@@ -405,10 +405,10 @@ void phptrace_execute_ex(zend_execute_data *execute_data TSRMLS_DC)
 
     /*do trace*/
     /*first startup*/
-    if(ctx->tracelog.shmaddr == NULL){
+    if(ctx->tracelog.shmaddr == NULL || ctx->tracelog.shmaddr == MAP_FAILED){
         ctx->tracelog = phptrace_mmap_write(filename, PHPTRACE_G(logsize));
         if(ctx->tracelog.shmaddr == MAP_FAILED){
-            php_error_docref(NULL TSRMLS_CC, E_WARNING, "phptrace_mmap_write %s failed: %s", filename, strerror(errno));
+            /*TODO write log here*/
             goto exec;
         }
         ctx->shmoffset = ctx->tracelog.shmaddr;
@@ -576,10 +576,10 @@ void phptrace_execute_internal(zend_execute_data *current_execute_data, struct _
 
     /*do trace*/
     /*first startup*/
-    if(ctx->tracelog.shmaddr == NULL){
+    if(ctx->tracelog.shmaddr == NULL || ctx->tracelog.shmaddr == MAP_FAILED){
         ctx->tracelog = phptrace_mmap_write(filename, PHPTRACE_G(logsize));
         if(ctx->tracelog.shmaddr == MAP_FAILED){
-            php_error_docref(NULL TSRMLS_CC, E_WARNING, "phptrace_mmap_write %s failed: %s", filename, strerror(errno));
+            /*TODO write log here*/
             goto exec;
         }
         ctx->shmoffset = ctx->tracelog.shmaddr;
