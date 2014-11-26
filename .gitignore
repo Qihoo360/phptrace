@@ -1,0 +1,9 @@
+*.swp
+*.swo
+*.o
+*.lo
+*.la
+*.so
+.libs
+.svn
+.deps
