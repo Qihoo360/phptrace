@@ -168,18 +168,30 @@ void *phptrace_mem_write_record(phptrace_file_record_t *record, void *mem){
     *((uint64_t *)mem) = record->start_time;
     mem += sizeof(uint64_t);
 
-    *((uint32_t *)mem) = record->func_name->len;
-    mem += sizeof(uint32_t);
-    memcpy(mem, record->func_name->data, record->func_name->len);
-    mem += record->func_name->len;
+    if(record->func_name){
+        *((uint32_t *)mem) = record->func_name->len;
+        mem += sizeof(uint32_t);
+        memcpy(mem, record->func_name->data, record->func_name->len);
+        mem += record->func_name->len;
+    }else{
+        *((uint32_t *)mem) = 0;
+        mem += sizeof(uint32_t);
+    }
 
-    *((uint32_t *)mem) = record->params->len;
-    mem += sizeof(uint32_t);
-    memcpy(mem, record->params->data, record->params->len);
-    mem += record->params->len;
+    if(record->params){
+        *((uint32_t *)mem) = record->params->len;
+        mem += sizeof(uint32_t);
+        memcpy(mem, record->params->data, record->params->len);
+        mem += record->params->len;
+    }else{
+        *((uint32_t *)mem) = 0;
+        mem += sizeof(uint32_t);
+    }
 
-    *((uint32_t *)mem) = record->ret_values->len;
-    memcpy(mem, record->ret_values->data, RET_VALUE_SIZE);
+    if(record->ret_values){
+        *((uint32_t *)mem) = record->ret_values->len;
+        memcpy(mem, record->ret_values->data, RET_VALUE_SIZE);
+    }
     mem += RET_VALUE_SIZE;
 
     *((uint64_t *)mem) = record->time_cost;

@@ -53,6 +53,7 @@ PHP_FUNCTION(phptrace_mmap_test);
 
 typedef struct phptrace_context_s{
     pid_t pid;
+    int cli;
     phptrace_segment_t ctrl;   
     phptrace_segment_t tracelog;   
     void *shmoffset;

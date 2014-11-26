@@ -23,6 +23,7 @@
 #endif
 
 #include "php.h"
+#include "SAPI.h"
 #include "php_ini.h"
 #include "ext/standard/info.h"
 #include "php_phptrace.h"
@@ -51,6 +52,7 @@ ZEND_DECLARE_MODULE_GLOBALS(phptrace)
 
 /* True global resources - no need for thread safety here */
 static int le_phptrace;
+extern sapi_module_struct sapi_module;
 
 /* {{{ phptrace_functions[]
  *
@@ -129,6 +131,8 @@ PHP_MINIT_FUNCTION(phptrace)
     phptrace_old_execute_ex = zend_execute_ex;
     zend_execute_ex = phptrace_execute_ex;
 #endif
+    phptrace_old_execute_internal = zend_execute_internal;
+    zend_execute_internal = phptrace_execute_internal;
     /* Create contrl mmap file
      * */
     phptrace_context_t *ctx;
@@ -140,6 +144,11 @@ PHP_MINIT_FUNCTION(phptrace)
         perror("phptrace_mmap");
     }
     memset(ctx->ctrl.shmaddr, 0, PID_MAX);
+    if(sapi_module.name[0]=='c' &&
+       sapi_module.name[1]=='l' &&
+       sapi_module.name[2]=='i'){
+        ctx->cli = 1;
+    }
     return SUCCESS;
 }
 /* }}} */
@@ -150,10 +159,17 @@ PHP_MSHUTDOWN_FUNCTION(phptrace)
 {
     char filename[256];
     phptrace_context_t *ctx;
+
     if(!PHPTRACE_G(enabled)){
         UNREGISTER_INI_ENTRIES();
         return SUCCESS;
     }
+#if PHP_VERSION_ID < 50500
+    zend_execute = phptrace_old_execute;
+#else
+    zend_execute_ex = phptrace_old_execute_ex;
+#endif
+    zend_execute_internal = phptrace_old_execute_internal;
     ctx = &PHPTRACE_G(ctx);
     snprintf(filename, sizeof(filename), "%s/%s", PHPTRACE_G(logdir), "phptrace.ctrl");
     phptrace_unmap(&ctx->ctrl);
@@ -226,7 +242,7 @@ phptrace_str_t *phptrace_repr_zval(zval *val){
             sprintf(value, "%f", Z_DVAL_P(val));
             break;
         case IS_BOOL:
-            sprintf(value, "%s", Z_LVAL__(val)?"true":"false");
+            sprintf(value, "%s", Z_LVAL_P(val)?"true":"false");
             break;
         case IS_STRING:
             return phptrace_str_new(Z_STRVAL_P(val), Z_STRLEN_P(val));
@@ -366,7 +382,7 @@ void phptrace_execute_ex(zend_execute_data *execute_data TSRMLS_DC)
 
     snprintf(filename, sizeof(filename), "%s/%s.%d", PHPTRACE_G(logdir),"phptrace.log", ctx->pid);
 
-    if(ctrl[ctx->pid] == 0){ //TODO set to 1 just for debug 
+    if(ctrl[ctx->pid] == 0 && !ctx->cli){
         /*unmap tracelog if phptrace was shutdown*/
         if(ctx->tracelog.shmaddr){
             phptrace_unmap(&ctx->tracelog);
@@ -410,6 +426,9 @@ void phptrace_execute_ex(zend_execute_data *execute_data TSRMLS_DC)
     record.seq = ctx->seq ++;
     record.level = ctx->level ++;
     record.start_time = phptrace_time_usec();
+    record.func_name = NULL;
+    record.params = NULL;
+    record.ret_values = NULL;
     printf("%d %d %f ",record.seq, record.level, record.start_time/1000000.0);
     funcname = phptrace_get_funcname(ex);
     if(funcname){
@@ -446,6 +465,174 @@ void phptrace_execute_ex(zend_execute_data *execute_data TSRMLS_DC)
         if(retval){
             record.ret_values = phptrace_str_nconcat(record.ret_values, retval->data, retval->len);
             printf(" = %s ", retval->data);
+        }
+    }
+    record.time_cost = now - record.start_time;
+    /*write the return value and cost time*/
+    memcpy(retoffset, record.ret_values, 
+            record.ret_values->len + sizeof(uint32_t) > RET_VALUE_SIZE 
+            ? RET_VALUE_SIZE
+            : record.ret_values->len + sizeof(uint32_t));
+
+    retoffset += RET_VALUE_SIZE;
+    *((uint64_t *)retoffset) = record.time_cost;
+    phptrace_str_free(record.ret_values);
+    printf("%f\n", record.time_cost/1000000.0);
+}
+
+#if PHP_VERSION_ID < 50500
+void phptrace_execute_internal(zend_execute_data *current_execute_data, int return_value_used TSRMLS_DC)
+#else
+void phptrace_execute_internal(zend_execute_data *current_execute_data, struct _zend_fcall_info *fci, int return_value_used TSRMLS_DC)
+#endif
+{
+    zend_execute_data    *ex = current_execute_data;
+
+    uint64_t now;
+    uint8_t *ctrl;
+    void * retoffset;
+    char filename[256];
+    phptrace_context_t *ctx;
+
+    zend_op *opline;
+    zval *return_value;
+    zend_free_op should_free;
+
+    phptrace_str_t *retval;
+    phptrace_str_t *funcname;
+    phptrace_str_t *parameters;
+
+
+    phptrace_file_record_t record;
+    phptrace_file_tailer_t tailer = {MAGIC_NUMBER_TAILER, 0};
+    phptrace_file_header_t header = {MAGIC_NUMBER_HEADER, 1, 0};
+
+    if(ex == NULL){
+#if PHP_VERSION_ID < 50500
+    if(phptrace_old_execute_internal){
+        return phptrace_old_execute_internal(current_execute_data, return_value_used TSRMLS_DC);
+    }else{
+        return execute_internal(current_execute_data, return_value_used TSRMLS_DC);
+    }
+#else
+    if(phptrace_old_execute_internal){
+        return phptrace_old_execute_internal(current_execute_data, fci, return_value_used TSRMLS_DC);
+    }else{
+        return execute_internal(current_execute_data, fci, return_value_used TSRMLS_DC);
+    }
+#endif
+    }
+
+
+    ctx = &PHPTRACE_G(ctx);
+    ctrl = ctx->ctrl.shmaddr;
+    if(ctx->pid == 0){
+        ctx->pid = getpid();
+    }
+
+    snprintf(filename, sizeof(filename), "%s/%s.%d", PHPTRACE_G(logdir),"phptrace.log", ctx->pid);
+
+    if(ctrl[ctx->pid] == 0 && !ctx->cli){
+        /*unmap tracelog if phptrace was shutdown*/
+        if(ctx->tracelog.shmaddr){
+            phptrace_unmap(&ctx->tracelog);
+            ctx->tracelog.shmaddr = NULL;
+            unlink(filename);
+            ctx->seq = 0;
+            ctx->level = 0;
+            ctx->shmoffset = NULL;
+            ctx->rotate = 0;
+        }
+#if PHP_VERSION_ID < 50500
+        if(phptrace_old_execute_internal){
+            return phptrace_old_execute_internal(current_execute_data, return_value_used TSRMLS_DC);
+        }else{
+            return execute_internal(current_execute_data, return_value_used TSRMLS_DC);
+        }
+#else
+        if(phptrace_old_execute_internal){
+            return phptrace_old_execute_internal(current_execute_data, fci, return_value_used TSRMLS_DC);
+        }else{
+            return execute_internal(current_execute_data, fci, return_value_used TSRMLS_DC);
+        }
+#endif
+    
+    }
+
+    /*do trace*/
+    /*first startup*/
+    if(ctx->tracelog.shmaddr == NULL){
+        ctx->rotate = 1;
+        ctx->tracelog = phptrace_mmap_write(filename, PHPTRACE_G(logsize));
+        ctx->shmoffset = ctx->tracelog.shmaddr;
+    }
+    /*should do rotate*/
+    if((ctx->shmoffset - ctx->tracelog.shmaddr) > PHPTRACE_G(logsize)-10*1024){ /*FIXME Use a more safty condition to rotate*/
+        ctx->rotate = 1;
+        tailer.filename = phptrace_str_new(filename, strlen(filename));
+        ctx->shmoffset = phptrace_mem_write_tailer(&tailer, ctx->shmoffset);
+        php_str_free(tailer.filename);
+    }
+
+    /*ex MUST NOT be NULL*/
+    if(ctx->rotate){
+        ctx->rotate = 0;
+        ctx->shmoffset = ctx->tracelog.shmaddr;
+        ctx->shmoffset = phptrace_mem_write_header(&header, ctx->shmoffset);
+        phptrace_mem_write_waitflag(ctx->shmoffset);
+    }
+    record.seq = ctx->seq ++;
+    record.level = ctx->level ++;
+    record.start_time = phptrace_time_usec();
+    record.func_name = NULL;
+    record.params = NULL;
+    record.ret_values = NULL;
+    printf("%d %d %f ",record.seq, record.level, record.start_time/1000000.0);
+    funcname = phptrace_get_funcname(ex);
+    if(funcname){
+        record.func_name = funcname;
+        printf("%s ", funcname->data);
+    }
+    parameters = phptrace_get_parameters(ex);
+    if(parameters){
+        record.params = parameters;
+        printf("(%s) ", parameters->data);
+    }
+    record.ret_values = phptrace_str_empty();
+
+    ctx->shmoffset = phptrace_mem_write_record(&record, ctx->shmoffset);
+    phptrace_str_free(record.func_name);
+    phptrace_str_free(record.params);
+    retoffset = ctx->shmoffset - sizeof(uint64_t) - RET_VALUE_SIZE;
+    phptrace_mem_write_waitflag(ctx->shmoffset);
+#if PHP_VERSION_ID < 50500
+    if(phptrace_old_execute_internal){
+        phptrace_old_execute_internal(current_execute_data, return_value_used TSRMLS_DC);
+    }else{
+        execute_internal(current_execute_data, return_value_used TSRMLS_DC);
+    }
+#else
+    if(phptrace_old_execute_internal){
+        phptrace_old_execute_internal(current_execute_data, fci, return_value_used TSRMLS_DC);
+    }else{
+        execute_internal(current_execute_data, fci, return_value_used TSRMLS_DC);
+    }
+#endif
+    -- ctx->level;
+    now = phptrace_time_usec();
+
+    if(*EG(opline_ptr)){
+        opline = *EG(opline_ptr);
+        if(opline && opline->result_type & 0x0F){
+            return_value = zend_get_zval_ptr((opline->result_type&0x0F), &opline->result, ex->Ts, &should_free, 0);
+            //FIXME : should free ?
+            if(return_value){
+                retval = phptrace_get_return_value(return_value);
+                if(retval){
+                    record.ret_values = phptrace_str_nconcat(record.ret_values, retval->data, retval->len);
+                    printf(" = %s ", retval->data);
+                }
+            }
         }
     }
     record.time_cost = now - record.start_time;

@@ -41,7 +41,7 @@ static FILE *shared_log;
 //#define MIN_RECORDS_NUMBER 100
 //#define MAX_RECORDS_NUMBER 100
 
-#define WAIT_INTERVAL 1000   // ms
+#define WAIT_INTERVAL 11   // ms
 
 #define BASE_FUNCTION_LEVEL 0
 #define MAX_FUNCTION_LEVEL 100
@@ -68,7 +68,7 @@ static void cleanup()
 {
 	phptrace_unmap(&seg);
 	//phptrace_stack_free(stack);
-	phptrace_ctrl_free(ctrl);
+	phptrace_ctrl_free(ctrl, phptrace_php_pid);
 #ifdef DEBUG
 	printf ("[debug]~~~cleanup~~~~~\n");
 #endif 
@@ -333,8 +333,8 @@ void func_enter_print(phptrace_file_record_t *r)
 #ifdef DEBUG
 	printf ("[debug][enter level=%d]\n", r->level);
 #endif 
-	print_indent_str("  ", r->level);
 	print_time(r->start_time, 0);
+	print_indent_str("    ", r->level);
  	phptrace_str_print(r->func_name); 
 	putchar ('(');
 	phptrace_str_print(r->params); 
@@ -344,10 +344,11 @@ void func_enter_print(phptrace_file_record_t *r)
 
 void func_leave_print(phptrace_file_record_t *r)
 {
-	print_indent_str("  ", r->level);
-	printf ("=> ");
+	print_time(r->start_time+r->time_cost, 0);
+	print_indent_str("    ", r->level);
 	phptrace_str_print(r->func_name);
-	printf ("()	");
+	printf (" =>");
+	printf ("	");
 	phptrace_str_print(r->ret_values); 
 	printf ("	");
 	print_time(r->time_cost, 0);

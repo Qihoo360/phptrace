@@ -40,7 +40,7 @@
 #include "phptrace_string.h"
 #include "phptrace_mmap.h"
 
-#define DEBUG
+//#define DEBUG
 
 typedef struct phptrace_file_header_s
 {
