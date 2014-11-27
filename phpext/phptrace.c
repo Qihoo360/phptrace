@@ -642,15 +642,7 @@ void phptrace_execute_internal(zend_execute_data *current_execute_data, struct _
     record.func_name = NULL;
     record.ret_values = NULL;
 
-    funcname = phptrace_get_funcname(ex);
-    if(funcname){
-        record.func_name = funcname;
-    }
-
-    parameters = phptrace_get_parameters(ex);
-    if(parameters){
-        record.params = parameters;
-    }
+    phptrace_get_callinfo(&record, ex);
 
     record.seq = ctx->seq ++;
     record.level = ctx->level ++;
