@@ -424,6 +424,10 @@ void phptrace_print_callinfo(phptrace_file_record_t *record){
         printf("() ");
     }
 }
+void phptrace_print_call_result(phptrace_file_record_t *record){
+    printf(" = %s ", record->ret_values->data);
+    printf("%f\n", record->time_cost/1000000.0);
+}
 
 #if PHP_VERSION_ID < 50500
 void phptrace_execute(zend_op_array *op_array TSRMLS_DC)
@@ -550,8 +554,7 @@ void phptrace_execute_ex(zend_execute_data *execute_data TSRMLS_DC)
     phptrace_mem_fix_record(&record, retoffset);
 
     if(ctx->cli){
-        printf(" = %s ", record.ret_values->data);
-        printf("%f\n", record.time_cost/1000000.0);
+        phptrace_print_call_result(&record);
     }
     phptrace_str_free(record.ret_values);
     return;
@@ -594,7 +597,6 @@ void phptrace_execute_internal(zend_execute_data *current_execute_data, struct _
     if(ex == NULL){
         goto exec;
     }
-
 
     ctx = &PHPTRACE_G(ctx);
     ctrl = ctx->ctrl.shmaddr;
@@ -688,8 +690,7 @@ void phptrace_execute_internal(zend_execute_data *current_execute_data, struct _
     }
     phptrace_mem_fix_record(&record, retoffset);
     if(ctx->cli){
-        printf(" = %s ", record.ret_values->data);
-        printf("%f\n", record.time_cost/1000000.0);
+        phptrace_print_call_result(&record);
     }
     phptrace_str_free(record.ret_values);
 
