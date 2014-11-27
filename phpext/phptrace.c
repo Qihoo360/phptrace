@@ -411,6 +411,20 @@ void phptrace_get_execute_internal_return_value(phptrace_file_record_t *record, 
     }
 }
 
+void phptrace_print_callinfo(phptrace_file_record_t *record){
+    printf("%d %d %f ",record->seq, record->level, record->start_time/1000000.0);
+    if(record->func_name){
+        printf("%s ", record->func_name->data);
+    }else{
+        printf("- ");
+    }
+    if(record->params){
+        printf("(%s) ", record->params->data);
+    }else{
+        printf("() ");
+    }
+}
+
 #if PHP_VERSION_ID < 50500
 void phptrace_execute(zend_op_array *op_array TSRMLS_DC)
 {
@@ -503,17 +517,7 @@ void phptrace_execute_ex(zend_execute_data *execute_data TSRMLS_DC)
     record.start_time = phptrace_time_usec();
 
     if(ctx->cli){
-        printf("%d %d %f ",record.seq, record.level, record.start_time/1000000.0);
-        if(record.func_name){
-            printf("%s ", record.func_name->data);
-        }else{
-            printf("- ");
-        }
-        if(record.params){
-            printf("(%s) ", record.params->data);
-        }else{
-            printf("- ");
-        }
+        phptrace_print_callinfo(&record);
     }
 
     ctx->shmoffset = phptrace_mem_write_record(&record, ctx->shmoffset);
@@ -649,17 +653,7 @@ void phptrace_execute_internal(zend_execute_data *current_execute_data, struct _
     record.start_time = phptrace_time_usec();
 
     if(ctx->cli){
-        printf("%d %d %f ",record.seq, record.level, record.start_time/1000000.0);
-        if(funcname){
-            printf("%s ", funcname->data);
-        }else{
-            printf("- ");
-        }
-        if(parameters){
-            printf("(%s) ", parameters->data);
-        }else{
-            printf("- ");
-        }
+        phptrace_print_callinfo(&record);
     }
 
     ctx->shmoffset = phptrace_mem_write_record(&record, ctx->shmoffset);
