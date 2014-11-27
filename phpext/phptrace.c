@@ -302,7 +302,11 @@ phptrace_str_t *phptrace_get_funcname(zend_execute_data *ex){
     name = EXF_COMMON(function_name);
     if(scope){
         funcname = phptrace_str_new(scope, strlen(scope));
-        funcname = phptrace_str_nconcat(funcname, "::", 2);
+        if(ex->object){
+            funcname = phptrace_str_nconcat(funcname, "->", 2);
+        }else{
+            funcname = phptrace_str_nconcat(funcname, "::", 2);
+        }
         funcname = phptrace_str_nconcat(funcname, name, strlen(name));
     }else{
         funcname = phptrace_str_new(name, strlen(name));
