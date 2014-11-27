@@ -354,6 +354,19 @@ phptrace_str_t *phptrace_get_return_value(zval *return_value){
     }
 }
 
+void phptrace_reset_tracelog(phptrace_context_t *ctx){
+    char filename[256];
+
+    snprintf(filename, sizeof(filename), "%s/%s.%d", PHPTRACE_G(logdir),"phptrace.log", ctx->pid);
+    phptrace_unmap(&ctx->tracelog);
+    ctx->tracelog.shmaddr = NULL;
+    ctx->tracelog.size = 0;
+    unlink(filename);
+    ctx->seq = 0;
+    ctx->level = 0;
+    ctx->rotate = 0;
+    ctx->shmoffset = NULL;
+}
 
 #if PHP_VERSION_ID < 50500
 void phptrace_execute(zend_op_array *op_array TSRMLS_DC)
@@ -397,14 +410,7 @@ void phptrace_execute_ex(zend_execute_data *execute_data TSRMLS_DC)
     if(ctrl[ctx->pid] == 0 && !ctx->cli){
         /*unmap tracelog if phptrace was shutdown*/
         if(ctx->tracelog.shmaddr){
-            phptrace_unmap(&ctx->tracelog);
-            ctx->tracelog.shmaddr = NULL;
-            ctx->tracelog.size = 0;
-            unlink(filename);
-            ctx->seq = 0;
-            ctx->level = 0;
-            ctx->rotate = 0;
-            ctx->shmoffset = NULL;
+            phptrace_reset_tracelog(ctx);
         }
         goto exec;
     
@@ -572,13 +578,7 @@ void phptrace_execute_internal(zend_execute_data *current_execute_data, struct _
     if(ctrl[ctx->pid] == 0 && !ctx->cli){
         /*unmap tracelog if phptrace was shutdown*/
         if(ctx->tracelog.shmaddr){
-            phptrace_unmap(&ctx->tracelog);
-            ctx->tracelog.shmaddr = NULL;
-            unlink(filename);
-            ctx->seq = 0;
-            ctx->level = 0;
-            ctx->shmoffset = NULL;
-            ctx->rotate = 0;
+            phptrace_reset_tracelog(ctx);
         }
         goto exec;
     
