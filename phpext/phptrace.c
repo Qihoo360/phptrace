@@ -408,9 +408,10 @@ void phptrace_execute_ex(zend_execute_data *execute_data TSRMLS_DC)
 
     /*do trace*/
     /*first startup*/
-    if(ctx->tracelog.shmaddr == NULL || ctx->tracelog.shmaddr == MAP_FAILED){
+    if(ctx->tracelog.shmaddr == NULL){
         ctx->tracelog = phptrace_mmap_write(filename, PHPTRACE_G(logsize));
         if(ctx->tracelog.shmaddr == MAP_FAILED){
+            ctx->tracelog.shmaddr = NULL;
             /*TODO write log here*/
             goto exec;
         }
@@ -579,9 +580,10 @@ void phptrace_execute_internal(zend_execute_data *current_execute_data, struct _
 
     /*do trace*/
     /*first startup*/
-    if(ctx->tracelog.shmaddr == NULL || ctx->tracelog.shmaddr == MAP_FAILED){
+    if(ctx->tracelog.shmaddr == NULL){
         ctx->tracelog = phptrace_mmap_write(filename, PHPTRACE_G(logsize));
         if(ctx->tracelog.shmaddr == MAP_FAILED){
+            ctx->tracelog.shmaddr = NULL;
             /*TODO write log here*/
             goto exec;
         }
