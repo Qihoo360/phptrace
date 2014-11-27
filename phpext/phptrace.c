@@ -177,8 +177,11 @@ PHP_MSHUTDOWN_FUNCTION(phptrace)
     snprintf(filename, sizeof(filename), "%s/%s", PHPTRACE_G(logdir), "phptrace.ctrl");
     phptrace_unmap(&ctx->ctrl);
     //unlink(filename); /*TODO uncomment this*/
-    snprintf(filename, sizeof(filename), "%s/%s.%d", PHPTRACE_G(logdir), "phptrace.log", ctx->pid);
-    //unlink(filename); /*TODO uncomment this*/
+    if(ctx->tracelog.shmaddr){
+        phptrace_unmap(&ctx->ctrl);
+        snprintf(filename, sizeof(filename), "%s/%s.%d", PHPTRACE_G(logdir), "phptrace.log", ctx->pid);
+        //unlink(filename); /*TODO uncomment this*/
+    }
     UNREGISTER_INI_ENTRIES();
     return SUCCESS;
 }
