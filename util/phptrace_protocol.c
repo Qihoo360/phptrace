@@ -147,7 +147,8 @@ phptrace_file_record_t* phptrace_file_record_pop(phptrace_file_t *f)
 }
 
 void *phptrace_mem_write_header(phptrace_file_header_t *header, void *mem){
-    *((uint64_t *)mem) = header->magic_number;
+    void *waitaddr = mem;
+    /*skip the waitflag*/
     mem += sizeof(uint64_t);
 
     *((uint8_t *)mem) = header->version;
@@ -155,6 +156,8 @@ void *phptrace_mem_write_header(phptrace_file_header_t *header, void *mem){
 
     *((uint8_t *)mem) = header->flag;
     mem += sizeof(uint8_t);
+
+    *((uint64_t *)waitaddr) = header->magic_number;
     return mem; 
 }
 void *phptrace_mem_write_record(phptrace_file_record_t *record, void *mem){

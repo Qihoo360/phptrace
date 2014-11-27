@@ -416,6 +416,8 @@ void phptrace_execute_ex(zend_execute_data *execute_data TSRMLS_DC)
             goto exec;
         }
         ctx->shmoffset = ctx->tracelog.shmaddr;
+        /*write into waitflag immediately after mmapping*/
+        phptrace_mem_write_waitflag(ctx->shmoffset);
         ctx->rotate = 1;
     }
     /*should do rotate*/
