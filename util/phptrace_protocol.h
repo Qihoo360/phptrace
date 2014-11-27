@@ -173,6 +173,8 @@ void *phptrace_mem_read_record_level(int16_t *level, void *mem);
 void *phptrace_mem_write_record(phptrace_file_record_t *record, void *mem);
 void *phptrace_mem_update_record(phptrace_file_record_t *record, void *mem);
 
+void *phptrace_mem_fix_record(phptrace_file_record_t *record, void *mem);
+
 void *phptrace_mem_write_waitflag(void *mem);
 int phptrace_mem_is_waitflag(void *mem);
 void *phptrace_mem_read_waitflag(uint64_t *waitflag, void *mem);

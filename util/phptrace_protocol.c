@@ -204,6 +204,16 @@ void *phptrace_mem_write_record(phptrace_file_record_t *record, void *mem){
     return mem;
 }
 
+void *phptrace_mem_fix_record(phptrace_file_record_t *record, void *mem){
+    memcpy(mem, record->ret_values, 
+            record->ret_values->len + sizeof(uint32_t) > RET_VALUE_SIZE 
+            ? RET_VALUE_SIZE
+            : record->ret_values->len + sizeof(uint32_t));
+
+    mem += RET_VALUE_SIZE;
+    *((uint64_t *)mem) = record->time_cost;
+}
+
 void *phptrace_mem_write_waitflag(void *mem){
     *((uint64_t *)mem) = (uint64_t)-1;
     mem += sizeof(uint64_t);

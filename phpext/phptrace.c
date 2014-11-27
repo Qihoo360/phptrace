@@ -542,13 +542,8 @@ void phptrace_execute_ex(zend_execute_data *execute_data TSRMLS_DC)
     if(record.ret_values == NULL){
         record.ret_values = phptrace_str_empty();
     }
-    memcpy(retoffset, record.ret_values, 
-            record.ret_values->len + sizeof(uint32_t) > RET_VALUE_SIZE 
-            ? RET_VALUE_SIZE
-            : record.ret_values->len + sizeof(uint32_t));
 
-    retoffset += RET_VALUE_SIZE;
-    *((uint64_t *)retoffset) = record.time_cost;
+    phptrace_mem_fix_record(&record, retoffset);
 
     if(ctx->cli){
         printf(" = %s ", record.ret_values->data);
@@ -705,13 +700,7 @@ void phptrace_execute_internal(zend_execute_data *current_execute_data, struct _
     if(record.ret_values == NULL){
         record.ret_values = phptrace_str_empty();
     }
-    memcpy(retoffset, record.ret_values, 
-            record.ret_values->len + sizeof(uint32_t) > RET_VALUE_SIZE 
-            ? RET_VALUE_SIZE
-            : record.ret_values->len + sizeof(uint32_t));
-
-    retoffset += RET_VALUE_SIZE;
-    *((uint64_t *)retoffset) = record.time_cost;
+    phptrace_mem_fix_record(&record, retoffset);
     if(ctx->cli){
         printf(" = %s ", record.ret_values->data);
         printf("%f\n", record.time_cost/1000000.0);
