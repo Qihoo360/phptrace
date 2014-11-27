@@ -367,6 +367,49 @@ void phptrace_reset_tracelog(phptrace_context_t *ctx){
     ctx->rotate = 0;
     ctx->shmoffset = NULL;
 }
+void phptrace_get_callinfo(phptrace_file_record_t *record, zend_execute_data *ex){
+    phptrace_str_t *funcname, *parameters;
+    funcname = phptrace_get_funcname(ex);
+    if(funcname){
+        record->func_name = funcname;
+    }
+
+    parameters = phptrace_get_parameters(ex);
+    if(parameters){
+        record->params = parameters;
+    }
+}
+void phptrace_register_return_value(zval **return_value){
+    if (EG(return_value_ptr_ptr) == NULL){
+        EG(return_value_ptr_ptr) = return_value;
+    }
+}
+void phptrace_get_execute_return_value(phptrace_file_record_t *record, zval *return_value){
+    if(*EG(return_value_ptr_ptr)){
+        record->ret_values = phptrace_get_return_value(return_value);
+        zval_ptr_dtor(EG(return_value_ptr_ptr));
+        EG(return_value_ptr_ptr) = NULL;
+    }
+
+}
+void phptrace_get_execute_internal_return_value(phptrace_file_record_t *record, zend_execute_data *ex){
+    zend_op *opline;
+    zval *return_value;
+    zend_free_op should_free;
+
+    if(*EG(opline_ptr)){
+        opline = *EG(opline_ptr);
+        if(opline && opline->result_type & 0x0F){
+            return_value = zend_get_zval_ptr((opline->result_type&0x0F), &opline->result, ex->Ts, &should_free, 0);
+            if(return_value){
+                record->ret_values = phptrace_get_return_value(return_value);
+            }
+            if(should_free.var){
+                zval_dtor(should_free.var);
+            }
+        }
+    }
+}
 
 #if PHP_VERSION_ID < 50500
 void phptrace_execute(zend_op_array *op_array TSRMLS_DC)
@@ -451,20 +494,9 @@ void phptrace_execute_ex(zend_execute_data *execute_data TSRMLS_DC)
     record.func_name = NULL;
     record.ret_values = NULL;
 
-    funcname = phptrace_get_funcname(ex);
-    if(funcname){
-        record.func_name = funcname;
-    }
+    phptrace_get_callinfo(&record, ex);
 
-    parameters = phptrace_get_parameters(ex);
-    if(parameters){
-        record.params = parameters;
-    }
-
-    return_value = NULL;
-    if (EG(return_value_ptr_ptr) == NULL){
-        EG(return_value_ptr_ptr) = &return_value;
-    }
+    phptrace_register_return_value(&return_value);
 
     record.seq = ctx->seq ++;
     record.level = ctx->level ++;
@@ -472,13 +504,13 @@ void phptrace_execute_ex(zend_execute_data *execute_data TSRMLS_DC)
 
     if(ctx->cli){
         printf("%d %d %f ",record.seq, record.level, record.start_time/1000000.0);
-        if(funcname){
-            printf("%s ", funcname->data);
+        if(record.func_name){
+            printf("%s ", record.func_name->data);
         }else{
             printf("- ");
         }
-        if(parameters){
-            printf("(%s) ", parameters->data);
+        if(record.params){
+            printf("(%s) ", record.params->data);
         }else{
             printf("- ");
         }
@@ -501,10 +533,8 @@ void phptrace_execute_ex(zend_execute_data *execute_data TSRMLS_DC)
     -- ctx->level;
     now = phptrace_time_usec();
 
-    if(return_value && *EG(return_value_ptr_ptr)){
-        record.ret_values = phptrace_get_return_value(return_value);
-        zval_ptr_dtor(EG(return_value_ptr_ptr));
-        EG(return_value_ptr_ptr) = NULL;
+    if(return_value){
+        phptrace_get_execute_return_value(&record, return_value);
     }
 
     record.time_cost = now - record.start_time;
@@ -669,19 +699,7 @@ void phptrace_execute_internal(zend_execute_data *current_execute_data, struct _
     -- ctx->level;
     now = phptrace_time_usec();
 
-    if(*EG(opline_ptr)){
-        opline = *EG(opline_ptr);
-        if(opline && opline->result_type & 0x0F){
-            return_value = zend_get_zval_ptr((opline->result_type&0x0F), &opline->result, ex->Ts, &should_free, 0);
-            if(return_value){
-                record.ret_values = phptrace_get_return_value(return_value);
-            }
-            if(should_free.var){
-                zval_dtor(should_free.var);
-            }
-        }
-    }
-
+    phptrace_get_execute_internal_return_value(&record, ex);
     /*write the return value and cost time*/
     record.time_cost = now - record.start_time;
     if(record.ret_values == NULL){
