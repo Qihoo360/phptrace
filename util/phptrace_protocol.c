@@ -276,6 +276,7 @@ void *phptrace_mem_read_record(phptrace_file_record_t *record, void *mem)
 }
 void *phptrace_mem_update_record(phptrace_file_record_t *record, void *mem)
 {
+    record->ret_values->len = 0;
     record->ret_values = (phptrace_str_t *)mem;
     mem += RET_VALUE_SIZE * sizeof(char);
 

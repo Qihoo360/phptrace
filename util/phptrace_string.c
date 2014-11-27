@@ -18,14 +18,19 @@ phptrace_str_t *phptrace_str_new(const char *str, int len){
 	return ss;
 }
 
+/* note: only free the malloc string, not mmap ones*/
 void phptrace_str_free(phptrace_str_t *s){
 	if (s){
-        //free(s);
+        free(s);
     }
 }
+
 int phptrace_str_print(phptrace_str_t *s) {
 	int i;
 	if (s) {
+		if (s->len == 0) {
+			printf ("<Null>");
+		}
 		for (i = 0; i < s->len; i++)
 			putchar(s->data[i]);
 		return s->len;

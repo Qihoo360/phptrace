@@ -1,5 +1,6 @@
 NAME = 
 VERSION = 0.1
+
 DIST := $(NAME)-$(VERSION)
 
 CC = gcc
@@ -8,16 +9,22 @@ RM = rm
 ### src directory
 MW_DIR=$(PWD)
 OBJ_PATH = objs
-TARGET=phptrace
+TARGET=trace
 MAIN=
 INSTALL_PATH = 
+type = release
 
 
 #################################
 # flags, includes and libs
 # ################################
 # # for test
-CFLAGS = -g 
+ifeq ($(type), debug)
+CFLAGS = -g -D DEBUG
+else
+CFLAGS = -g
+endif
+
 # CFLAGS = -g -Wall -fPIC \
 	# #   -shared \
 	#  # -I/home/work/lib/libmcrypt/include\
@@ -80,9 +87,12 @@ C_SRCDIR = $(SRC_DIR)
 C_FILES = $(foreach d,$(C_SRCDIR),$(wildcard $(d)/*.c) )
 #C_FILES+=$(wildcard *.c)   ## c files in current directory
 C_FILES+=phptrace.c
+#C_FILES+=fpm_ptrace.c
+#C_FILES+=phpstack.c
 #C_FILES+=p_object.c
 C_OBJS = $(patsubst %.c, %.o, $(C_FILES))
 #C_OBJS = $(patsubst %.c, $(OBJ_PATH)/%.o, $(C_FILES))
+STACK_OBJS = fpm_ptrace.o phpstack.o
 
 
 ### CPP src files  CPP_SOURCES = $(wildcard *.cpp)
@@ -96,7 +106,7 @@ C_OBJS = $(patsubst %.c, %.o, $(C_FILES))
 
 
 
-default:init compile
+default:init compile stack
 
 $(C_OBJS):%.o:%.c
 	$(CC) -c $(CFLAGS) $(INCLUDES) $< -o $@
@@ -114,6 +124,9 @@ gen:
 	gcc -c -g gen.c -o gen.o
 	gcc ../util/phptrace_mmap.o ../util/phptrace_protocol.o ../util/phptrace_string.o gen.o -o gen  -g
 
+stack: $(STACK_OBJS)
+	gcc $(STACK_OBJS) -o stack
+
 test:
 	@echo "C_FILES: $(C_FILES)"
 	@echo "C_OBJS: $(C_OBJS)"
@@ -124,9 +137,12 @@ compile:$(C_OBJS) $(CPP_OBJS)
 	$(CC)  $^ -o $(TARGET)  $(LFLAGS) $(LIBS)  -g
 
 clean:
-	$(RM) $(C_OBJS) $(CPP_OBJS) 
+	$(RM) $(C_OBJS) $(CPP_OBJS) $(STACK_OBJS)
 	$(RM) -rf $(OBJ_PATH)
-	$(RM) -f $(TARGET)
+	$(RM) -f $(TARGET) stack
+	
+	$(RM) -f gen.o gen
+	$(RM) -f phpstack.o fpm_ptrace.o stack 
 
 install: $(TARGET)
 	cp $(TARGET) $(PREFIX_BIN)

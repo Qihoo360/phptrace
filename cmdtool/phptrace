@@ -1,0 +1,60 @@
+#!/bin/sh
+
+CLEAR_FLAG=0
+STACK_FLAG=0
+
+while getopts "p:cs" arg
+do
+    case $arg in
+        p)
+            #echo "a's arg:$OPTARG"
+            PID=$OPTARG
+            ;;  
+        c)
+            #echo "b"
+            CLEAR_FLAG=1
+            ;;  
+        s)
+            #echo "c"
+            STACK_FLAG=1
+            ;;  
+        ?)
+            echo "unknown argument ???"
+            exit 1
+            ;;  
+    esac
+done
+
+if [ $STACK_FLAG -eq 1 ] && [ $CLEAR_FLAG -eq 1 ] ; then
+    exit 1
+fi
+
+if [ $STACK_FLAG -eq 1 ] ; then
+    if [ -z $PID ] ; then
+        echo "no pid"
+        exit 1
+    fi
+
+    declare -i retry=1
+    while ((retry<=10))
+    do
+        lines=$(sh trace_php_info.sh $PID)
+        if [ $? -eq 0 ] ; then
+            params=($lines)
+            params_num=${#params[@]}
+            if [ $params_num -eq 15 ]; then
+                ./stack $PID $lines
+                break
+            fi
+        fi
+        let ++retry
+        usleep 100000
+    done
+    if [ $retry -ge 11 ] ; then
+        echo "can not print php stack"
+    fi
+else
+	./trace $@
+fi
+
+
