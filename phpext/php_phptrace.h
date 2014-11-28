@@ -63,6 +63,7 @@ typedef struct phptrace_context_s{
 }phptrace_context_t;
 ZEND_BEGIN_MODULE_GLOBALS(phptrace)
     long  enabled;
+    long  dotrace;
     long  logsize;
     char *logdir;
     phptrace_context_t ctx;

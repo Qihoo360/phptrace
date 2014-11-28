@@ -95,6 +95,7 @@ ZEND_GET_MODULE(phptrace)
  */
 PHP_INI_BEGIN()
     STD_PHP_INI_ENTRY("phptrace.enabled",      "0", PHP_INI_ALL, OnUpdateLong, enabled, zend_phptrace_globals, phptrace_globals)
+    STD_PHP_INI_ENTRY("phptrace.dotrace",      "0", PHP_INI_ALL, OnUpdateLong, dotrace, zend_phptrace_globals, phptrace_globals)
     STD_PHP_INI_ENTRY("phptrace.logsize",      "52428800", PHP_INI_ALL, OnUpdateLong, logsize, zend_phptrace_globals, phptrace_globals)
     STD_PHP_INI_ENTRY("phptrace.logdir",      NULL, PHP_INI_ALL, OnUpdateString, logdir, zend_phptrace_globals, phptrace_globals)
 PHP_INI_END()
@@ -105,6 +106,7 @@ PHP_INI_END()
 static void php_phptrace_init_globals(zend_phptrace_globals *phptrace_globals)
 {
     phptrace_globals->enabled = 0;
+    phptrace_globals->dotrace = 0;
     phptrace_globals->logsize = 50*1024*1024;
     phptrace_globals->logdir = NULL;
     memset(&phptrace_globals->ctx, 0, sizeof(phptrace_context_t));
@@ -469,7 +471,7 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
 
     snprintf(filename, sizeof(filename), "%s/%s.%d", PHPTRACE_G(logdir),"phptrace.log", ctx->pid);
 
-    if(ctrl[ctx->pid] == 0 && !ctx->cli){
+    if(ctrl[ctx->pid] == 0 && !(ctx->cli && PHPTRACE_G(dotrace))){
         /*unmap tracelog if phptrace was shutdown*/
         if(ctx->tracelog.shmaddr){
             phptrace_reset_tracelog(ctx);
@@ -523,7 +525,7 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
     record.level = ctx->level ++;
     record.start_time = phptrace_time_usec();
 
-    if(ctx->cli){
+    if(ctx->cli && PHPTRACE_G(dotrace)){
         phptrace_print_callinfo(&record);
     }
 
@@ -574,7 +576,7 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
 
     phptrace_mem_fix_record(&record, retoffset);
 
-    if(ctx->cli){
+    if(ctx->cli && PHPTRACE_G(dotrace)){
         phptrace_print_call_result(&record);
     }
     phptrace_str_free(record.ret_values);
