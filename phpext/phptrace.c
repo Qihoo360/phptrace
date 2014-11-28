@@ -33,6 +33,8 @@
 
 #define PID_MAX 0x8000 /*32768*/
 #define PHPTRACE_LOG_DIR "/tmp"
+#define HEARTBEAT_TIMEDOUT 30 /*30 seconds*/
+#define HEARTBEAT_FLAG 1<<1
 
 #if PHP_VERSION_ID < 50500
 void (*phptrace_old_execute)(zend_op_array *op_array TSRMLS_DC);
@@ -152,6 +154,7 @@ PHP_MINIT_FUNCTION(phptrace)
        sapi_module.name[2]=='i'){
         ctx->cli = 1;
     }
+    ctx->heartbeat_timedout = HEARTBEAT_TIMEDOUT;
     return SUCCESS;
 }
 /* }}} */
@@ -443,7 +446,7 @@ void phptrace_print_call_result(phptrace_file_record_t *record){
 
 void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
 {
-    uint64_t now;
+    uint64_t now, heartbeat;
     uint8_t *ctrl;
     void * retoffset;
     char filename[256];
@@ -478,6 +481,18 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
         }
         goto exec;
     
+    }
+
+    if(ctrl[ctx->pid] & HEARTBEAT_FLAG){
+        ctrl[ctx->pid] &= ~HEARTBEAT_FLAG;
+        ctx->heartbeat = phptrace_time_usec();
+    }
+    if((ctrl[ctx->pid] & HEARTBEAT_FLAG == 0) && ctx->heartbeat){
+        now = phptrace_time_usec();
+        if(now - ctx->heartbeat > ctx->heartbeat_timedout * 1000000){
+            phptrace_reset_tracelog(ctx);
+            goto exec;
+        }
     }
 
     /*do trace*/
