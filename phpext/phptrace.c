@@ -534,6 +534,10 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
     phptrace_get_callinfo(&record, ex);
 
     if(!px->internal){
+        /* register return_values's address
+         * it will be setting if needed after execute
+         * */
+        return_value = NULL;
         phptrace_register_return_value(&return_value);
     }
 
@@ -579,7 +583,12 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
     now = phptrace_time_usec();
 
     if(!px->internal){
-        phptrace_get_execute_return_value(&record, return_value);
+        /* return_value was setted
+         * now get the value
+         * */
+        if(return_value){
+            phptrace_get_execute_return_value(&record, return_value);
+        }
     }else{
         phptrace_get_execute_internal_return_value(&record, ex);
     }
