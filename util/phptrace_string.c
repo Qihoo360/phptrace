@@ -1,4 +1,5 @@
 #include <string.h>
+#include <stdio.h>
 #include "phptrace_string.h"
 
 phptrace_str_t *phptrace_str_new(const char *str, int len){
