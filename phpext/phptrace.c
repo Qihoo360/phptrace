@@ -413,8 +413,13 @@ void phptrace_get_execute_internal_return_value(phptrace_file_record_t *record, 
 
     if(*EG(opline_ptr)){
         opline = *EG(opline_ptr);
+#if PHP_VERSION_ID > 50328
         if(opline && opline->result_type & 0x0F){
             return_value = zend_get_zval_ptr((opline->result_type&0x0F), &opline->result, ex->Ts, &should_free, 0);
+#else
+        if(opline && opline->result.op_type & 0x0F){
+            return_value = zend_get_zval_ptr(&opline->result, ex->Ts, &should_free, 0);
+#endif
             if(return_value){
                 record->ret_values = phptrace_get_return_value(return_value);
             }
