@@ -522,6 +522,7 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
         ctx->rotate = 0;
         ctx->shmoffset = ctx->tracelog.shmaddr;
         /*TODO write header & waitflag at once*/
+        phptrace_mem_write_waitflag(ctx->shmoffset);
         ctx->shmoffset = phptrace_mem_write_header(&header, ctx->shmoffset);
         phptrace_mem_write_waitflag(ctx->shmoffset);
     }
