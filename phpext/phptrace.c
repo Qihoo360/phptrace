@@ -34,7 +34,7 @@
 #define PID_MAX 0x8000 /*32768*/
 #define PHPTRACE_LOG_DIR "/tmp"
 #define HEARTBEAT_TIMEDOUT 30 /*30 seconds*/
-#define HEARTBEAT_FLAG 1<<1
+#define HEARTBEAT_FLAG 1<<7
 
 #if PHP_VERSION_ID < 50500
 void (*phptrace_old_execute)(zend_op_array *op_array TSRMLS_DC);
@@ -484,7 +484,7 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
     }
 
     if(ctrl[ctx->pid] & HEARTBEAT_FLAG){
-        ctrl[ctx->pid] &= ~HEARTBEAT_FLAG;
+        ctrl[ctx->pid] &= ~HEARTBEAT_FLAG & 0x00FF;
         ctx->heartbeat = phptrace_time_usec();
     }
     if((ctrl[ctx->pid] & HEARTBEAT_FLAG == 0) && ctx->heartbeat){
