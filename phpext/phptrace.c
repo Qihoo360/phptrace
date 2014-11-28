@@ -474,7 +474,7 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
 
     snprintf(filename, sizeof(filename), "%s/%s.%d", PHPTRACE_G(logdir),"phptrace.log", ctx->pid);
 
-    if(ctrl[ctx->pid] == 0 && !(ctx->cli && PHPTRACE_G(dotrace))){
+    if(ctrl[ctx->pid] == 0 && !PHPTRACE_G(dotrace)){
         /*unmap tracelog if phptrace was shutdown*/
         if(ctx->tracelog.shmaddr){
             phptrace_reset_tracelog(ctx);
