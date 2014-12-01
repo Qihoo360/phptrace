@@ -528,7 +528,6 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
         ctx->shmoffset = ctx->tracelog.shmaddr;
         /*TODO write header & waitflag at once*/
         ctx->shmoffset = phptrace_mem_write_header(&header, ctx->shmoffset);
-        phptrace_mem_write_waitflag(ctx->shmoffset);
     }
 
     record.params = NULL;
@@ -553,14 +552,12 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
         phptrace_print_callinfo(&record);
     }
 
-    phptrace_mem_write_waitflag(ctx->shmoffset);
     ctx->shmoffset = phptrace_mem_write_record(&record, ctx->shmoffset);
 
     phptrace_str_free(record.func_name);
     phptrace_str_free(record.params);
 
     retoffset = ctx->shmoffset - sizeof(uint64_t) - RET_VALUE_SIZE;
-    phptrace_mem_write_waitflag(ctx->shmoffset);
 
     if(!px->internal){
 #if PHP_VERSION_ID < 50500
