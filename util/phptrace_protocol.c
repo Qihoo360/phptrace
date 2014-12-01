@@ -160,6 +160,7 @@ void *phptrace_mem_write_header(phptrace_file_header_t *header, void *mem){
     *((uint8_t *)mem) = header->flag;
     mem += sizeof(uint8_t);
 
+    phptrace_mem_write_waitflag(mem);
     *((uint64_t *)waitaddr) = header->magic_number;
     return mem; 
 }
@@ -208,6 +209,7 @@ void *phptrace_mem_write_record(phptrace_file_record_t *record, void *mem){
     *((uint64_t *)mem) = record->time_cost;
     mem += sizeof(uint64_t);
 
+    phptrace_mem_write_waitflag(mem);
     *((uint64_t *)waitaddr) = record->seq;
     return mem;
 }
@@ -237,6 +239,7 @@ void *phptrace_mem_write_tailer(phptrace_file_tailer_t *tailer, void *mem){
     memcpy(mem, tailer->filename->data, tailer->filename->len);
     mem += tailer->filename->len;
 
+    phptrace_mem_write_waitflag(mem);
     *((uint64_t *)waitaddr) = tailer->magic_number;
     return mem;
 }
