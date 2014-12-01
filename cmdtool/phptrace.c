@@ -1,8 +1,7 @@
 /*
- * generate binary data
+ *  trace cmdtools 
  */
 
-//#include "../util/phptrace_protocol.h"
 #include "../util/phptrace_mmap.h"
 
 //#include "p_object.h"
@@ -444,7 +443,7 @@ void trace(phptrace_file_t *f)
 		ctrl_wait_interval = CTRL_WAIT_INTERVAL;
 		
 		/* ? here or before sleep */
-		//phptrace_ctrl_heart_beat_ping(ctrl, phptrace_php_pid);
+		phptrace_ctrl_heart_beat_ping(ctrl, phptrace_php_pid);
 
 		/* read header */
 		phptrace_mem_read_64b(&flag, seg.shmaddr);

@@ -33,16 +33,19 @@ void phptrace_ctrl_free(phptrace_ctrl_t *c, int pid)
 		free(c);
 	}
 }
-int8_t phptrace_ctrl_heart_beat(phptrace_ctrl_t *c, int pid)
+int8_t phptrace_ctrl_heart_beat_ping(phptrace_ctrl_t *c, int pid)
 { 
 	int8_t s = -1;
 	phptrace_ctrl_get(c, &s, pid);
+	s = s | (1 << 7);
+	phptrace_ctrl_set(c, (int8_t)s, pid);
+	/*
 	if (s != CTRL_STATE_CLOSE)
 	{
 		if (s == CTRL_STATE_PING) s = CTRL_STATE_PONG;
 		else s = CTRL_STATE_PONG;
 		phptrace_ctrl_set(c, (uint8_t)s, pid);
-	}
+	}*/
 	return s;
 }
 
