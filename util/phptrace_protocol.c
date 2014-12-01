@@ -332,6 +332,7 @@ void *phptrace_mem_read_waitflag(uint64_t *waitflag, void *mem)
 void *phptrace_mem_read_tailer(phptrace_file_tailer_t *tailer, void *mem)
 {
     tailer->magic_number = *((uint64_t *)mem); 
+	mem += sizeof(uint64_t);
 	tailer->filename = (phptrace_str_t *)mem;
 	mem += sizeof(uint32_t);
     mem += tailer->filename->len;

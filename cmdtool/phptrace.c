@@ -486,8 +486,8 @@ void trace(phptrace_file_t *f)
 #endif
 				break;
 			case WAIT_FLAG:
-				if (state != STATE_HEADER && state != STATE_RECORD)
-					error_msg_and_die("[error] file damaged!\n");
+				//if (state != STATE_HEADER && state != STATE_RECORD)  BugFix: maybe wait in STATE_OPEN too.
+				//	error_msg_and_die("[error] file damaged!\n");
 
 				phptrace_msleep(data_wait_interval);
 				data_wait_interval = grow_interval(data_wait_interval, MAX_DATA_WAIT_INTERVAL);
