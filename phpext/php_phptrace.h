@@ -60,6 +60,7 @@ typedef struct phptrace_context_s{
     phptrace_segment_t tracelog;   
     void *shmoffset;
     int rotate;
+    int rotate_count;
     unsigned long long seq;
     int level;
 }phptrace_context_t;

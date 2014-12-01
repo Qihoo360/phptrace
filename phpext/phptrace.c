@@ -454,6 +454,7 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
     uint64_t now, heartbeat;
     uint8_t *ctrl;
     void * retoffset;
+    int rotate_count;
     char filename[256];
     zval *return_value;
     phptrace_context_t *ctx;
@@ -513,10 +514,12 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
         /*write into waitflag immediately after mmapping*/
         phptrace_mem_write_waitflag(ctx->shmoffset);
         ctx->rotate = 1;
+        ctx->rotate_count = 0;
     }
     /*should do rotate*/
     if((ctx->shmoffset - ctx->tracelog.shmaddr) > PHPTRACE_G(logsize)-10*1024){ /*FIXME Use a more safty condition to rotate*/
         ctx->rotate = 1;
+        ++ctx->rotate_count;
         tailer.filename = phptrace_str_new(filename, strlen(filename));
         ctx->shmoffset = phptrace_mem_write_tailer(&tailer, ctx->shmoffset);
         phptrace_str_free(tailer.filename);
@@ -558,6 +561,7 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
     phptrace_str_free(record.params);
 
     retoffset = ctx->shmoffset - sizeof(uint64_t) - RET_VALUE_SIZE;
+    rotate_count = ctx->rotate_count;
 
     if(!px->internal){
 #if PHP_VERSION_ID < 50500
@@ -601,7 +605,11 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
         record.ret_values = phptrace_str_empty();
     }
 
-    phptrace_mem_fix_record(&record, retoffset);
+    if(ctx->tracelog.shmaddr && (ctx->rotate_count - rotate_count)*ctx->tracelog.size 
+            + ctx->shmoffset - retoffset < ctx->tracelog.size){
+        /*make sure the retoffset is still valid*/
+        phptrace_mem_fix_record(&record, retoffset);
+    }
 
     if(ctx->cli && PHPTRACE_G(dotrace)){
         phptrace_print_call_result(&record);
