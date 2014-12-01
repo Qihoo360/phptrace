@@ -33,6 +33,8 @@
 
 #define PID_MAX 0x8000 /*32768*/
 #define PHPTRACE_LOG_DIR "/tmp"
+#define HEARTBEAT_TIMEDOUT 30 /*30 seconds*/
+#define HEARTBEAT_FLAG 1<<7
 
 #if PHP_VERSION_ID < 50500
 void (*phptrace_old_execute)(zend_op_array *op_array TSRMLS_DC);
@@ -95,6 +97,7 @@ ZEND_GET_MODULE(phptrace)
  */
 PHP_INI_BEGIN()
     STD_PHP_INI_ENTRY("phptrace.enabled",      "0", PHP_INI_ALL, OnUpdateLong, enabled, zend_phptrace_globals, phptrace_globals)
+    STD_PHP_INI_ENTRY("phptrace.dotrace",      "0", PHP_INI_ALL, OnUpdateLong, dotrace, zend_phptrace_globals, phptrace_globals)
     STD_PHP_INI_ENTRY("phptrace.logsize",      "52428800", PHP_INI_ALL, OnUpdateLong, logsize, zend_phptrace_globals, phptrace_globals)
     STD_PHP_INI_ENTRY("phptrace.logdir",      NULL, PHP_INI_ALL, OnUpdateString, logdir, zend_phptrace_globals, phptrace_globals)
 PHP_INI_END()
@@ -105,6 +108,7 @@ PHP_INI_END()
 static void php_phptrace_init_globals(zend_phptrace_globals *phptrace_globals)
 {
     phptrace_globals->enabled = 0;
+    phptrace_globals->dotrace = 0;
     phptrace_globals->logsize = 50*1024*1024;
     phptrace_globals->logdir = NULL;
     memset(&phptrace_globals->ctx, 0, sizeof(phptrace_context_t));
@@ -150,6 +154,7 @@ PHP_MINIT_FUNCTION(phptrace)
        sapi_module.name[2]=='i'){
         ctx->cli = 1;
     }
+    ctx->heartbeat_timedout = HEARTBEAT_TIMEDOUT;
     return SUCCESS;
 }
 /* }}} */
@@ -441,7 +446,7 @@ void phptrace_print_call_result(phptrace_file_record_t *record){
 
 void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
 {
-    uint64_t now;
+    uint64_t now, heartbeat;
     uint8_t *ctrl;
     void * retoffset;
     char filename[256];
@@ -469,13 +474,25 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
 
     snprintf(filename, sizeof(filename), "%s/%s.%d", PHPTRACE_G(logdir),"phptrace.log", ctx->pid);
 
-    if(ctrl[ctx->pid] == 0 && !ctx->cli){
+    if(ctrl[ctx->pid] == 0 && !PHPTRACE_G(dotrace)){
         /*unmap tracelog if phptrace was shutdown*/
         if(ctx->tracelog.shmaddr){
             phptrace_reset_tracelog(ctx);
         }
         goto exec;
     
+    }
+
+    if(ctrl[ctx->pid] & HEARTBEAT_FLAG){
+        ctrl[ctx->pid] &= ~HEARTBEAT_FLAG & 0x00FF;
+        ctx->heartbeat = phptrace_time_usec();
+    }
+    if((ctrl[ctx->pid] & HEARTBEAT_FLAG == 0) && ctx->heartbeat){
+        now = phptrace_time_usec();
+        if(now - ctx->heartbeat > ctx->heartbeat_timedout * 1000000){
+            phptrace_reset_tracelog(ctx);
+            goto exec;
+        }
     }
 
     /*do trace*/
@@ -505,6 +522,7 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
         ctx->rotate = 0;
         ctx->shmoffset = ctx->tracelog.shmaddr;
         /*TODO write header & waitflag at once*/
+        phptrace_mem_write_waitflag(ctx->shmoffset);
         ctx->shmoffset = phptrace_mem_write_header(&header, ctx->shmoffset);
         phptrace_mem_write_waitflag(ctx->shmoffset);
     }
@@ -516,6 +534,10 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
     phptrace_get_callinfo(&record, ex);
 
     if(!px->internal){
+        /* register return_values's address
+         * it will be setting if needed after execute
+         * */
+        return_value = NULL;
         phptrace_register_return_value(&return_value);
     }
 
@@ -523,7 +545,7 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
     record.level = ctx->level ++;
     record.start_time = phptrace_time_usec();
 
-    if(ctx->cli){
+    if(ctx->cli && PHPTRACE_G(dotrace)){
         phptrace_print_callinfo(&record);
     }
 
@@ -561,7 +583,12 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
     now = phptrace_time_usec();
 
     if(!px->internal){
-        phptrace_get_execute_return_value(&record, return_value);
+        /* return_value was setted
+         * now get the value
+         * */
+        if(return_value){
+            phptrace_get_execute_return_value(&record, return_value);
+        }
     }else{
         phptrace_get_execute_internal_return_value(&record, ex);
     }
@@ -574,7 +601,7 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
 
     phptrace_mem_fix_record(&record, retoffset);
 
-    if(ctx->cli){
+    if(ctx->cli && PHPTRACE_G(dotrace)){
         phptrace_print_call_result(&record);
     }
     phptrace_str_free(record.ret_values);

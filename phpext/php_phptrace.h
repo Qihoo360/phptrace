@@ -54,6 +54,8 @@ PHP_FUNCTION(phptrace_mmap_test);
 typedef struct phptrace_context_s{
     pid_t pid;
     int cli;
+    unsigned long long heartbeat;
+    int heartbeat_timedout;
     phptrace_segment_t ctrl;   
     phptrace_segment_t tracelog;   
     void *shmoffset;
@@ -63,6 +65,7 @@ typedef struct phptrace_context_s{
 }phptrace_context_t;
 ZEND_BEGIN_MODULE_GLOBALS(phptrace)
     long  enabled;
+    long  dotrace;
     long  logsize;
     char *logdir;
     phptrace_context_t ctx;

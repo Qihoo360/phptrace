@@ -197,6 +197,11 @@ void *phptrace_mem_write_record(phptrace_file_record_t *record, void *mem){
     if(record->ret_values){
         *((uint32_t *)mem) = record->ret_values->len;
         memcpy(mem, record->ret_values->data, RET_VALUE_SIZE);
+    }else{
+        /* zero the reserved chunk because maybe 
+         * we never have an opportunity to write 
+         * the return value*/
+        memset(mem, 0, RET_VALUE_SIZE);
     }
     mem += RET_VALUE_SIZE;
 
