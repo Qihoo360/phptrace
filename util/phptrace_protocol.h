@@ -151,8 +151,9 @@ void phptrace_ctrl_free(phptrace_ctrl_t *c, int pid);
 	phptrace_mem_write_8b((n), (c)->ctrl_seg.shmaddr+(pid))
 #define phptrace_ctrl_get(c, n, pid)	\
 	phptrace_mem_read_8b((n), (c)->ctrl_seg.shmaddr+(pid))
-int8_t phptrace_ctrl_heart_beat(phptrace_ctrl_t *c, int pid);
-
+//int8_t phptrace_ctrl_heart_beat(phptrace_ctrl_t *c, int pid);
+int8_t phptrace_ctrl_heart_beat_ping(phptrace_ctrl_t *c, int pid);
+	
 void phptrace_file_init(phptrace_file_t *f);
 void phptrace_file_free(phptrace_file_t *f);
 
