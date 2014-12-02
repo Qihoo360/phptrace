@@ -4,7 +4,8 @@ a tools to trace php calls like strace
 [phptrace介绍及使用](https://git.corp.qihoo.net/infra-webcore/phptrace/wikis/home)
 
 ## Building
-1. 编译cmdtool
+
+编译cmdtool
 ```shell
 tar -zxf phptrace-<version>.tar.gz
 cd phptrace-<version>
@@ -12,7 +13,7 @@ cd cmdtool
 make
 ```
 
-2. 编译PHP扩展
+编译PHP扩展
 ```shell
 cd phpext
 phpize
@@ -54,5 +55,3 @@ $ ./phptrace -p 2459
 1417506347.727354     say =>    hello world     1.000122 
 1417506347.727358 run =>        nil     1.000135 
 ```
-
-
