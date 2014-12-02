@@ -339,10 +339,10 @@ void print_indent_str(char* str, int32_t size)
 		printf ("%s", str);
 }
 
-void update_deep_info(phptrace_file_record_t *r)
+int update_deep_info(phptrace_file_record_t *r)
 {
 	//phptrace_mem_read_64b(&(r->time_cost), r->time_cost_ptr);
-	phptrace_mem_update_record(r, r->ret_values_ptr);
+	return phptrace_mem_update_record(r, r->ret_values_ptr);
 }
 
 void print_time(uint64_t t, int kind)
@@ -488,6 +488,22 @@ void trace(phptrace_file_t *f)
 			case WAIT_FLAG:
 				//if (state != STATE_HEADER && state != STATE_RECORD)  BugFix: maybe wait in STATE_OPEN too.
 				//	error_msg_and_die("[error] file damaged!\n");
+
+				if (state == STATE_RECORD)  // try to check returned function
+				{
+					ptr_rcd_top = phptrace_file_record_top(f);
+					while (ptr_rcd_top && update_deep_info(ptr_rcd_top))
+					{
+						level_prev = ptr_rcd_top->level;
+						ptr_rcd_top = phptrace_file_record_pop(f);
+						record_time = ptr_rcd_top->start_time;
+						if (record_time > phptrace_start_time)
+							func_leave_print(ptr_rcd_top);
+
+						phptrace_file_record_free(ptr_rcd_top);
+						ptr_rcd_top = phptrace_file_record_top(f);
+					}
+				}
 
 				phptrace_msleep(data_wait_interval);
 				data_wait_interval = grow_interval(data_wait_interval, MAX_DATA_WAIT_INTERVAL);
