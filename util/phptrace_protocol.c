@@ -285,16 +285,15 @@ void *phptrace_mem_read_record(phptrace_file_record_t *record, void *mem)
 
     return mem;
 }
-void *phptrace_mem_update_record(phptrace_file_record_t *record, void *mem)
+int phptrace_mem_update_record(phptrace_file_record_t *record, void *mem)
 {
-    record->ret_values->len = 0;
     record->ret_values = (phptrace_str_t *)mem;
     mem += RET_VALUE_SIZE * sizeof(char);
 
     record->time_cost = *((uint64_t *)mem); 
     mem += sizeof(uint64_t);
 
-    return mem;
+	return (record->time_cost > 0);
 }
 
 void *phptrace_mem_read_record_level(int16_t *level, void *mem)

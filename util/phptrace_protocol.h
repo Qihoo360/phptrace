@@ -172,7 +172,7 @@ void *phptrace_mem_write_header(phptrace_file_header_t *header, void *mem);
 void *phptrace_mem_read_record(phptrace_file_record_t *record, void *mem);
 void *phptrace_mem_read_record_level(int16_t *level, void *mem);
 void *phptrace_mem_write_record(phptrace_file_record_t *record, void *mem);
-void *phptrace_mem_update_record(phptrace_file_record_t *record, void *mem);
+int phptrace_mem_update_record(phptrace_file_record_t *record, void *mem);
 
 void *phptrace_mem_fix_record(phptrace_file_record_t *record, void *mem);
 
