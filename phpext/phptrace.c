@@ -550,6 +550,7 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
     record.seq = ctx->seq ++;
     record.level = ctx->level ++;
     record.start_time = phptrace_time_usec();
+    record.time_cost = 0;
 
     if(ctx->cli && PHPTRACE_G(dotrace)){
         phptrace_print_callinfo(&record);
