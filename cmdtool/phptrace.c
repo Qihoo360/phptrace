@@ -494,6 +494,7 @@ void trace(phptrace_file_t *f)
 					ptr_rcd_top = phptrace_file_record_top(f);
 					while (ptr_rcd_top && update_deep_info(ptr_rcd_top))
 					{
+						level_prev = ptr_rcd_top->level;
 						ptr_rcd_top = phptrace_file_record_pop(f);
 						record_time = ptr_rcd_top->start_time;
 						if (record_time > phptrace_start_time)
