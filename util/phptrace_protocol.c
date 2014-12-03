@@ -235,10 +235,16 @@ void *phptrace_mem_write_tailer(phptrace_file_tailer_t *tailer, void *mem){
     /*skip the waitflag*/
     mem += sizeof(uint64_t);
 
-    *((uint32_t *)mem) = tailer->filename->len;
-    mem += sizeof(uint32_t);
-    memcpy(mem, tailer->filename->data, tailer->filename->len);
-    mem += tailer->filename->len;
+    if(tailer->filename){
+        *((uint32_t *)mem) = tailer->filename->len;
+        mem += sizeof(uint32_t);
+        memcpy(mem, tailer->filename->data, tailer->filename->len);
+        mem += tailer->filename->len;
+    }else{
+        *((uint32_t *)mem) = 0;
+        mem += sizeof(uint32_t);
+    }
+
 
     phptrace_mem_write_waitflag(mem);
     *((uint64_t *)waitaddr) = tailer->magic_number;
