@@ -249,7 +249,6 @@ uint64_t phptrace_time_usec(){
     return tv.tv_sec * 1000000 + tv.tv_usec;
 }
 phptrace_str_t *phptrace_repr_zval(zval *val){
-    phptrace_str_t *s;
     char value[128];
     switch(Z_TYPE_P(val)){
         case IS_NULL:
@@ -270,7 +269,7 @@ phptrace_str_t *phptrace_repr_zval(zval *val){
             sprintf(value, "array<%p>", Z_ARRVAL_P(val));
             break;
         case IS_OBJECT:
-            sprintf(value, "object<%p>", Z_OBJVAL_P(val));
+            sprintf(value, "object<%p>", &Z_OBJVAL_P(val));
             break;
         default:
             sprintf(value, "unknown");
@@ -309,9 +308,9 @@ phptrace_str_t *phptrace_get_funcname(zend_execute_data *ex){
     if(strncmp(EXF_COMMON(function_name), "{closure}", sizeof("closure")-1) == 0){
         /*a closure may be a chunk of code, get the filename and line range*/
         /*TODO process a closure*/
-        EXF(op_array.filename);
+        /*EXF(op_array.filename);
         EXF(op_array.line_start);
-        EXF(op_array.line_end);
+        EXF(op_array.line_end);*/
     }
     name = EXF_COMMON(function_name);
     if(scope){
@@ -330,9 +329,8 @@ phptrace_str_t *phptrace_get_funcname(zend_execute_data *ex){
 phptrace_str_t *phptrace_get_parameters(zend_execute_data *ex){
     phptrace_str_t *parameters, *param;
     zend_arg_info *arg_info;
-    zval **args, *arg;
-    long n, i, got;
-    size_t size;
+    zval **args;
+    long n, i;
 
     if(ex == NULL || 
             ex->function_state.function == NULL || 
@@ -432,7 +430,7 @@ void phptrace_get_execute_internal_return_value(phptrace_file_record_t *record, 
 }
 
 void phptrace_print_callinfo(phptrace_file_record_t *record){
-    printf("%d %d %f ",record->seq, record->level, record->start_time/1000000.0);
+    printf("%lu %d %f ",record->seq, record->level, record->start_time/1000000.0);
     if(record->func_name){
         printf("%s ", record->func_name->data);
     }else{
@@ -451,16 +449,13 @@ void phptrace_print_call_result(phptrace_file_record_t *record){
 
 void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
 {
-    uint64_t now, heartbeat;
+    uint64_t now;
     uint8_t *ctrl;
     void * retoffset;
     int rotate_count;
     char filename[256];
     zval *return_value;
     phptrace_context_t *ctx;
-    phptrace_str_t *retval;
-    phptrace_str_t *funcname;
-    phptrace_str_t *parameters;
 
     phptrace_file_record_t record;
     phptrace_file_tailer_t tailer = {MAGIC_NUMBER_TAILER, 0};
@@ -493,7 +488,7 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
         ctrl[ctx->pid] &= ~HEARTBEAT_FLAG & 0x00FF;
         ctx->heartbeat = phptrace_time_usec();
     }
-    if((ctrl[ctx->pid] & HEARTBEAT_FLAG == 0) && ctx->heartbeat){
+    if(((ctrl[ctx->pid] & HEARTBEAT_FLAG) == 0) && ctx->heartbeat){
         now = phptrace_time_usec();
         if(now - ctx->heartbeat > ctx->heartbeat_timedout * 1000000){
             phptrace_reset_tracelog(ctx);
