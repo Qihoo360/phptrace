@@ -222,6 +222,7 @@ void *phptrace_mem_fix_record(phptrace_file_record_t *record, void *mem){
 
     mem += RET_VALUE_SIZE;
     *((uint64_t *)mem) = record->time_cost;
+    return mem;
 }
 
 void *phptrace_mem_write_waitflag(void *mem){

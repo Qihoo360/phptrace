@@ -3,6 +3,8 @@
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/mman.h>
+#include <unistd.h>
+#include <sys/stat.h>
 
 /*
  * Some operating systems (like FreeBSD) have a MAP_NOSYNC flag that

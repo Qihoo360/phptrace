@@ -69,7 +69,7 @@ phptrace_str_t *phptrace_str_nconcat(phptrace_str_t *s, const char *t, size_t le
     tlen = len;
 
     len += slen + 1 + sizeof(phptrace_str_t);
-    s = realloc(s, len);
+    s = (phptrace_str_t *)realloc(s, len);
     memcpy(s->data+slen, t, tlen);
     s->len = slen + tlen;
     s->data[s->len] = '\0';
