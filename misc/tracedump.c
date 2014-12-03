@@ -64,7 +64,7 @@ int main(int argc, char *argv[]){
 
         if(st == P_HEADER){
             addr = phptrace_mem_read_header(&header, addr);
-            printf("magic %lu, version %d, flag %d\n", header.magic_number, header.version, header.flag);
+            printf("magic 0X%lX, version %d, flag %d\n", header.magic_number, header.version, header.flag);
             st = P_RECORD;
             continue;
         }
@@ -93,7 +93,7 @@ int main(int argc, char *argv[]){
         if(st == P_TAILER){
             addr = phptrace_mem_read_tailer(&tailer, addr);
             snprintf(out, tailer.filename->len+1, "%s", tailer.filename->data);
-            printf("rotate %s\n", out);
+            printf("magic 0X%lX, rotate %s\n", tailer.magic_number, out);
             st = P_HEADER;
             addr = tracelog.shmaddr;
             continue;
