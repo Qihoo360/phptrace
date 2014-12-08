@@ -1,5 +1,9 @@
 #include<stdio.h>
 #include<stdint.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <ctype.h>
 #include "../util/phptrace_mmap.h"
 #include "../util/phptrace_protocol.h"
 
@@ -14,12 +18,23 @@ void sigctrlc(sig){
     printf("\33[?25h");
     exit(0);
 }
+void repr_binary_data(char *bin, int len){
+    if(len > 1024){
+        len = 1024;
+        bin[len] = '\0';
+    }
+    while(--len>0){
+        if(!isprint(bin[len])){
+            bin[len] = '.';
+        }
+    }
+}
 int main(int argc, char *argv[]){
     uint64_t seq, last;
     phptrace_segment_t tracelog;
     enum protocol_st st;
     void *addr;
-    char out[1024];
+    char out[1024*1024]; //FIXME this maybe not enogth as well
 
     phptrace_file_record_t record;
     phptrace_file_header_t header;
@@ -80,9 +95,11 @@ int main(int argc, char *argv[]){
             printf("seq %lu level %d %s", record.seq,record.level, out);
 
             snprintf(out, record.params->len+1, "%s", record.params->data);
+            repr_binary_data(out, strlen(out));
             printf("(%s)", out);
 
             snprintf(out, record.ret_values->len+1, "%s", record.ret_values->data);
+            repr_binary_data(out, strlen(out));
             printf(" => %s", out);
 
             sprintf(out, "%f", record.time_cost/1000000.0);

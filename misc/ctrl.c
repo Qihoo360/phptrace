@@ -4,7 +4,7 @@
 #include "../util/phptrace_mmap.h"
 #define PID_MAX 32768
 int main(int argc, char *argv[]){
-    int pid, i;
+    int pid, i, c;
     uint8_t *flags, flag;
     char *cmd;
     if(argc != 2 && argc !=3){
@@ -15,22 +15,27 @@ int main(int argc, char *argv[]){
     flags = ctrl.shmaddr;
 
     cmd = argv[1];
+    c = 0;
     if(strncmp("scan", cmd, sizeof("scan")-1) == 0){
         for(i = 0; i < PID_MAX; ++i){
             flag = flags[i];
             if(flag!=0){
                 printf("%d %d\n", i, flag);
+                ++c;
             }
         } 
+        printf("%d %s setted\n", c, c>1?"pids":"pid");
         return 0;
     }
     if(strncmp("clear", cmd, sizeof("clear")-1) == 0){
         for(i = 0; i < PID_MAX; ++i){
             if(flags[i]!=0){
                 printf("set %d %d\n", i, 0);
+                ++c;
             }
             flags[i] = 0;
         }
+        printf("%d %s cleared\n", c, c>1?"pids":"pid");
         return 0;
     }
 
