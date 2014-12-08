@@ -517,7 +517,7 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
         ctx->rotate_count = 0;
     }
     /*should do rotate*/
-    if((ctx->shmoffset - ctx->tracelog.shmaddr) > PHPTRACE_G(logsize)-10*1024){ /*FIXME Use a more safty condition to rotate*/
+    if((ctx->shmoffset - ctx->tracelog.shmaddr) > PHPTRACE_G(logsize)-1024*1024){ /*FIXME Use a more safty condition to rotate*/
         ctx->rotate = 1;
         ++ctx->rotate_count;
         tailer.filename = phptrace_str_new(filename, strlen(filename));
