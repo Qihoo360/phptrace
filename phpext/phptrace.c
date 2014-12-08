@@ -519,17 +519,21 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
     /*should do rotate*/
     if((ctx->shmoffset - ctx->tracelog.shmaddr) > PHPTRACE_G(logsize)-1024*1024){ /*FIXME Use a more safty condition to rotate*/
         ctx->rotate = 1;
-        ++ctx->rotate_count;
-        tailer.filename = phptrace_str_new(filename, strlen(filename));
-        ctx->shmoffset = phptrace_mem_write_tailer(&tailer, ctx->shmoffset);
-        phptrace_str_free(tailer.filename);
     }
 
     /*ex MUST NOT be NULL*/
     if(ctx->rotate){
         ctx->rotate = 0;
+        ++ctx->rotate_count;
+
+        /*set waitflag at header before rotate*/
+        phptrace_mem_write_waitflag(ctx->tracelog.shmaddr);
+
+        tailer.filename = phptrace_str_new(filename, strlen(filename));
+        ctx->shmoffset = phptrace_mem_write_tailer(&tailer, ctx->shmoffset);
+        phptrace_str_free(tailer.filename);
+
         ctx->shmoffset = ctx->tracelog.shmaddr;
-        /*TODO write header & waitflag at once*/
         ctx->shmoffset = phptrace_mem_write_header(&header, ctx->shmoffset);
     }
 
