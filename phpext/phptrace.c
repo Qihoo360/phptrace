@@ -330,7 +330,7 @@ phptrace_str_t *phptrace_get_parameters(zend_execute_data *ex){
     phptrace_str_t *parameters, *param;
     zend_arg_info *arg_info;
     zval **args;
-    long n, i;
+    long n, i, narg_info;
 
     if(ex == NULL || 
             ex->function_state.function == NULL || 
@@ -340,15 +340,20 @@ phptrace_str_t *phptrace_get_parameters(zend_execute_data *ex){
     n = (long)(zend_uintptr_t)*(ex->function_state.arguments);
     args = (zval **)(ex->function_state.arguments) - n;
     arg_info = EXF_COMMON(arg_info);
+    narg_info  = EXF_COMMON(num_args);
 
     parameters = phptrace_str_new(NULL, 0);
     for(i = 0; i < n; ++i){
         /*The format $p = "hello", $b = "world"*/
         /*FIXME: It is a terriable idea to realloc memory frequently*/
-        parameters = phptrace_str_nconcat(parameters, "$", 1);
-        parameters = phptrace_str_nconcat(parameters, arg_info[i].name, arg_info[i].name_len);
-        param = phptrace_repr_zval(args[i]);
+        if(i < narg_info){
+            parameters = phptrace_str_nconcat(parameters, "$", 1);
+            parameters = phptrace_str_nconcat(parameters, arg_info[i].name, arg_info[i].name_len);
+        }else{
+            parameters = phptrace_str_nconcat(parameters, "optional", sizeof("optional")-1);
+        }
         parameters = phptrace_str_nconcat(parameters, " = \"", 4);
+        param = phptrace_repr_zval(args[i]);
         parameters = phptrace_str_nconcat(parameters, param->data, param->len);
         parameters = phptrace_str_nconcat(parameters, "\"", 1);
         phptrace_str_free(param);
