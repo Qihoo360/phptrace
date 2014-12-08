@@ -416,7 +416,10 @@ void phptrace_get_execute_internal_return_value(phptrace_file_record_t *record, 
 
     if(*EG(opline_ptr)){
         opline = *EG(opline_ptr);
-#if PHP_VERSION_ID >= 50400
+#if PHP_VERSION_ID >= 50500
+        if(opline && opline->result_type & 0x0F){
+            return_value = zend_get_zval_ptr((opline->result_type&0x0F), &opline->result, ex, &should_free, 0);
+#elif PHP_VERSION_ID >= 50400
         if(opline && opline->result_type & 0x0F){
             return_value = zend_get_zval_ptr((opline->result_type&0x0F), &opline->result, ex->Ts, &should_free, 0);
 #else
@@ -627,7 +630,7 @@ exec:
 #if PHP_VERSION_ID < 50500
         return phptrace_old_execute(px->op_array TSRMLS_CC);
 #else
-        return phptrace_old_execute_ex(px->execute_data TSRMLS_CC);
+        return phptrace_old_execute_ex(px->current_execute_data TSRMLS_CC);
 #endif
     }else{
 #if PHP_VERSION_ID < 50500
