@@ -31,6 +31,10 @@
 #include "../util/phptrace_protocol.h"
 #include "../util/phptrace_string.h"
 
+#if PHP_VERSION_ID < 50300
+#define PHP_FE_END {NULL, NULL, NULL, 0, 0}
+#endif
+
 #define PID_MAX 0x8000 /*32768*/
 #define PHPTRACE_LOG_DIR "/tmp"
 #define HEARTBEAT_TIMEDOUT 30 /*30 seconds*/
@@ -337,8 +341,18 @@ phptrace_str_t *phptrace_get_parameters(zend_execute_data *ex){
             EXF_COMMON(num_args) == 0){
         return NULL;
     }
+    n = 0;
+#if PHP_VERSION_ID >=50300
     n = (long)(zend_uintptr_t)*(ex->function_state.arguments);
     args = (zval **)(ex->function_state.arguments) - n;
+#else
+    if (EG(argument_stack).top >= 2) { 
+        void **p;
+        p = EG(argument_stack).top_element - 2; 
+        n = (long) *p;
+        args = p - n;
+    } 
+#endif
     arg_info = EXF_COMMON(arg_info);
     narg_info  = EXF_COMMON(num_args);
 
