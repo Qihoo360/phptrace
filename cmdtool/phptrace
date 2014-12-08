@@ -3,6 +3,67 @@
 CLEAR_FLAG=0
 STACK_FLAG=0
 
+function get_php_version()
+{
+    echo `/proc/29670/exe -i 2>&1 | grep -i 'PHP Version' | uniq | awk '{print $4}'`
+}
+
+function get_php_address() 
+{
+GDB=${GDB:-/usr/bin/gdb}
+
+#if $GDB -nx --quiet --batch --readnever > /dev/null 2>&1; then
+#    readnever=--readnever
+#else
+#    readnever=
+#fi
+
+sapi_globals="print &(sapi_globals)"
+sapi_globals_1="print &(sapi_globals.request_info.path_translated)"
+executor_globals="print &(executor_globals)"
+executor_globals_1="print &(executor_globals.current_execute_data)"
+executor_globals_10="print (executor_globals.current_execute_data)"
+executor_globals_11="print &(executor_globals.current_execute_data->function_state.function)"
+executor_globals_110="print (executor_globals.current_execute_data->function_state.function)"
+executor_globals_111="print &(executor_globals.current_execute_data->function_state.function->common.function_name)"
+executor_globals_12="print &(executor_globals.current_execute_data->prev_execute_data)"
+executor_globals_13="print &(executor_globals.current_execute_data->op_array)"
+executor_globals_130="print (executor_globals.current_execute_data->op_array)"
+executor_globals_131="print &(executor_globals.current_execute_data->op_array->filename)"
+executor_globals_14="print &(executor_globals.current_execute_data->opline)"
+executor_globals_140="print (executor_globals.current_execute_data->opline)"
+executor_globals_141="print &(executor_globals.current_execute_data->opline->lineno)"
+
+# Run GDB, strip out unwanted noise.
+$GDB --quiet $readnever -nx /proc/$1/exe $1 <<EOF 2>&1 | 
+set width 0
+set height 0
+set pagination no
+$sapi_globals
+$sapi_globals_1
+$executor_globals
+$executor_globals_1
+$executor_globals_10
+$executor_globals_11
+$executor_globals_110
+$executor_globals_111
+$executor_globals_12
+$executor_globals_13
+$executor_globals_130
+$executor_globals_131
+$executor_globals_14
+$executor_globals_140
+$executor_globals_141
+EOF
+/bin/sed -n \
+    -e 's/^\((gdb) \)*//' \
+    -e '/^\$/p' \
+    -e '/^Thread/p' | awk '{print $NF}'
+
+}
+echo "===" $(get_php_version)
+#exit 0
+
 while getopts "p:cs" arg
 do
     case $arg in
@@ -38,7 +99,7 @@ if [ $STACK_FLAG -eq 1 ] ; then
     declare -i retry=1
     while ((retry<=10))
     do
-        lines=$(sh trace_php_info.sh $PID)
+        lines=$(get_php_address $PID)
         if [ $? -eq 0 ] ; then
             params=($lines)
             params_num=${#params[@]}
@@ -56,5 +117,4 @@ if [ $STACK_FLAG -eq 1 ] ; then
 else
 	./trace $@
 fi
-
 
