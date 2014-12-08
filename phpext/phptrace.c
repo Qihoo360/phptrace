@@ -397,6 +397,7 @@ void phptrace_reset_tracelog(phptrace_context_t *ctx){
     ctx->level = 0;
     ctx->rotate = 0;
     ctx->shmoffset = NULL;
+    ctx->heartbeat = 0;
 }
 void phptrace_get_callinfo(phptrace_file_record_t *record, zend_execute_data *ex){
     phptrace_str_t *funcname, *parameters;
