@@ -394,7 +394,6 @@ void phptrace_reset_tracelog(phptrace_context_t *ctx){
     ctx->tracelog.size = 0;
     unlink(filename);
     ctx->seq = 0;
-    ctx->level = 0;
     ctx->rotate = 0;
     ctx->shmoffset = NULL;
     ctx->heartbeat = 0;
@@ -490,6 +489,7 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
 
 
     ctx = &PHPTRACE_G(ctx);
+    ++ctx->level;
     ctrl = ctx->ctrl.shmaddr;
     /*TODO move to request init ?*/
     if(ctx->pid == 0){
@@ -570,7 +570,7 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
     }
 
     record.seq = ctx->seq ++;
-    record.level = ctx->level ++;
+    record.level = ctx->level;
     record.start_time = phptrace_time_usec();
     record.time_cost = 0;
 
@@ -643,24 +643,27 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
 exec:
     if(!px->internal){
 #if PHP_VERSION_ID < 50500
-        return phptrace_old_execute(px->op_array TSRMLS_CC);
+        phptrace_old_execute(px->op_array TSRMLS_CC);
 #else
-        return phptrace_old_execute_ex(px->current_execute_data TSRMLS_CC);
+        phptrace_old_execute_ex(px->current_execute_data TSRMLS_CC);
 #endif
     }else{
 #if PHP_VERSION_ID < 50500
         if(phptrace_old_execute_internal){
-            return phptrace_old_execute_internal(px->current_execute_data, px->return_value_used TSRMLS_DC);
+            phptrace_old_execute_internal(px->current_execute_data, px->return_value_used TSRMLS_DC);
         }else{
-            return execute_internal(px->current_execute_data, px->return_value_used TSRMLS_DC);
+            execute_internal(px->current_execute_data, px->return_value_used TSRMLS_DC);
         }
 #else
         if(phptrace_old_execute_internal){
-            return phptrace_old_execute_internal(px->current_execute_data, px->fci, px->return_value_used TSRMLS_DC);
+            phptrace_old_execute_internal(px->current_execute_data, px->fci, px->return_value_used TSRMLS_DC);
         }else{
-            return execute_internal(px->current_execute_data, px->fci, px->return_value_used TSRMLS_DC);
+            execute_internal(px->current_execute_data, px->fci, px->return_value_used TSRMLS_DC);
         }
 #endif
+    }
+    if(ex){
+        -- ctx->level;
     }
 }
 
