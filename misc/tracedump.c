@@ -62,6 +62,9 @@ int main(int argc, char *argv[]){
     for(;;){
         seq = *(uint64_t *)addr;
         if(seq == (uint64_t)-1){
+            if(!isatty(1)){
+                break;
+            }
             printf("\33[?25lwaiting \\\r");
             usleep(1000*2);
             printf("waiting -\r");
