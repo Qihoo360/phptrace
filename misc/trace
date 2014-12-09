@@ -1,0 +1,24 @@
+#!/usr/bin/env ruby
+
+PID=ARGV[0]
+if not PID
+    puts "#$0 PID"
+    exit
+end
+
+Signal.trap('INT') do
+    puts "trace cancled"
+    %x|./ctrl #{PID} 0|
+    exit
+end
+
+%x|./ctrl #{PID} 1|
+
+puts "waiting to attach to #{PID}"
+path = "/tmp/phptrace.log.#{PID}"
+until File.exists? path
+    sleep 0.2
+end
+puts "attached"
+
+exec "./tracedump #{path}"
