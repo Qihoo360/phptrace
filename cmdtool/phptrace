@@ -5,7 +5,7 @@ STACK_FLAG=0
 
 function get_php_version()
 {
-    echo `/proc/29670/exe -i 2>&1 | grep -i 'PHP Version' | uniq | awk '{print $4}'`
+    echo `/proc/$1/exe -i 2>&1 | grep -i 'PHP Version' | uniq | awk '{print $4}'`
 }
 
 function get_php_address() 
@@ -34,26 +34,29 @@ executor_globals_14="print &(executor_globals.current_execute_data->opline)"
 executor_globals_140="print (executor_globals.current_execute_data->opline)"
 executor_globals_141="print &(executor_globals.current_execute_data->opline->lineno)"
 
+#$sapi_globals
+#$sapi_globals_1
+#$executor_globals
+#$executor_globals_1
+#$executor_globals_10
+#$executor_globals_11
+#$executor_globals_110
+#$executor_globals_111
+#$executor_globals_12
+#$executor_globals_13
+#$executor_globals_130
+#$executor_globals_131
+#$executor_globals_14
+#$executor_globals_140
+#$executor_globals_141
+
 # Run GDB, strip out unwanted noise.
 $GDB --quiet $readnever -nx /proc/$1/exe $1 <<EOF 2>&1 | 
 set width 0
 set height 0
 set pagination no
 $sapi_globals
-$sapi_globals_1
 $executor_globals
-$executor_globals_1
-$executor_globals_10
-$executor_globals_11
-$executor_globals_110
-$executor_globals_111
-$executor_globals_12
-$executor_globals_13
-$executor_globals_130
-$executor_globals_131
-$executor_globals_14
-$executor_globals_140
-$executor_globals_141
 EOF
 /bin/sed -n \
     -e 's/^\((gdb) \)*//' \
@@ -61,8 +64,6 @@ EOF
     -e '/^Thread/p' | awk '{print $NF}'
 
 }
-echo "===" $(get_php_version)
-#exit 0
 
 while getopts "p:cs" arg
 do
@@ -99,18 +100,22 @@ if [ $STACK_FLAG -eq 1 ] ; then
     declare -i retry=1
     while ((retry<=10))
     do
-        lines=$(get_php_address $PID)
+        version=$(get_php_version $PID)
         if [ $? -eq 0 ] ; then
-            params=($lines)
-            params_num=${#params[@]}
-            if [ $params_num -eq 15 ]; then
-                ./stack $PID $lines
-                break
+            lines=$(get_php_address $PID)
+            if [ $? -eq 0 ] ; then
+                params=($lines)
+                params_num=${#params[@]}
+                if [ $params_num -eq 2 ]; then
+                    ./stack $version $PID $lines
+                    break
+                fi
             fi
         fi
         let ++retry
         usleep 100000
     done
+
     if [ $retry -ge 11 ] ; then
         echo "can not print php stack"
     fi

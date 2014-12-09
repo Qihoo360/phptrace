@@ -24,6 +24,11 @@
 #define PTR_FMT "016"
 #endif
 
+#define PHP502 0
+#define PHP503 1
+#define PHP504 2
+#define PHP505 3
+
 typedef struct _trace_info_t {
     long sapi_globals_addr;
     long sapi_globals_path_offset;
@@ -41,6 +46,13 @@ typedef struct _trace_info_t {
     long opline_addr;
     long opline_ln_offset;
 } trace_info_t;
+
+trace_info_t trace_info_templates[] = {
+    {0, 64, 0, 968, 0, 16, 0, 8, 112, 64, 0, 168, 0, 112},
+    {0, 64, 0, 1360, 0, 8, 0, 8, 80, 40, 0, 168, 0, 0, 112},
+    {0, 64, 0, 1152, 0, 8, 0, 8, 80, 40, 0, 144, 0, 0, 40},
+    {0, 64, 0, 1120, 0, 8, 0, 8, 48, 24, 0, 152, 0, 0, 40}
+};
 
 static trace_info_t traced_info;
 
@@ -102,19 +114,51 @@ int parse_args(pid_t* pid, trace_info_t* info, int argc, char** argv)
 {
 	long addr;
 	int len;
+	int version;
+	int index;
 
 	if (!info) {
 		printf("invalid info\n");
 		return -1;
 	}
 
-	if (argc < 14) {
+	if (argc < 5) {
 		printf("args wrong\n");
 		return -1;
 	}
 
-	*pid = atoi(argv[1]);
+	if (strlen(argv[1]) < 5) {
+		printf("invalid php version %s\n", argv[1]);
+		return -1;
+	}
+	if (argv[1][0] == '5' && argv[1][1] == '.') {
+		version = argv[1][2] - '0';
+	}
+	else {
+		printf("invalid php version %s\n", argv[1]);
+		return -1;
+	}
+	printf("php version = %s\n", argv[1]);
 
+	index = version - 2;
+	memcpy(&traced_info, &trace_info_templates[index], sizeof(trace_info_t));
+
+	*pid = atoi(argv[2]);
+	printf("process id = %lld\n", pid);
+
+	if ((addr = hexstring2long(argv[3], strlen(argv[3]))) == -1) {
+		printf("invalid hex string %s\n", argv[3]);
+		return -1;
+	}
+	info->sapi_globals_addr = addr;
+
+	if ((addr = hexstring2long(argv[4], strlen(argv[4]))) == -1) {
+		printf("invalid hex string %s\n", argv[4]);
+		return -1;
+	}
+	info->executor_globals_addr = addr;
+
+#if 0
 	if ((addr = hexstring2long(argv[2], strlen(argv[2]))) == -1) {
 		printf("invalid hex string %s\n", argv[2]);
 		return -1;
@@ -204,6 +248,8 @@ int parse_args(pid_t* pid, trace_info_t* info, int argc, char** argv)
                 return -1;
         }
 	info->opline_ln_offset = addr - info->opline_addr;
+#endif
+
 #if 0
 	printf("pid %d\n", *pid, (long)addr);
 	printf("sapi_globals_addr %lld\n", info->sapi_globals_addr);
@@ -231,9 +277,6 @@ int trace_dump(pid_t pid)
 	char buf[buf_size];
 	long l, execute_data, function;
 	int callers_limit = 10;
-
-	printf("phptrace 0.1 demo, published by infra webcore team\n");
-	printf("process id = %lld\n", pid);
 
 	//if (0 > fpm_trace_get_strz(buf, buf_size, (long) &SG(request_info).path_translated)) {
 	if (0 > fpm_trace_get_strz(buf, buf_size, (long) (traced_info.sapi_globals_addr + traced_info.sapi_globals_path_offset))) {
@@ -315,105 +358,13 @@ int trace_dump(pid_t pid)
 }
 
 
-//static int fpm_php_trace_dump(struct fpm_child_s *child, FILE *slowlog TSRMLS_DC)
-//{
-//	int callers_limit = 20;
-//	pid_t pid = child->pid;
-//	struct timeval tv;
-//	static const int buf_size = 1024;
-//	char buf[buf_size];
-//	long execute_data;
-//	long l;
-//
-//	gettimeofday(&tv, 0);
-//
-//	zlog_print_time(&tv, buf, buf_size);
-//
-//	fprintf(slowlog, "\n%s [pool %s] pid %d\n", buf, child->wp->config->name, (int) pid);
-//
-//	if (0 > fpm_trace_get_strz(buf, buf_size, (long) &SG(request_info).path_translated)) {
-//		return -1;
-//	}
-//
-//	fprintf(slowlog, "script_filename = %s\n", buf);
-//
-//	if (0 > fpm_trace_get_long((long) &EG(current_execute_data), &l)) {
-//		return -1;
-//	}
-//
-//	execute_data = l;
-//
-//	while (execute_data) {
-//		long function;
-//		uint lineno = 0;
-//
-//		fprintf(slowlog, "[0x%" PTR_FMT "lx] ", execute_data);
-//
-//		if (0 > fpm_trace_get_long(execute_data + offsetof(zend_execute_data, function_state.function), &l)) {
-//			return -1;
-//		}
-//
-//		function = l;
-//
-//		if (valid_ptr(function)) {
-//			if (0 > fpm_trace_get_strz(buf, buf_size, function + offsetof(zend_function, common.function_name))) {
-//				return -1;
-//			}
-//
-//			fprintf(slowlog, "%s()", buf);
-//		} else {
-//			fprintf(slowlog, "???");
-//		}
-//
-//		if (0 > fpm_trace_get_long(execute_data + offsetof(zend_execute_data, op_array), &l)) {
-//			return -1;
-//		}
-//
-//		*buf = '\0';
-//
-//		if (valid_ptr(l)) {
-//			long op_array = l;
-//
-//			if (0 > fpm_trace_get_strz(buf, buf_size, op_array + offsetof(zend_op_array, filename))) {
-//				return -1;
-//			}
-//		}
-//
-//		if (0 > fpm_trace_get_long(execute_data + offsetof(zend_execute_data, opline), &l)) {
-//			return -1;
-//		}
-//
-//		if (valid_ptr(l)) {
-//			long opline = l;
-//			uint *lu = (uint *) &l;
-//
-//			if (0 > fpm_trace_get_long(opline + offsetof(struct _zend_op, lineno), &l)) {
-//				return -1;
-//			}
-//
-//			lineno = *lu;
-//		}
-//
-//		fprintf(slowlog, " %s:%u\n", *buf ? buf : "unknown", lineno);
-//
-//		if (0 > fpm_trace_get_long(execute_data + offsetof(zend_execute_data, prev_execute_data), &l)) {
-//			return -1;
-//		}
-//
-//		execute_data = l;
-//
-//		if (0 == --callers_limit) {
-//			break;
-//		}
-//	}
-//	return 0;
-//}
-
 int main(int argc, char** argv)
 {
 	int ret;
 	pid_t pid;
 	int retry;
+
+	printf("phptrace 0.1 demo, published by infra webcore team\n");
 
 	if (parse_args(&pid, &traced_info, argc, argv) == -1) {
 		return -1;
