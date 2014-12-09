@@ -6,6 +6,7 @@ if not PID
     exit
 end
 
+# The signal handler only takes effects before running "exec"
 Signal.trap('INT') do
     puts "trace cancled"
     `./ctrl #{PID} 0`
