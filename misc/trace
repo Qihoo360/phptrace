@@ -8,11 +8,16 @@ end
 
 Signal.trap('INT') do
     puts "trace cancled"
-    %x|./ctrl #{PID} 0|
+    `./ctrl #{PID} 0`
     exit
 end
 
-%x|./ctrl #{PID} 1|
+if not File.exists? "/proc/#{PID}"
+    puts "process #{PID} does not exist"
+    exit
+end
+
+`./ctrl #{PID} 1`
 
 puts "waiting to attach to #{PID}"
 path = "/tmp/phptrace.log.#{PID}"
