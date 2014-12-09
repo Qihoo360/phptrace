@@ -147,7 +147,16 @@ PHP_MINIT_FUNCTION(phptrace)
     phptrace_context_t *ctx;
     ctx = &PHPTRACE_G(ctx);
     snprintf(filename, sizeof(filename), "%s/%s", PHPTRACE_G(logdir), "phptrace.ctrl");
-    ctx->ctrl = phptrace_mmap_write(filename, PID_MAX);
+    if(access(filename, R_OK|W_OK) == -1){
+        if(errno == ENOENT){
+            ctx->ctrl = phptrace_mmap_write(filename, PID_MAX);
+        }else{
+            php_error_docref(NULL TSRMLS_CC, E_WARNING, "phptrace_mmap_write %s failed: %s", filename, strerror(errno));
+            return FAILURE;
+        }
+    }else{
+        ctx->ctrl = phptrace_mmap_read(filename);
+    }
     if(ctx->ctrl.shmaddr == MAP_FAILED){
         php_error_docref(NULL TSRMLS_CC, E_WARNING, "phptrace_mmap_write %s failed: %s", filename, strerror(errno));
         return FAILURE;
