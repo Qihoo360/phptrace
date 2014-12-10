@@ -8,7 +8,11 @@
 #include "../util/phptrace_protocol.h"
 #include "../util/phptrace_string.h"
 
+#include <stdio.h>
+#include <string.h>
 #include <stdarg.h>
+//#include <ctype.h>
+#include <inttypes.h>
 
 static char *progname;
 
@@ -32,8 +36,8 @@ phptrace_segment_t seg;
 phptrace_ctrl_t *ctrl;
 
 /* not used */
-static unsigned int nprocs = 0;
-static FILE *shared_log;
+//static unsigned int nprocs = 0;
+//static FILE *shared_log;
 
 //static volatile int interrupted;
 
@@ -163,8 +167,7 @@ void error_msg_and_die_setctrl(const char *fmt, ...)
 
 static void process_opt_p(char *optarg)
 {
-	uint8_t num = -1;
-	uint8_t a = 1;
+	int8_t num = -1;
 
 	phptrace_php_pid = string2uint(optarg);
 	if (phptrace_php_pid <= 0 || phptrace_php_pid > MAX_PROCESS_NUMBER || phptrace_php_pid > ctrl->ctrl_seg.size) {
@@ -310,7 +313,7 @@ static void init(int argc, char *argv[])
 
 	progname = argv[0] ? argv[0] : "phptrace";
 	phptrace_tracer_pid = getpid();
-	shared_log = stderr;
+	//shared_log = stderr;
 
 	if (argc < 2)
 	{
@@ -424,17 +427,17 @@ void phptrace_file_stack_print(phptrace_file_t *f)
 }
 void trace(phptrace_file_t *f)
 {
-	char ch;
+	//char ch;
 	int rc;
 	//int32_t idx_new, idx_top;
 	phptrace_file_record_t *ptr_rcd_top, *ptr_rcd_new;
 	int state = STATE_START;
-	uint64_t flag;
+	int64_t flag;
 	uint64_t record_time;
 	void *mem_ptr = NULL;
-	void *mem_ptr_prev = NULL;	
-	phptrace_file_record_t* p;
-	int16_t level_new, level_top, level_prev = -1;
+	//void *mem_ptr_prev = NULL;	
+	//phptrace_file_record_t* p;
+	int16_t level_new,  level_prev = -1;
 	int opendata_wait_interval = OPEN_DATA_WAIT_INTERVAL;
 	int data_wait_interval = DATA_WAIT_INTERVAL;
 
@@ -473,7 +476,8 @@ void trace(phptrace_file_t *f)
 		/* read header */
 		phptrace_mem_read_64b(&flag, mem_ptr);
 #ifdef DEBUG
-		printf ("[debug]flag=(%lld)", flag);
+		//printf ("[debug]flag=(%lld)", flag);
+		printf ("[debug]flag=(" PRId64 ")", flag);
 		if (flag == WAIT_FLAG)	
 		{
 			printf (" will wait %d ms.\n", data_wait_interval);
@@ -592,7 +596,7 @@ void trace(phptrace_file_t *f)
 #ifdef DEBUG
 				else 
 				{
-					printf ("[debug] old record [seq=%d] ~~ [record_time:", flag);
+					printf ("[debug] old record [seq=" PRId64 "] ~~ [record_time:", flag);
 					print_time(record_time, 0);
 					printf ("] < [tool_start_time:");
 					print_time(phptrace_start_time, 0);

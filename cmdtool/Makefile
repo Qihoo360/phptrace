@@ -20,9 +20,9 @@ type = release
 # ################################
 # # for test
 ifeq ($(type), debug)
-CFLAGS = -g -D DEBUG
+CFLAGS = -g -Wall -D DEBUG
 else
-CFLAGS = -g
+CFLAGS = -g -Wall
 endif
 
 # CFLAGS = -g -Wall -fPIC \

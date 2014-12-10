@@ -310,22 +310,22 @@ void *phptrace_mem_read_record_level(int16_t *level, void *mem)
     mem += sizeof(uint16_t);
 	return mem;
 }
-void *phptrace_mem_read_64b(uint64_t *number, void *mem)
+void *phptrace_mem_read_64b(int64_t *number, void *mem)
 {
-	*number = *((uint64_t *)mem);
-	mem += sizeof(uint64_t);
+	*number = *((int64_t *)mem);
+	mem += sizeof(int64_t);
 	return mem;
 }
-void *phptrace_mem_write_8b(uint8_t number, void *mem)
+void *phptrace_mem_write_8b(int8_t number, void *mem)
 {
-    *((uint8_t *)mem) = number;
-	mem += sizeof(uint8_t);
+    *((int8_t *)mem) = number;
+	mem += sizeof(int8_t);
 	return mem;
 }
-void *phptrace_mem_read_8b(uint8_t *number, void *mem)
+void *phptrace_mem_read_8b(int8_t *number, void *mem)
 {
-	*number = *((uint8_t *)mem);
-	mem += sizeof(uint8_t);
+	*number = *((int8_t *)mem);
+	mem += sizeof(int8_t);
 	return mem;
 }
 int phptrace_mem_is_waitflag(void *mem)
@@ -366,11 +366,6 @@ int string2uint(const char *str)
 }   
 
 #ifdef DEBUG
-
-//#define dump_header(h, fp) \
-//	fprintf (fp, "%lld%c%c", (h)->magic_number, (h)->version, (h)->flag);
-//#define dump_tailer(t, fp) \
-//	fprintf (fp, "%lld%u%p", (t)->magic_number, (t)->filename_len, (t)->file_ptr);
 #define dump_header(h, fp) \
 	fwrite(&((h)->magic_number), sizeof(uint64_t), 1, (fp));	\
 	fwrite(&((h)->version), sizeof(uint8_t), 1, (fp));	\

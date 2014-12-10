@@ -183,9 +183,9 @@ void *phptrace_mem_read_waitflag(uint64_t *waitflag, void *mem);
 void *phptrace_mem_read_tailer(phptrace_file_tailer_t *record, void *mem);
 void *phptrace_mem_write_tailer(phptrace_file_tailer_t *record, void *mem);
 
-void *phptrace_mem_read_64b(uint64_t *number, void *mem);
-void *phptrace_mem_read_8b(uint8_t *number, void *mem);
-void *phptrace_mem_write_8b(uint8_t number, void *mem);
+void *phptrace_mem_read_64b(int64_t *number, void *mem);
+void *phptrace_mem_read_8b(int8_t *number, void *mem);
+void *phptrace_mem_write_8b(int8_t number, void *mem);
 
 /* utils */
 int string2uint(const char *str);
