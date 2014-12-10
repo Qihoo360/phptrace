@@ -264,29 +264,51 @@ void *phptrace_mem_read_header(phptrace_file_header_t *header, void *mem)
     mem += sizeof(uint8_t);
     return mem; 
 }
-void *phptrace_mem_read_record(phptrace_file_record_t *record, void *mem)
+void *phptrace_mem_read_record(phptrace_file_record_t *record, void *mem, uint64_t seq)
 {
+    void *seqaddr = mem;
+    if(*((uint64_t *)mem)!=seq){
+        return NULL;
+    }
     record->seq = *((uint64_t *)mem);
     mem += sizeof(uint64_t);
 
+    if(*((uint64_t *)seqaddr)!=seq){
+        return NULL;
+    }
     record->level = *((uint16_t *)mem); 
     mem += sizeof(uint16_t);
 
+    if(*((uint64_t *)seqaddr)!=seq){
+        return NULL;
+    }
     record->start_time = *((uint64_t *)mem);
     mem += sizeof(uint64_t);
 
+    if(*((uint64_t *)seqaddr)!=seq){
+        return NULL;
+    }
     record->func_name = (phptrace_str_t *)mem; 
     mem += sizeof(uint32_t);
     mem += record->func_name->len;
 
+    if(*((uint64_t *)seqaddr)!=seq){
+        return NULL;
+    }
     record->params = (phptrace_str_t *)mem; 
     mem += sizeof(uint32_t);
     mem += record->params->len;
 
+    if(*((uint64_t *)seqaddr)!=seq){
+        return NULL;
+    }
 	record->ret_values_ptr = (uint64_t *)mem;
     record->ret_values = (phptrace_str_t *)mem;
     mem += RET_VALUE_SIZE * sizeof(char);
 
+    if(*((uint64_t *)seqaddr)!=seq){
+        return NULL;
+    }
     record->time_cost = *((uint64_t *)mem); 
     mem += sizeof(uint64_t);
 
