@@ -134,7 +134,7 @@ test:
 	@echo "CPP_OBJS: $(CPP_OBJS)"
 
 compile:$(C_OBJS) $(CPP_OBJS)
-	$(CC)  $^ -o $(TARGET)  $(LFLAGS) $(LIBS)  -g
+	$(CC)  $^ -o $(TARGET)  $(LFLAGS) $(LIBS) $(CFLAGS) 
 
 clean:
 	$(RM) $(C_OBJS) $(CPP_OBJS) $(STACK_OBJS)

@@ -28,7 +28,7 @@ void phptrace_ctrl_free(phptrace_ctrl_t *c, int pid)
 {
 	if (c && c->ctrl_seg.shmaddr != MAP_FAILED)
 	{ 
-		phptrace_ctrl_clean_one(c, pid);
+		//phptrace_ctrl_clean_one(c, pid);
 		phptrace_unmap(&(c->ctrl_seg));
 		free(c);
 	}

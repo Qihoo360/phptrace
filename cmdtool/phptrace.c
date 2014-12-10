@@ -18,6 +18,7 @@ static int phptrace_mmap_again;
 static int phptrace_tracer_pid = 0;
 static int phptrace_php_pid = 0;
 static int phptrace_mmap_cnt = 0; 
+int phptrace_trace_flag = 0;
 int map_filename_free_flag = 0; /* @TODO because first map filename is malloc, we need to free it */
 int seq = -1;
 
@@ -43,8 +44,8 @@ static FILE *shared_log;
 //#define MIN_RECORDS_NUMBER 100
 //#define MAX_RECORDS_NUMBER 100
 
-#define CTRL_WAIT_INTERVAL 100   			/* ms */
-#define MAX_CTRL_WAIT_INTERVAL (CTRL_WAIT_INTERVAL * 16)  /* ms */
+#define OPEN_DATA_WAIT_INTERVAL 100   			/* ms */
+#define MAX_OPEN_DATA_WAIT_INTERVAL (OPEN_DATA_WAIT_INTERVAL * 16)  /* ms */
 #define DATA_WAIT_INTERVAL 10   			/* ms */
 #define MAX_DATA_WAIT_INTERVAL (DATA_WAIT_INTERVAL * 20)  /* ms */ 
 
@@ -73,6 +74,9 @@ enum {
 
 static void cleanup()
 {
+#ifdef DEBUG
+	printf ("[debug]~~~cleanup~~~~~\n");
+#endif 
 	phptrace_unmap(&seg);
 	//phptrace_stack_free(stack);
 	phptrace_ctrl_free(ctrl, phptrace_php_pid);
@@ -84,9 +88,6 @@ static void cleanup()
 		if (map_filename_next) free(map_filename_next);
 	}
 
-#ifdef DEBUG
-	printf ("[debug]~~~cleanup~~~~~\n");
-#endif 
 }
 
 /* trace error utils */
@@ -144,6 +145,19 @@ void error_msg_and_die(const char *fmt, ...)
 	va_list p;
 	va_start(p, fmt);
 	verror_msg(0, fmt, p);
+	va_end(p);
+	die(PHPTRACE_ERROR);
+}
+void error_msg_and_die_setctrl(const char *fmt, ...)
+{
+	va_list p;
+	va_start(p, fmt);
+	verror_msg(0, fmt, p);
+	va_end(p);
+	phptrace_ctrl_clean_one(ctrl, phptrace_php_pid);
+#ifdef DEBUG
+	printf ("[debug]~~~cleanup clean ctrl pid=%d~~~~~\n", phptrace_php_pid);
+#endif 
 	die(PHPTRACE_ERROR);
 }
 
@@ -168,6 +182,7 @@ static void process_opt_p(char *optarg)
 	}
 
 	phptrace_ctrl_set(ctrl, (uint8_t)1, phptrace_php_pid);
+	phptrace_trace_flag = 1;
 #ifdef DEBUG
 	phptrace_ctrl_get(ctrl, &num, phptrace_php_pid);
 	printf ("[debug][ok] argument -p pid=%d  ctrl after set num=(%d)\n", phptrace_php_pid, num);
@@ -201,7 +216,6 @@ static int update_mmap_filename(phptrace_file_t *f)
 	}
 	else
 	{
-		phptrace_mmap_cnt++;
 		if (phptrace_str_equal(f->tailer.filename, map_filename_next))
 		{
 			phptrace_mmap_again = 0;
@@ -224,7 +238,8 @@ static int update_mmap_filename(phptrace_file_t *f)
 	//@TEST
 	//map_filename_next = phptrace_string("data.in3");
 
-	printf ("[debug]map_filename_prev=(%s) map_filename_next=(%s)\n", map_filename_prev == NULL ? "NULL" : map_filename_prev->data, map_filename_next->data);
+	printf ("[debug]map_filename_prev=(%s) map_filename_next=(%s)\n", map_filename_prev == NULL ? "NULL" : map_filename_prev->data,
+			map_filename_next == NULL ? "NULL" : map_filename_next->data);
 #endif
 	return PHPTRACE_AGAIN;
 }
@@ -260,6 +275,7 @@ int open_mmap(phptrace_file_t *f)
 		//phptrace_unmap(&seg);
 	}
 #endif
+	phptrace_mmap_cnt++;
 	return PHPTRACE_OK;
 }
 
@@ -268,6 +284,13 @@ void interrupt(int sig)
 {
 	if (sig == SIGINT)
 	{
+		if (phptrace_trace_flag)
+		{
+#ifdef DEBUG
+			printf ("[debug]~~~cleanup clean ctrl pid=%d~~~~~\n", phptrace_php_pid);
+#endif 
+			phptrace_ctrl_clean_one(ctrl, phptrace_php_pid);
+		}
 		die(PHPTRACE_OK);
 	}
 }
@@ -323,7 +346,7 @@ static void init(int argc, char *argv[])
 	//phptrace_stack_init(stack, file);  // stack init must be afer file init
 
 	if (signal(SIGINT, interrupt) == SIG_ERR)
-		error_msg_and_die("[error] can't catch SIGINT!\n");
+		error_msg_and_die_setctrl("[error] can't catch SIGINT!\n");
 }
 
 void print_indent_char(char ch, int size)
@@ -360,7 +383,7 @@ void func_enter_print(phptrace_file_record_t *r)
 	printf ("[debug][enter level=%d]\n", r->level);
 #endif 
 	print_time(r->start_time, 0);
-	print_indent_str("    ", r->level);
+	print_indent_str("  ", r->level);
  	phptrace_str_print(r->func_name); 
 	putchar ('(');
 	phptrace_str_print(r->params); 
@@ -371,7 +394,7 @@ void func_enter_print(phptrace_file_record_t *r)
 void func_leave_print(phptrace_file_record_t *r)
 {
 	print_time(r->start_time+r->time_cost, 0);
-	print_indent_str("    ", r->level);
+	print_indent_str("  ", r->level);
 	phptrace_str_print(r->func_name);
 	printf (" =>");
 	printf ("	");
@@ -412,7 +435,7 @@ void trace(phptrace_file_t *f)
 	void *mem_ptr_prev = NULL;	
 	phptrace_file_record_t* p;
 	int16_t level_new, level_top, level_prev = -1;
-	int ctrl_wait_interval = CTRL_WAIT_INTERVAL;
+	int opendata_wait_interval = OPEN_DATA_WAIT_INTERVAL;
 	int data_wait_interval = DATA_WAIT_INTERVAL;
 
 	while (1)
@@ -426,27 +449,29 @@ void trace(phptrace_file_t *f)
 		/* open mmap first time(START) or another time*/
 		while (state == STATE_START || state == STATE_TAILER)	
 		{
+#ifdef DEBUG
+			printf ("[debug]  open data mmap sleep %d ms.\n", opendata_wait_interval);
+#endif
+			phptrace_msleep(opendata_wait_interval);
+			opendata_wait_interval = grow_interval(opendata_wait_interval, MAX_OPEN_DATA_WAIT_INTERVAL);
+			
 			phptrace_mmap_again = 1;
 			rc = open_mmap(f);
 			if (rc == PHPTRACE_OK) 
 			{
 				state = STATE_OPEN;
+				mem_ptr = seg.shmaddr;	// mem_ptr will not change shmaddr;
 				break;
 			}
-#ifdef DEBUG
-			printf ("[debug]  open ctrl sleep %d ms.\n", ctrl_wait_interval);
-#endif
-			phptrace_msleep(ctrl_wait_interval);
-			ctrl_wait_interval = grow_interval(ctrl_wait_interval, MAX_CTRL_WAIT_INTERVAL);
-			//phptrace_msleep(CTRL_WAIT_INTERVAL);
+			//phptrace_msleep(OPEN_DATA_WAIT_INTERVAL);
 		} 
-		ctrl_wait_interval = CTRL_WAIT_INTERVAL;
+		opendata_wait_interval = OPEN_DATA_WAIT_INTERVAL;
 		
 		/* ? here or before sleep */
 		phptrace_ctrl_heart_beat_ping(ctrl, phptrace_php_pid);
 
 		/* read header */
-		phptrace_mem_read_64b(&flag, seg.shmaddr);
+		phptrace_mem_read_64b(&flag, mem_ptr);
 #ifdef DEBUG
 		printf ("[debug]flag=(%lld)", flag);
 		if (flag == WAIT_FLAG)	
@@ -460,12 +485,11 @@ void trace(phptrace_file_t *f)
 			data_wait_interval = DATA_WAIT_INTERVAL;
 		}
 
-		mem_ptr = seg.shmaddr;	// mem_ptr will not change shmaddr;
 		switch (flag)
 		{
 			case MAGIC_NUMBER_HEADER:
 				if (state != STATE_OPEN)
-					error_msg_and_die("[error] file damaged!\n");
+					error_msg_and_die_setctrl("[error] file damaged!\n");
 					
 				mem_ptr = phptrace_mem_read_header(&(f->header), mem_ptr);			
 				state = STATE_HEADER;
@@ -476,7 +500,7 @@ void trace(phptrace_file_t *f)
 				break;
 			case MAGIC_NUMBER_TAILER:
 				if (state != STATE_HEADER && state != STATE_RECORD)
-					error_msg_and_die("[error] file damaged!\n");
+					error_msg_and_die_setctrl("[error] file damaged!\n");
 
 				state = STATE_TAILER;
 				mem_ptr = phptrace_mem_read_tailer(&(f->tailer), mem_ptr);			
@@ -512,21 +536,26 @@ void trace(phptrace_file_t *f)
 				if (state == STATE_HEADER)
 					state = STATE_RECORD;
 				if (state != STATE_RECORD)
-					error_msg_and_die("--Sorry, tool internal error(1)!\n"); /* file not ok */
+				{
+#ifdef DEBUG
+					printf ("[error 1] (state:%d) != (STATE_RECORD:%d)\n", state, STATE_RECORD);
+#endif
+					error_msg_and_die_setctrl("--Sorry, tool internal error(1)!\n"); /* file not ok */
+				}
 
 				if (flag != seq + 1)
 				{
-					error_msg_and_die("--Sorry, tool internal error(2)!\n"); /* seq not ok */
+					error_msg_and_die_setctrl("--Sorry, tool internal error(2)!\n"); /* seq not ok */
 				}
 
 				phptrace_mem_read_record_level(&level_new, mem_ptr);
 			//	if (level_new > MIN_RECORDS_NUMBER)
 			//	{
-			//		error_msg_and_die("[error] too many records!\n");
+			//		error_msg_and_die_set_ctrl("[error] too many records!\n");
 			//	}
 			//	if (level_new > MAX_FUNCTION_LEVEL)
 			//	{
-			//		error_msg_and_die("[error] function call too much levels!\n");
+			//		error_msg_and_die_setctrl("[error] function call too much levels!\n");
 			//	}
 
 				//assert(level_new >= 0);	
@@ -579,10 +608,9 @@ void trace(phptrace_file_t *f)
 				seq++;
 				break;
 		}
-		mem_ptr_prev = seg.shmaddr;	
-		seg.shmaddr = mem_ptr;
-
 		//@TEST
+		//mem_ptr_prev = mem_ptr;	
+		//seg.shmaddr = mem_ptr;
 		//scanf ("%c", &ch);
 	}
 }

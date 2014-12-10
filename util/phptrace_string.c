@@ -32,8 +32,28 @@ int phptrace_str_print(phptrace_str_t *s) {
 		if (s->len == 0) {
 			printf ("<Null>");
 		}
+#ifdef DEBUG1
+		else
+		{
+			printf ("[len=%d+", s->len);
+		}
+#endif
 		for (i = 0; i < s->len; i++)
-			putchar(s->data[i]);
+		{
+			if (isprint(s->data[i]))
+				putchar(s->data[i]);
+			else
+			{
+				//printf ("\\x%x", (int)s->data[i]);
+				printf ("\\x%02x", (s->data[i] & 0x00ff));
+			}
+		}
+#ifdef DEBUG1
+		{
+			printf ("+]");
+		}
+#endif
+
 		return s->len;
 	}
 	return -1;
