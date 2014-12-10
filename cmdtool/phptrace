@@ -91,13 +91,18 @@ if [ $STACK_FLAG -eq 1 ] && [ $CLEAR_FLAG -eq 1 ] ; then
     exit 1
 fi
 
-if [ $STACK_FLAG -eq 1 ] ; then
-    if [ -z $PID ] ; then
-        echo "no pid"
-        exit 1
-    fi
+#ADD /proc/PID exist
+if [ -n "${PID}" ] && [ ! -d "/proc/${PID}" ]; then
+	echo "Oops, process ${PID} is not running."
+	exit 1
+fi
 
-    declare -i retry=1
+if [ $STACK_FLAG -eq 1 ] ; then
+	if [ -z $PID ] ; then
+		echo "Oops, need a pid"
+		exit 1
+	fi
+	declare -i retry=1
     while ((retry<=10))
     do
         version=$(get_php_version $PID)
