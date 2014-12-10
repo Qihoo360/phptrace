@@ -476,8 +476,8 @@ void trace(phptrace_file_t *f)
 		/* read header */
 		phptrace_mem_read_64b(&flag, mem_ptr);
 #ifdef DEBUG
-		//printf ("[debug]flag=(%lld)", flag);
-		printf ("[debug]flag=(" PRId64 ")", flag);
+		printf ("[debug]flag=(%lld) (0x%llx)", flag, flag);
+		//printf ("[debug]flag=(" PRId64 ")", flag);
 		if (flag == WAIT_FLAG)	
 		{
 			printf (" will wait %d ms.\n", data_wait_interval);
@@ -581,7 +581,11 @@ void trace(phptrace_file_t *f)
 					}
 				}
 				ptr_rcd_new = phptrace_file_record_new();
-				mem_ptr = phptrace_mem_read_record(ptr_rcd_new, mem_ptr);
+				mem_ptr = phptrace_mem_read_record(ptr_rcd_new, mem_ptr, flag);
+				if (!mem_ptr)
+				{
+					error_msg_and_die_setctrl("--Sorry, tool internal error(3)!\n"); /* write too fast */
+				}
 
 				record_time = ptr_rcd_new->start_time;	
 				if (record_time > phptrace_start_time)
@@ -596,7 +600,8 @@ void trace(phptrace_file_t *f)
 #ifdef DEBUG
 				else 
 				{
-					printf ("[debug] old record [seq=" PRId64 "] ~~ [record_time:", flag);
+					printf ("[debug] old record [seq=%lld] ~~ [record_time:", flag);
+					//printf ("[debug] old record [seq=" PRId64 "] ~~ [record_time:", flag);
 					print_time(record_time, 0);
 					printf ("] < [tool_start_time:");
 					print_time(phptrace_start_time, 0);
