@@ -93,7 +93,11 @@ int main(int argc, char *argv[]){
                 break;
             }
             last = seq;
-            addr = phptrace_mem_read_record(&record, addr);
+            addr = phptrace_mem_read_record(&record, addr, seq);
+            if(!addr){
+                printf("overlapped\n");
+                break;
+            }
             snprintf(out, record.func_name->len+1, "%s",record.func_name->data);
             printf("seq %lu level %d %s", record.seq,record.level, out);
 
