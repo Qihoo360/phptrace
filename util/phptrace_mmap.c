@@ -32,7 +32,8 @@ phptrace_segment_t phptrace_mmap_write(char *file_mask, size_t size)
     /*
      * we do a normal filesystem mmap
      */
-    fd = open(file_mask, O_RDWR|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH);
+    umask(0);
+    fd = open(file_mask, O_RDWR|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH);
     if (fd == -1) {
         goto error;
     }
