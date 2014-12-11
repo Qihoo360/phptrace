@@ -14,6 +14,10 @@
 //#include <ctype.h>
 #include <inttypes.h>
 
+//#ifdef HAVE_VASPRINTF
+//#define _GNU_SOURCE /* For vasprintf */
+//#endif
+
 static char *progname;
 
 static phptrace_str_t *map_filename_next;
