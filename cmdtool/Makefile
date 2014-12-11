@@ -20,9 +20,9 @@ type = release
 # ################################
 # # for test
 ifeq ($(type), debug)
-CFLAGS = -g -Wall -D DEBUG
+CFLAGS = -g -Wall -DDEBUG -D_GNU_SOURCE
 else
-CFLAGS = -g -Wall
+CFLAGS = -g -Wall -D_GNU_SOURCE
 endif
 
 # CFLAGS = -g -Wall -fPIC \
@@ -106,7 +106,7 @@ STACK_OBJS = fpm_ptrace.o phpstack.o
 
 
 
-default:init compile stack
+default:compile stack
 
 $(C_OBJS):%.o:%.c
 	$(CC) -c $(CFLAGS) $(INCLUDES) $< -o $@

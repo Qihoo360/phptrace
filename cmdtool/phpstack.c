@@ -113,7 +113,7 @@ int fpm_trace_get_strz(char *buf, size_t sz, long addr)
 int parse_args(pid_t* pid, trace_info_t* info, int argc, char** argv)
 {
 	long addr;
-	int len;
+	//int len;
 	int version;
 	int index;
 
@@ -144,7 +144,7 @@ int parse_args(pid_t* pid, trace_info_t* info, int argc, char** argv)
 	memcpy(&traced_info, &trace_info_templates[index], sizeof(trace_info_t));
 
 	*pid = atoi(argv[2]);
-	printf("process id = %lld\n", pid);
+	printf("process id = %d\n", *pid);
 
 	if ((addr = hexstring2long(argv[3], strlen(argv[3]))) == -1) {
 		printf("invalid hex string %s\n", argv[3]);
@@ -275,7 +275,7 @@ int trace_dump(pid_t pid)
 {
 	static const int buf_size = 1024;
 	char buf[buf_size];
-	long l, execute_data, function;
+	long l, execute_data; 
 	int callers_limit = 10;
 
 	//if (0 > fpm_trace_get_strz(buf, buf_size, (long) &SG(request_info).path_translated)) {
