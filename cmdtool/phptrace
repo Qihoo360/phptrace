@@ -2,6 +2,7 @@
 
 CLEAR_FLAG=0
 STACK_FLAG=0
+SCRIPT_PATH=`dirname $0`
 
 function get_php_version()
 {
@@ -125,7 +126,7 @@ if [ $STACK_FLAG -eq 1 ] ; then
                 params=($lines)
                 params_num=${#params[@]}
                 if [ $params_num -eq 2 ]; then
-                    ./stack $version $PID $lines
+                    "$SCRIPT_PATH/stack" $version $PID $lines
                     break
                 fi
             fi
@@ -138,6 +139,6 @@ if [ $STACK_FLAG -eq 1 ] ; then
         echo "can not print php stack"
     fi
 else
-	./trace $@
+	"$SCRIPT_PATH/trace" $@
 fi
 
