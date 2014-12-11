@@ -65,7 +65,20 @@ EOF
 
 }
 
-while getopts "p:cs" arg
+usage() { 
+	echo "usage: phptrace [ -chs ] [ -p pid ]"
+	echo "		-h     -- show this help"
+	echo "		-c     -- clear the trace switches of pid, or all the switches if no pid paramete"
+	echo "		-p pid -- access the php process i"
+	echo "		-s     -- print call stack of php process by the pi."
+}
+
+if [ $# -lt 2 ] ; then
+	usage
+	exit
+fi
+
+while getopts "p:csh" arg
 do
     case $arg in
         p)
@@ -80,8 +93,8 @@ do
             #echo "c"
             STACK_FLAG=1
             ;;  
-        ?)
-            echo "unknown argument ???"
+        *)
+			usage
             exit 1
             ;;  
     esac
@@ -93,7 +106,7 @@ fi
 
 #ADD /proc/PID exist
 if [ -n "${PID}" ] && [ ! -d "/proc/${PID}" ]; then
-	echo "Oops, process ${PID} is not running."
+	echo "Oops, could not trace process ${PID}."
 	exit 1
 fi
 

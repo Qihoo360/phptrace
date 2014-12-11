@@ -20,9 +20,10 @@ static phptrace_str_t *map_filename_next;
 static phptrace_str_t *map_filename_prev;
 static int phptrace_mmap_again;
 static int phptrace_tracer_pid = 0;
-static int phptrace_php_pid = 0;
+static int phptrace_php_pid = -1;
 static int phptrace_mmap_cnt = 0; 
 int phptrace_trace_flag = 0;
+int phptrace_opt_c_flag = 0;
 int map_filename_free_flag = 0; /* @TODO because first map filename is malloc, we need to free it */
 int seq = -1;
 
@@ -165,17 +166,10 @@ void error_msg_and_die_setctrl(const char *fmt, ...)
 	die(PHPTRACE_ERROR);
 }
 
-static void process_opt_p(char *optarg)
+static void process_opt_p()
 {
 	int8_t num = -1;
 
-	phptrace_php_pid = string2uint(optarg);
-	if (phptrace_php_pid <= 0 || phptrace_php_pid > MAX_PROCESS_NUMBER || phptrace_php_pid > ctrl->ctrl_seg.size) {
-		error_msg_and_die("Invalid process id: '%s'", optarg);
-	}
-	if (phptrace_php_pid == phptrace_tracer_pid) {
-		error_msg_and_die("Sorry not a php process.");
-	}
 	phptrace_ctrl_get(ctrl, &num, phptrace_php_pid);
 #ifdef DEBUG
 	printf ("[debug] read ctrl data: %d, not zero will exit!\n", num);
@@ -192,6 +186,21 @@ static void process_opt_p(char *optarg)
 #endif
 }
 
+static void process_opt_c()
+{
+	if (phptrace_php_pid >= 0)
+	{
+		phptrace_ctrl_clean_one(ctrl, phptrace_php_pid);
+		printf ("clean process %d.\n", phptrace_php_pid);
+	}
+	else
+	{
+		phptrace_ctrl_clean_all(ctrl);
+		printf ("clean all process.\n");
+	}
+	exit(0);
+}
+/*
 static void process_opt_c(char *optarg)
 {
 	int pid;
@@ -205,6 +214,7 @@ static void process_opt_c(char *optarg)
 		phptrace_ctrl_clean_one(ctrl, pid);
 	}
 }
+*/
 		
 static int update_mmap_filename(phptrace_file_t *f)
 {
@@ -323,21 +333,29 @@ static void init(int argc, char *argv[])
 	/* init ctrl switches */
 	ctrl = (phptrace_ctrl_t *)malloc(sizeof(phptrace_ctrl_t));
 	if (!phptrace_ctrl_init(ctrl))
-		error_msg_and_die("[error] can't open ctrl mmap file!\n");
+		error_msg_and_die(" Sorry, tool internal error(1)!\n"); /*can't open ctrl mmap file*/
 
 	while ((c = getopt(argc, argv,
 					"p:"	 // trace pid
-					"c:"     // clean switches of pid | all
+					"c"     // clean switches of pid | all
 					"h"		 // help
 					)) != EOF)
 	{
 		switch (c)
 		{
 			case 'p':
-				process_opt_p(optarg);
+				phptrace_php_pid = string2uint(optarg);
+				if (phptrace_php_pid <= 0 || phptrace_php_pid > MAX_PROCESS_NUMBER || phptrace_php_pid > ctrl->ctrl_seg.size) {
+					error_msg_and_die("Invalid process id: '%s'", optarg);
+				}
+				if (phptrace_php_pid == phptrace_tracer_pid) {
+					error_msg_and_die("Sorry not a php process.");
+				}
+				//process_opt_p(optarg);
 				break;
 			case 'c':
-				process_opt_c(optarg);
+				phptrace_opt_c_flag = 1;
+				//process_opt_c(optarg);
 				break;
 			default: 
 				usage();
@@ -350,6 +368,11 @@ static void init(int argc, char *argv[])
 
 	if (signal(SIGINT, interrupt) == SIG_ERR)
 		error_msg_and_die_setctrl("[error] can't catch SIGINT!\n");
+
+	if (phptrace_opt_c_flag > 0)
+		process_opt_c();
+
+	process_opt_p();
 }
 
 void print_indent_char(char ch, int size)
@@ -544,12 +567,12 @@ void trace(phptrace_file_t *f)
 #ifdef DEBUG
 					printf ("[error 1] (state:%d) != (STATE_RECORD:%d)\n", state, STATE_RECORD);
 #endif
-					error_msg_and_die_setctrl("--Sorry, tool internal error(1)!\n"); /* file not ok */
+					error_msg_and_die_setctrl("--Sorry, tool internal error(2)!\n"); /* file not ok */
 				}
 
 				if (flag != seq + 1)
 				{
-					error_msg_and_die_setctrl("--Sorry, tool internal error(2)!\n"); /* seq not ok */
+					error_msg_and_die_setctrl("--Sorry, tool internal error(3)!\n"); /* seq not ok */
 				}
 
 				phptrace_mem_read_record_level(&level_new, mem_ptr);
@@ -584,7 +607,7 @@ void trace(phptrace_file_t *f)
 				mem_ptr = phptrace_mem_read_record(ptr_rcd_new, mem_ptr, flag);
 				if (!mem_ptr)
 				{
-					error_msg_and_die_setctrl("--Sorry, tool internal error(3)!\n"); /* write too fast */
+					error_msg_and_die_setctrl("--Sorry, tool internal error(4)!\n"); /* write too fast */
 				}
 
 				record_time = ptr_rcd_new->start_time;	
