@@ -32,7 +32,7 @@
 #include "phptrace_time.h"
 #include "sds/sds.h"
 
-#if PHP_VERSION_ID < 50300
+#ifndef PHP_FE_END
 #define PHP_FE_END {NULL, NULL, NULL, 0, 0}
 #endif
 
