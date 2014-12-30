@@ -23,9 +23,16 @@ make
 ```
 
 ## Installing
-cmdtool可直接使用，扩展需要安装到PHP相关目录：
+cmdtool编译后， 可直接使用其目录下的phptrace命令。
+
+PHP扩展需要安装到PHP相关目录：
 ```shell
 make install
+```
+编辑php.ini，启用扩展
+```
+extension=phptrace.so
+phptrace.enabled=1
 ```
 
 ## Usage
