@@ -70,7 +70,7 @@ TEST(ProtocolWriteTest, phptrace_mem_write_record_entry)
     record.flag  = RECORD_FLAG_ENTRY;
     record.level = 3;
     record.function_name = sdsnew("say");
-    record.info.entry.start_time = 1234;
+    record.start_time = 1234;
     record.info.entry.params = sdsnew("(\"world\")");
     record.info.entry.filename = sdsnew("test.php");
     record.info.entry.lineno = 15;
@@ -84,7 +84,7 @@ TEST(ProtocolWriteTest, phptrace_mem_write_record_entry)
     ASSERT_EQ(record.level, GET<uint16_t>(&rd));
     ASSERT_EQ(sdslen(record.function_name), len = GET<uint32_t>(&rd));
     ASSERT_STREQ(record.function_name, GET_S(&rd, len));
-    ASSERT_EQ(record.info.entry.start_time, GET<uint64_t>(&rd));
+    ASSERT_EQ(record.start_time, GET<uint64_t>(&rd));
     ASSERT_EQ(sdslen(record.info.entry.params), len = GET<uint32_t>(&rd));
     ASSERT_STREQ(record.info.entry.params, GET_S(&rd, len));
     ASSERT_EQ(sdslen(record.info.entry.filename), len = GET<uint32_t>(&rd));
@@ -101,6 +101,7 @@ TEST(ProtocolWriteTest, phptrace_mem_write_record_exit)
     record.flag  = RECORD_FLAG_EXIT;
     record.level = 3;
     record.function_name = sdsnew("say");
+    record.start_time = 12345;
     record.info.exit.return_value = sdsnew("hello world");
     record.info.exit.cost_time = 1234;
 
@@ -113,6 +114,7 @@ TEST(ProtocolWriteTest, phptrace_mem_write_record_exit)
     ASSERT_EQ(record.level, GET<uint16_t>(&rd));
     ASSERT_EQ(sdslen(record.function_name), len = GET<uint32_t>(&rd));
     ASSERT_STREQ(record.function_name, GET_S(&rd, len));
+    ASSERT_EQ(record.start_time,   GET<uint64_t>(&rd));
     ASSERT_EQ(sdslen(record.info.exit.return_value), len = GET<uint32_t>(&rd));
     ASSERT_STREQ(record.info.exit.return_value, GET_S(&rd, len));
     ASSERT_EQ(record.info.exit.cost_time, GET<uint64_t>(&rd));
@@ -204,7 +206,7 @@ TEST(ProtocolReadTest, phptrace_mem_read_record_entry)
     ASSERT_EQ(flag, record.flag);
     ASSERT_EQ(level, record.level);
     ASSERT_STREQ(function_name,record.function_name);
-    ASSERT_EQ(start_time, record.info.entry.start_time);
+    ASSERT_EQ(start_time, record.start_time);
     ASSERT_STREQ(params, record.info.entry.params);
     ASSERT_STREQ(filename, record.info.entry.filename);
     ASSERT_EQ(lineno, record.info.entry.lineno);
@@ -217,6 +219,7 @@ TEST(ProtocolReadTest, phptrace_mem_read_record_exit)
     uint64_t seq = 1;
     uint8_t flag = RECORD_FLAG_EXIT;
     uint16_t level = 1;
+    uint64_t start_time = 123456;
     sds function_name = sdsnew("say");
     sds return_value = sdsnew("hello world");
     uint64_t cost_time = 1419493969;
@@ -227,6 +230,7 @@ TEST(ProtocolReadTest, phptrace_mem_read_record_exit)
     SET<uint16_t>(&wr, level);
     SET<uint32_t>(&wr, sdslen(function_name));
     SET_S(&wr, function_name);
+    SET<uint64_t>(&wr, start_time);
     SET<uint32_t>(&wr, sdslen(return_value));
     SET_S(&wr, return_value);
     SET<uint64_t>(&wr, cost_time);
@@ -238,6 +242,7 @@ TEST(ProtocolReadTest, phptrace_mem_read_record_exit)
     ASSERT_EQ(flag, record.flag);
     ASSERT_EQ(level, record.level);
     ASSERT_STREQ(function_name,record.function_name);
+    ASSERT_EQ(start_time,record.start_time);
     ASSERT_STREQ(return_value,record.info.exit.return_value);
     ASSERT_EQ(cost_time, record.info.exit.cost_time);
 }
