@@ -3,6 +3,7 @@ phptrace
 php程序跟踪和分析工具，从PHP Runtime中获取程序的上下文及函数调用情况，适用于线上快速分析定位阻塞、负载高等疑难杂症
 
 [phptrace介绍及使用](https://github.com/Qihoo360/phptrace/wiki)
+QQ交流群: 428631461
 
 ## Building
 
