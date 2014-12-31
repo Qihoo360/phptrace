@@ -549,7 +549,7 @@ void process_opt_s(phptrace_context_t *ctx)
 {
     int ret;
 
-    printf("phptrace 0.1 demo, published by infra webcore team\n");
+    printf("%s %s, published by %s\n", PHPTRACE_NAME, PHPTRACE_VERSION, PHPTRACE_DEVELOPER);
 
     if (sys_trace_attach(ctx->php_pid)) {
         log_printf(LL_ERROR, "sys_trace_attach failed");
