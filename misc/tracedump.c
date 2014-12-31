@@ -4,8 +4,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <ctype.h>
-#include "../util/phptrace_mmap.h"
-#include "../util/phptrace_protocol.h"
+#include "../common/phptrace_mmap.h"
+#include "../common/phptrace_protocol.h"
+#include "../common/sds/sds.h"
 
 enum protocol_st{
     P_START,
@@ -63,7 +64,8 @@ int main(int argc, char *argv[]){
         seq = *(uint64_t *)addr;
         if(seq == (uint64_t)-1){
             if(!isatty(1)){
-                break;
+                usleep(1000*8);
+                continue;
             }
             printf("\33[?25lwaiting \\\r");
             usleep(1000*2);
@@ -89,7 +91,7 @@ int main(int argc, char *argv[]){
         if(st == P_RECORD){
             seq = *(uint64_t *)addr;
             if(last != 0 && seq != last + 1){
-                printf("overlapped seq(0X%lX)\n", seq);
+                printf("overlapped seq(0X%lX) last(0X%lX)\n", seq, last);
                 break;
             }
             last = seq;
@@ -98,28 +100,36 @@ int main(int argc, char *argv[]){
                 printf("overlapped\n");
                 break;
             }
-            snprintf(out, record.func_name->len+1, "%s",record.func_name->data);
-            printf("seq %lu level %d %s", record.seq,record.level, out);
+            printf("%lu %d %d ", record.seq, record.level, record.flag);
+            if(record.flag == RECORD_FLAG_ENTRY){
+                printf("%s", record.function_name);
 
-            snprintf(out, record.params->len+1, "%s", record.params->data);
-            repr_binary_data(out, strlen(out));
-            printf("(%s)", out);
+                sprintf(out, "%s", record.info.entry.params);
+                repr_binary_data(out, strlen(out));
+                printf("(%s) %s:%d\n", out, record.info.entry.filename, record.info.entry.lineno);
+                sdsfree(record.function_name);
+                sdsfree(record.info.entry.params);
+                sdsfree(record.info.entry.filename);
+            }
 
-            snprintf(out, record.ret_values->len+1, "%s", record.ret_values->data);
-            repr_binary_data(out, strlen(out));
-            printf(" => %s", out);
+            if(record.flag == RECORD_FLAG_EXIT){
+                sprintf(out, "%s", record.info.exit.return_value);
+                repr_binary_data(out, strlen(out));
+                printf("=> %s", out);
 
-            sprintf(out, "%f", record.time_cost/1000000.0);
-            printf(" %s\n", out);
+                sprintf(out, "%f", record.info.exit.cost_time/1000001.0);
+                printf(" %s\n", out);
+                sdsfree(record.info.exit.return_value);
+            }
 
             continue;
         }
         if(st == P_TAILER){
             addr = phptrace_mem_read_tailer(&tailer, addr);
-            snprintf(out, tailer.filename->len+1, "%s", tailer.filename->data);
-            printf("magic 0X%lX, rotate %s\n", tailer.magic_number, out);
+            printf("magic 0X%lX, rotate %s\n", tailer.magic_number, tailer.filename);
             st = P_HEADER;
             addr = tracelog.shmaddr;
+            sdsfree(tailer.filename);
             continue;
         }
     }

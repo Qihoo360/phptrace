@@ -67,35 +67,37 @@ EOF
 }
 
 usage() { 
-	echo "usage: phptrace [ -chs ] [ -p pid ]"
-	echo "		-h     -- show this help"
-	echo "		-c     -- clear the trace switches of pid, or all the switches if no pid paramete"
-	echo "		-p pid -- access the php process i"
-	echo "		-s     -- print call stack of php process by the pi."
+    echo "usage: phptrace [ -chs ] [ -p pid ]"
+    echo "          -h          -- show this help"
+    echo "          -c          -- clear the trace switches of pid, or all the switches if no pid paramete"
+    echo "          -p pid      -- access the php process i"
+    echo "          -s          -- print call stack of php process by the pid."
+    echo "          -l size     -- specify the maximun string length to print"
+    echo "          -e          -- show error message of error code"
+    echo "          -v          -- set log level to debug"
 }
 
-if [ $# -lt 2 ] ; then
-	usage
-	exit
+if [ $# -lt 1 ] ; then
+    usage
+    exit
 fi
 
-while getopts "p:csh" arg
+while getopts "p:cshl:ev" arg
 do
-    case $arg in
-        p)
-            #echo "a's arg:$OPTARG"
+    case "$arg" in
+        "p")
             PID=$OPTARG
             ;;  
-        c)
-            #echo "b"
+        "c")
             CLEAR_FLAG=1
             ;;  
-        s)
-            #echo "c"
+        "s")
             STACK_FLAG=1
             ;;  
+        "l" | "e" | "v")
+        ;;
         *)
-			usage
+            usage
             exit 1
             ;;  
     esac
@@ -105,18 +107,17 @@ if [ $STACK_FLAG -eq 1 ] && [ $CLEAR_FLAG -eq 1 ] ; then
     exit 1
 fi
 
-#ADD /proc/PID exist
 if [ -n "${PID}" ] && [ ! -d "/proc/${PID}" ]; then
-	echo "Oops, could not trace process ${PID}."
-	exit 1
+    echo "Oops, process ${PID} does not exist."
+    exit 1
 fi
 
 if [ $STACK_FLAG -eq 1 ] ; then
-	if [ -z $PID ] ; then
-		echo "Oops, need a pid"
-		exit 1
-	fi
-	declare -i retry=1
+    if [ -z $PID ] ; then
+        echo "Oops, need a pid"
+        exit 1
+    fi
+    declare -i retry=1
     while ((retry<=10))
     do
         version=$(get_php_version $PID)
@@ -126,7 +127,8 @@ if [ $STACK_FLAG -eq 1 ] ; then
                 params=($lines)
                 params_num=${#params[@]}
                 if [ $params_num -eq 2 ]; then
-                    "$SCRIPT_PATH/stack" $version $PID $lines
+                    "$SCRIPT_PATH/php-trace" --php-version $version -p $PID --sapi-globals ${params[0]} --executor-globals ${params[1]}
+                    #"$SCRIPT_PATH/stack" --php-version $version -p $PID --sapi-globals ${params[0]} --executor-globals ${params[1]}
                     break
                 fi
             fi
@@ -139,6 +141,6 @@ if [ $STACK_FLAG -eq 1 ] ; then
         echo "can not print php stack"
     fi
 else
-	"$SCRIPT_PATH/trace" $@
+    "$SCRIPT_PATH/php-trace" $@
 fi
 

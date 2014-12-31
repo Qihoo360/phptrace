@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
-#include "../util/phptrace_mmap.h"
+#include "../common/phptrace_mmap.h"
 #define PID_MAX 32768
 int main(int argc, char *argv[]){
     int pid, i, c;
@@ -11,7 +11,7 @@ int main(int argc, char *argv[]){
         printf("Usage: %s pid [flag]\n", argv[0]);
         return 1;
     }
-    phptrace_segment_t ctrl = phptrace_mmap_read("/tmp/phptrace.ctrl");
+    phptrace_segment_t ctrl = phptrace_mmap_write("/tmp/phptrace.ctrl");
     flags = ctrl.shmaddr;
 
     cmd = argv[1];

@@ -48,7 +48,7 @@ clean :
 # Usually you shouldn't tweak such internal variables, indicated by a
 # trailing _.
 GTEST_SRCS_ = $(GTEST_DIR)/src/*.cc $(GTEST_DIR)/src/*.h $(GTEST_HEADERS)
-UTIL_SRCS = $(USER_DIR)/util/*.c $(USER_DIR)/util/*.h
+COMMON_SRCS = $(USER_DIR)/common/*.c $(USER_DIR)/common/*.h $(USER_DIR)/common/sds/*.c
 
 # For simplicity and to avoid depending on Google Test's
 # implementation details, the dependencies specified below are
@@ -72,17 +72,25 @@ gtest_main.a : gtest-all.o gtest_main.o
 # gtest_main.a, depending on whether it defines its own main()
 # function.
 
-phptrace_protocol.o : $(UTIL_SRCS) $(GTEST_HEADERS)
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(USER_DIR)/util/phptrace_protocol.c
-phptrace_mmap.o : $(UTIL_SRCS) $(GTEST_HEADERS)
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(USER_DIR)/util/phptrace_mmap.c
-phptrace_string.o : $(UTIL_SRCS) $(GTEST_HEADERS)
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(USER_DIR)/util/phptrace_string.c
+phptrace_protocol.o : $(COMMON_SRCS) $(GTEST_HEADERS)
+	$(CC) $(CPPFLAGS) $(CXXFLAGS) -c $(USER_DIR)/common/phptrace_protocol.c
+phptrace_mmap.o : $(COMMON_SRCS) $(GTEST_HEADERS)
+	$(CC) $(CPPFLAGS) $(CXXFLAGS) -c $(USER_DIR)/common/phptrace_mmap.c
+sds.o : $(COMMON_SRCS) $(GTEST_HEADERS)
+	$(CC) $(CPPFLAGS) $(CXXFLAGS) -c $(USER_DIR)/common/sds/sds.c
+phptrace_ctrl.o: $(COMMON_SRCS) $(GTEST_HEADERS)
+	$(CC) $(CPPFLAGS) $(CXXFLAGS) -c $(USER_DIR)/common/phptrace_ctrl.c
 
 phptrace_protocol_unittest.o : phptrace_protocol_unittest.cc \
-                     $(USER_DIR)/util/phptrace_protocol.h $(GTEST_HEADERS)
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -I$(USER_DIR) -c phptrace_protocol_unittest.cc
+                     $(USER_DIR)/common/phptrace_protocol.h $(GTEST_HEADERS)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -I$(USER_DIR) -I$(USER_DIR)/common -c phptrace_protocol_unittest.cc
+phptrace_mmap_unittest.o : phptrace_mmap_unittest.cc \
+                     $(USER_DIR)/common/phptrace_mmap.h $(GTEST_HEADERS)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -I$(USER_DIR) -I$(USER_DIR)/common -c phptrace_mmap_unittest.cc
+phptrace_ctrl_unittest.o : phptrace_ctrl_unittest.cc \
+                     $(USER_DIR)/common/phptrace_ctrl.h $(GTEST_HEADERS)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -I$(USER_DIR) -I$(USER_DIR)/common -c phptrace_ctrl_unittest.cc
 
 phptrace_unittest : phptrace_protocol.o phptrace_protocol_unittest.o gtest_main.a \
-	phptrace_mmap.o phptrace_string.o
+	phptrace_mmap.o sds.o phptrace_mmap_unittest.o phptrace_ctrl.o phptrace_ctrl_unittest.o
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@

@@ -2,29 +2,31 @@
 
 PID=ARGV[0]
 if not PID
-    puts "#$0 PID"
+    $stderr.puts "#$0 PID"
     exit
 end
 
 # The signal handler only takes effects before running "exec"
 Signal.trap('INT') do
-    puts "trace cancled"
+    $stderr.puts "trace cancled"
     `./ctrl #{PID} 0`
     exit
 end
 
 if not File.exists? "/proc/#{PID}"
-    puts "process #{PID} does not exist"
+    $stderr.puts "process #{PID} does not exist"
     exit
 end
 
 `./ctrl #{PID} 1`
 
-puts "waiting to attach to #{PID}"
-path = "/tmp/phptrace.log.#{PID}"
+$stderr.puts "waiting to attach to #{PID}"
+path = "/tmp/phptrace.trace.#{PID}"
 until File.exists? path
     sleep 0.2
 end
-puts "attached"
+$stderr.puts "attached"
 
-exec "./tracedump #{path}"
+childpid = fork {exec "./tracedump #{path}"}
+Process.wait childpid
+`./ctrl #{PID} 0`

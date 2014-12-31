@@ -20,7 +20,7 @@
 
 #ifndef PHP_PHPTRACE_H
 #define PHP_PHPTRACE_H
-#include "../util/phptrace_mmap.h"
+#include "phptrace_mmap.h"
 
 extern zend_module_entry phptrace_module_entry;
 #define phpext_phptrace_ptr &phptrace_module_entry
@@ -29,11 +29,11 @@ extern zend_module_entry phptrace_module_entry;
 #define PHPTRACE_UNIT_TEST 0
 
 #ifdef PHP_WIN32
-#	define PHP_PHPTRACE_API __declspec(dllexport)
+#    define PHP_PHPTRACE_API __declspec(dllexport)
 #elif defined(__GNUC__) && __GNUC__ >= 4
-#	define PHP_PHPTRACE_API __attribute__ ((visibility("default")))
+#    define PHP_PHPTRACE_API __attribute__ ((visibility("default")))
 #else
-#	define PHP_PHPTRACE_API
+#    define PHP_PHPTRACE_API
 #endif
 
 #ifdef ZTS
@@ -55,7 +55,7 @@ typedef struct phptrace_context_s{
     pid_t pid;
     int cli;
     unsigned long long heartbeat;
-    int heartbeat_timedout;
+    unsigned int heartbeat_timedout;
     phptrace_segment_t ctrl;   
     phptrace_segment_t tracelog;   
     void *shmoffset;
@@ -88,7 +88,7 @@ ZEND_END_MODULE_GLOBALS(phptrace)
 #define PHPTRACE_G(v) (phptrace_globals.v)
 #endif
 
-#endif	/* PHP_PHPTRACE_H */
+#endif    /* PHP_PHPTRACE_H */
 
 /*
  * Local variables:

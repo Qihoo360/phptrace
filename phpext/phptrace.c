@@ -27,16 +27,17 @@
 #include "php_ini.h"
 #include "ext/standard/info.h"
 #include "php_phptrace.h"
-#include "../util/phptrace_mmap.h"
-#include "../util/phptrace_protocol.h"
-#include "../util/phptrace_string.h"
+#include "phptrace_mmap.h"
+#include "phptrace_protocol.h"
+#include "phptrace_time.h"
+#include "sds/sds.h"
 
-#if PHP_VERSION_ID < 50300
+#ifndef PHP_FE_END
 #define PHP_FE_END {NULL, NULL, NULL, 0, 0}
 #endif
 
-#define PID_MAX 0x8000 /*32768*/
-#define PHPTRACE_LOG_DIR "/tmp"
+#define PHPTRACE_LOG_SIZE 52428800
+#define PHPTRACE_LOG_SIZE_STR "52428800"
 #define HEARTBEAT_TIMEDOUT 30 /*30 seconds*/
 #define HEARTBEAT_FLAG (1<<7)
 
@@ -65,11 +66,11 @@ extern sapi_module_struct sapi_module;
  * Every user visible function must have an entry in phptrace_functions[].
  */
 const zend_function_entry phptrace_functions[] = {
-	PHP_FE(phptrace_info,	NULL)
+    PHP_FE(phptrace_info,    NULL)
 #if PHPTRACE_UNIT_TEST
     PHP_FE(phptrace_mmap_test,   NULL)
 #endif // PHPTRACE_UNIT_TEST
-	PHP_FE_END	/* Must be the last line in phptrace_functions[] */
+    PHP_FE_END    /* Must be the last line in phptrace_functions[] */
 };
 /* }}} */
 
@@ -77,19 +78,19 @@ const zend_function_entry phptrace_functions[] = {
  */
 zend_module_entry phptrace_module_entry = {
 #if ZEND_MODULE_API_NO >= 20010901
-	STANDARD_MODULE_HEADER,
+    STANDARD_MODULE_HEADER,
 #endif
-	"phptrace",
-	phptrace_functions,
-	PHP_MINIT(phptrace),
-	PHP_MSHUTDOWN(phptrace),
-	PHP_RINIT(phptrace),		/* Replace with NULL if there's nothing to do at request start */
-	PHP_RSHUTDOWN(phptrace),	/* Replace with NULL if there's nothing to do at request end */
-	PHP_MINFO(phptrace),
+    "phptrace",
+    phptrace_functions,
+    PHP_MINIT(phptrace),
+    PHP_MSHUTDOWN(phptrace),
+    PHP_RINIT(phptrace),        /* Replace with NULL if there's nothing to do at request start */
+    PHP_RSHUTDOWN(phptrace),    /* Replace with NULL if there's nothing to do at request end */
+    PHP_MINFO(phptrace),
 #if ZEND_MODULE_API_NO >= 20010901
-	PHP_PHPTRACE_VERSION,
+    PHP_PHPTRACE_VERSION,
 #endif
-	STANDARD_MODULE_PROPERTIES
+    STANDARD_MODULE_PROPERTIES
 };
 /* }}} */
 
@@ -102,7 +103,7 @@ ZEND_GET_MODULE(phptrace)
 PHP_INI_BEGIN()
     STD_PHP_INI_ENTRY("phptrace.enabled",      "0", PHP_INI_ALL, OnUpdateLong, enabled, zend_phptrace_globals, phptrace_globals)
     STD_PHP_INI_ENTRY("phptrace.dotrace",      "0", PHP_INI_ALL, OnUpdateLong, dotrace, zend_phptrace_globals, phptrace_globals)
-    STD_PHP_INI_ENTRY("phptrace.logsize",      "52428800", PHP_INI_ALL, OnUpdateLong, logsize, zend_phptrace_globals, phptrace_globals)
+    STD_PHP_INI_ENTRY("phptrace.logsize",      PHPTRACE_LOG_SIZE_STR, PHP_INI_ALL, OnUpdateLong, logsize, zend_phptrace_globals, phptrace_globals)
     STD_PHP_INI_ENTRY("phptrace.logdir",      NULL, PHP_INI_ALL, OnUpdateString, logdir, zend_phptrace_globals, phptrace_globals)
 PHP_INI_END()
 /* }}} */
@@ -113,7 +114,7 @@ static void php_phptrace_init_globals(zend_phptrace_globals *phptrace_globals)
 {
     phptrace_globals->enabled = 0;
     phptrace_globals->dotrace = 0;
-    phptrace_globals->logsize = 50*1024*1024;
+    phptrace_globals->logsize = PHPTRACE_LOG_SIZE;
     phptrace_globals->logdir = NULL;
     memset(&phptrace_globals->ctx, 0, sizeof(phptrace_context_t));
 }
@@ -126,11 +127,16 @@ PHP_MINIT_FUNCTION(phptrace)
     char filename[256];
     ZEND_INIT_MODULE_GLOBALS(phptrace, php_phptrace_init_globals, NULL);
     REGISTER_INI_ENTRIES();
-    if(!PHPTRACE_G(enabled)){
+    if (!PHPTRACE_G(enabled)) {
         return SUCCESS;
     }
-    if(!PHPTRACE_G(logdir)){
+    if (!PHPTRACE_G(logdir)) {
         PHPTRACE_G(logdir) = PHPTRACE_LOG_DIR;
+    }
+    if (PHPTRACE_G(logsize) < PHPTRACE_LOG_SIZE) {
+        php_error_docref(NULL TSRMLS_CC, E_WARNING, "phptrace.logsize is too small"
+                " to run trace, expected >= %d , actually is %d",
+                PHPTRACE_LOG_SIZE, PHPTRACE_G(logsize));
     }
     /*phptrace enabled*/
 #if PHP_VERSION_ID < 50500
@@ -146,25 +152,25 @@ PHP_MINIT_FUNCTION(phptrace)
      * */
     phptrace_context_t *ctx;
     ctx = &PHPTRACE_G(ctx);
-    snprintf(filename, sizeof(filename), "%s/%s", PHPTRACE_G(logdir), "phptrace.ctrl");
-    if(access(filename, R_OK|W_OK) == -1){
-        if(errno == ENOENT){
-            ctx->ctrl = phptrace_mmap_write(filename, PID_MAX);
-        }else{
-            php_error_docref(NULL TSRMLS_CC, E_WARNING, "phptrace_mmap_write %s failed: %s", filename, strerror(errno));
+    snprintf(filename, sizeof(filename), "%s/%s", PHPTRACE_G(logdir), PHPTRACE_CTRL_FILENAME);
+    if (access(filename, R_OK|W_OK) == -1) {
+        if (errno == ENOENT) {
+            ctx->ctrl = phptrace_mmap_create(filename, PID_MAX);
+            memset(ctx->ctrl.shmaddr, 0, PID_MAX);
+        } else {
+            php_error_docref(NULL TSRMLS_CC, E_WARNING, "phptrace_mmap_create %s failed: %s", filename, strerror(errno));
             return FAILURE;
         }
-    }else{
-        ctx->ctrl = phptrace_mmap_read(filename);
+    } else {
+        ctx->ctrl = phptrace_mmap_write(filename);
     }
-    if(ctx->ctrl.shmaddr == MAP_FAILED){
+    if (ctx->ctrl.shmaddr == MAP_FAILED) {
         php_error_docref(NULL TSRMLS_CC, E_WARNING, "phptrace_mmap_write %s failed: %s", filename, strerror(errno));
         return FAILURE;
     }
-    memset(ctx->ctrl.shmaddr, 0, PID_MAX);
-    if(sapi_module.name[0]=='c' &&
-       sapi_module.name[1]=='l' &&
-       sapi_module.name[2]=='i'){
+    if (sapi_module.name[0]=='c' &&
+        sapi_module.name[1]=='l' &&
+        sapi_module.name[2]=='i') {
         ctx->cli = 1;
     }
     ctx->heartbeat_timedout = HEARTBEAT_TIMEDOUT;
@@ -179,7 +185,7 @@ PHP_MSHUTDOWN_FUNCTION(phptrace)
     char filename[256];
     phptrace_context_t *ctx;
 
-    if(!PHPTRACE_G(enabled)){
+    if (!PHPTRACE_G(enabled)) {
         UNREGISTER_INI_ENTRIES();
         return SUCCESS;
     }
@@ -192,13 +198,12 @@ PHP_MSHUTDOWN_FUNCTION(phptrace)
     zend_execute_internal = phptrace_old_execute_internal;
 
     ctx = &PHPTRACE_G(ctx);
-    snprintf(filename, sizeof(filename), "%s/%s", PHPTRACE_G(logdir), "phptrace.ctrl");
+    snprintf(filename, sizeof(filename), "%s/%s", PHPTRACE_G(logdir), PHPTRACE_CTRL_FILENAME);
     phptrace_unmap(&ctx->ctrl);
-    //unlink(filename); /*TODO uncomment this*/
-    if(ctx->tracelog.shmaddr){
+    if (ctx->tracelog.shmaddr) {
         phptrace_unmap(&ctx->ctrl);
-        snprintf(filename, sizeof(filename), "%s/%s.%d", PHPTRACE_G(logdir), "phptrace.log", ctx->pid);
-        //unlink(filename); /*TODO uncomment this*/
+        snprintf(filename, sizeof(filename), "%s/%s.%d", PHPTRACE_G(logdir), PHPTRACE_TRACE_FILENAME, ctx->pid);
+        unlink(filename);
     }
     UNREGISTER_INI_ENTRIES();
     return SUCCESS;
@@ -256,14 +261,10 @@ typedef struct phptrace_execute_data_s{
     int internal;
 }phptrace_execute_data;
 
-uint64_t phptrace_time_usec(){
-    struct timeval tv;
-    gettimeofday(&tv, 0);
-    return tv.tv_sec * 1000000 + tv.tv_usec;
-}
-phptrace_str_t *phptrace_repr_zval(zval *val){
-    char value[128];
-    switch(Z_TYPE_P(val)){
+sds phptrace_repr_zval(zval *val)
+{
+    char value[128], *type_name;
+    switch (Z_TYPE_P(val)) {
         case IS_NULL:
             sprintf(value, "nil");
             break;
@@ -277,48 +278,53 @@ phptrace_str_t *phptrace_repr_zval(zval *val){
             sprintf(value, "%s", Z_LVAL_P(val)?"true":"false");
             break;
         case IS_STRING:
-            return phptrace_str_new(Z_STRVAL_P(val), Z_STRLEN_P(val));
+            return sdsnewlen(Z_STRVAL_P(val), Z_STRLEN_P(val));
         case IS_ARRAY:
             sprintf(value, "array<%p>", Z_ARRVAL_P(val));
             break;
         case IS_OBJECT:
             sprintf(value, "object<%p>", &Z_OBJVAL_P(val));
             break;
+        case IS_RESOURCE:
+            type_name = (char *) zend_rsrc_list_get_rsrc_type(Z_LVAL_P(val));
+            sprintf(value, "%s(%ld)", type_name, Z_LVAL_P(val));
+            break;
         default:
-            sprintf(value, "unknown");
+            sprintf(value, "<unknown>");
     }
-    return phptrace_str_new(value, strlen(value));
+    return sdsnewlen(value, strlen(value));
 }
 
 #define EXF_COMMON(e) ex->function_state.function->common.e
 #define EXF(e) ex->function_state.function->e
-phptrace_str_t *phptrace_get_funcname(zend_execute_data *ex){
-    phptrace_str_t *funcname;
+sds phptrace_get_funcname(zend_execute_data *ex)
+{
+    sds funcname;
     const char *scope;
     const char *name;
 
     /*Just return if there is no function name*/
-    if(ex == NULL || 
+    if (ex == NULL || 
             ex->function_state.function == NULL || 
-            EXF_COMMON(function_name) == NULL){
+            EXF_COMMON(function_name) == NULL) {
         return NULL;
     }
 
-    if(ex->object && EXF_COMMON(scope)){
+    if (ex->object && EXF_COMMON(scope)) {
         /*This is an object, so the function should be a member of a class.
          *Get the scope which is the class's name
          * */
         scope = EXF_COMMON(scope->name);
     }
-    else if(EG(scope) &&
-            EXF_COMMON(scope) &&
-            EXF_COMMON(scope->name)){
+    else if (EG(scope) &&
+             EXF_COMMON(scope) &&
+             EXF_COMMON(scope->name)) {
         /*static member of class*/
         scope = EXF_COMMON(scope->name);
     }else{
         scope = NULL;
     }
-    if(strncmp(EXF_COMMON(function_name), "{closure}", sizeof("closure")-1) == 0){
+    if (strncmp(EXF_COMMON(function_name), "{closure}", sizeof("closure")-1) == 0) {
         /*a closure may be a chunk of code, get the filename and line range*/
         /*TODO process a closure*/
         /*EXF(op_array.filename);
@@ -326,28 +332,29 @@ phptrace_str_t *phptrace_get_funcname(zend_execute_data *ex){
         EXF(op_array.line_end);*/
     }
     name = EXF_COMMON(function_name);
-    if(scope){
-        funcname = phptrace_str_new(scope, strlen(scope));
+    if (scope) {
+        funcname = sdsnewlen(scope, strlen(scope));
         if(ex->object){
-            funcname = phptrace_str_nconcat(funcname, "->", 2);
+            funcname = sdscat(funcname, "->");
         }else{
-            funcname = phptrace_str_nconcat(funcname, "::", 2);
+            funcname = sdscat(funcname, "::");
         }
-        funcname = phptrace_str_nconcat(funcname, name, strlen(name));
-    }else{
-        funcname = phptrace_str_new(name, strlen(name));
+        funcname = sdscat(funcname, name);
+    } else {
+        funcname = sdsnew(name);
     }
     return funcname;
 }
-phptrace_str_t *phptrace_get_parameters(zend_execute_data *ex){
-    phptrace_str_t *parameters, *param;
+sds phptrace_get_parameters(zend_execute_data *ex)
+{
+    sds parameters, param;
     zend_arg_info *arg_info;
     zval **args;
     long n, i, narg_info;
 
-    if(ex == NULL || 
+    if (ex == NULL || 
             ex->function_state.function == NULL || 
-            EXF_COMMON(num_args) == 0){
+            EXF_COMMON(num_args) == 0) {
         return NULL;
     }
     n = 0;
@@ -365,39 +372,39 @@ phptrace_str_t *phptrace_get_parameters(zend_execute_data *ex){
     arg_info = EXF_COMMON(arg_info);
     narg_info  = EXF_COMMON(num_args);
 
-    parameters = phptrace_str_new(NULL, 0);
-    for(i = 0; i < n; ++i){
+    parameters = sdsempty();
+    for (i = 0; i < n; ++i) {
         /*The format $p = "hello", $b = "world"*/
-        /*FIXME: It is a terriable idea to realloc memory frequently*/
-        if(i < narg_info){
-            parameters = phptrace_str_nconcat(parameters, "$", 1);
-            parameters = phptrace_str_nconcat(parameters, arg_info[i].name, arg_info[i].name_len);
-        }else{
-            parameters = phptrace_str_nconcat(parameters, "optional", sizeof("optional")-1);
+        if (i < narg_info) {
+            parameters = sdscat(parameters, "$");
+            parameters = sdscatlen(parameters, arg_info[i].name, arg_info[i].name_len);
+        } else {
+            parameters = sdscat(parameters, "optional");
         }
-        parameters = phptrace_str_nconcat(parameters, " = \"", 4);
+        parameters = sdscat(parameters, " = ");
         param = phptrace_repr_zval(args[i]);
-        parameters = phptrace_str_nconcat(parameters, param->data, param->len);
-        parameters = phptrace_str_nconcat(parameters, "\"", 1);
-        phptrace_str_free(param);
+        parameters = sdscatsds(parameters, param);
+        sdsfree(param);
         if(i != n-1){
-            parameters = phptrace_str_nconcat(parameters, ", ", 2);
+            parameters = sdscat(parameters, ", ");
         }
     }
     return parameters;
 }
-phptrace_str_t *phptrace_get_return_value(zval *return_value){
-    if(return_value){
+sds phptrace_get_return_value(zval *return_value)
+{
+    if (return_value) {
         return phptrace_repr_zval(return_value); 
-    }else{
+    } else {
         return NULL;
     }
 }
 
-void phptrace_reset_tracelog(phptrace_context_t *ctx){
+void phptrace_reset_tracelog(phptrace_context_t *ctx)
+{
     char filename[256];
 
-    snprintf(filename, sizeof(filename), "%s/%s.%d", PHPTRACE_G(logdir),"phptrace.log", ctx->pid);
+    snprintf(filename, sizeof(filename), "%s/%s.%d", PHPTRACE_G(logdir),PHPTRACE_TRACE_FILENAME, ctx->pid);
     phptrace_unmap(&ctx->tracelog);
     ctx->tracelog.shmaddr = NULL;
     ctx->tracelog.size = 0;
@@ -407,50 +414,58 @@ void phptrace_reset_tracelog(phptrace_context_t *ctx){
     ctx->shmoffset = NULL;
     ctx->heartbeat = 0;
 }
-void phptrace_get_callinfo(phptrace_file_record_t *record, zend_execute_data *ex){
-    phptrace_str_t *funcname, *parameters;
+void phptrace_get_callinfo(phptrace_file_record_t *record, zend_execute_data *ex)
+{
+    sds funcname, parameters;
     funcname = phptrace_get_funcname(ex);
-    if(funcname){
-        record->func_name = funcname;
+    if (funcname) {
+        record->function_name = funcname;
     }
 
     parameters = phptrace_get_parameters(ex);
-    if(parameters){
-        record->params = parameters;
+    if (parameters) {
+        RECORD_ENTRY(record, params) = parameters;
     }
 }
-void phptrace_register_return_value(zval **return_value){
-    if (EG(return_value_ptr_ptr) == NULL){
+void phptrace_register_return_value(zval **return_value)
+{
+    if (EG(return_value_ptr_ptr) == NULL) {
         EG(return_value_ptr_ptr) = return_value;
     }
 }
-void phptrace_get_execute_return_value(phptrace_file_record_t *record, zval *return_value){
-    if(*EG(return_value_ptr_ptr)){
-        record->ret_values = phptrace_get_return_value(return_value);
+void phptrace_get_execute_return_value(phptrace_file_record_t *record, zval *return_value)
+{
+    if (return_value) {
+        /*registered by phptrace*/
+        RECORD_EXIT(record, return_value) = phptrace_get_return_value(return_value);
         zval_ptr_dtor(EG(return_value_ptr_ptr));
         EG(return_value_ptr_ptr) = NULL;
+    } else if (*EG(return_value_ptr_ptr)) {
+        /*registered by someone else, just fetch it*/
+        RECORD_EXIT(record, return_value) = phptrace_get_return_value(*EG(return_value_ptr_ptr));
     }
 
 }
-void phptrace_get_execute_internal_return_value(phptrace_file_record_t *record, zend_execute_data *ex){
+void phptrace_get_execute_internal_return_value(phptrace_file_record_t *record, zend_execute_data *ex)
+{
     zend_op *opline;
     zval *return_value;
     zend_free_op should_free;
 
-    if(*EG(opline_ptr)){
+    if (*EG(opline_ptr)) {
         opline = *EG(opline_ptr);
 #if PHP_VERSION_ID >= 50500
-        if(opline && opline->result_type & 0x0F){
+        if (opline && opline->result_type & 0x0F) {
             return_value = zend_get_zval_ptr((opline->result_type&0x0F), &opline->result, ex, &should_free, 0);
 #elif PHP_VERSION_ID >= 50400
-        if(opline && opline->result_type & 0x0F){
+        if (opline && opline->result_type & 0x0F) {
             return_value = zend_get_zval_ptr((opline->result_type&0x0F), &opline->result, ex->Ts, &should_free, 0);
 #else
-        if(opline && opline->result.op_type & 0x0F){
+        if (opline && opline->result.op_type & 0x0F) {
             return_value = zend_get_zval_ptr(&opline->result, ex->Ts, &should_free, 0);
 #endif
-            if(return_value){
-                record->ret_values = phptrace_get_return_value(return_value);
+            if (return_value) {
+                RECORD_EXIT(record, return_value) = phptrace_get_return_value(return_value);
             }
         }
         /*
@@ -460,31 +475,32 @@ void phptrace_get_execute_internal_return_value(phptrace_file_record_t *record, 
     }
 }
 
-void phptrace_print_callinfo(phptrace_file_record_t *record){
+void phptrace_print_callinfo(phptrace_file_record_t *record)
+{
     printf("%lu %d %f ",record->seq, record->level, record->start_time/1000000.0);
-    if(record->func_name){
-        printf("%s ", record->func_name->data);
-    }else{
+    if (record->function_name) {
+        printf("%s ", record->function_name);
+    } else {
         printf("- ");
     }
-    if(record->params){
-        printf("(%s) ", record->params->data);
-    }else{
+    if (RECORD_ENTRY(record, params)) {
+        printf("(%s) ", RECORD_ENTRY(record, params));
+    } else {
         printf("() ");
     }
 }
-void phptrace_print_call_result(phptrace_file_record_t *record){
-    printf(" = %s ", record->ret_values->data);
-    printf("%f\n", record->time_cost/1000000.0);
+void phptrace_print_call_result(phptrace_file_record_t *record)
+{
+    printf(" = %s ", RECORD_EXIT(record, return_value));
+    printf("%f\n", RECORD_EXIT(record, cost_time)/1000000.0);
 }
 
 void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
 {
     uint64_t now;
     uint8_t *ctrl;
-    void * retoffset;
-    int rotate_count;
     char filename[256];
+    const char *p;
     zval *return_value;
     phptrace_context_t *ctx;
 
@@ -496,33 +512,32 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
         goto exec;
     }
 
-
     ctx = &PHPTRACE_G(ctx);
     ++ctx->level;
     ctrl = ctx->ctrl.shmaddr;
-    /*TODO move to request init ?*/
-    if(ctx->pid == 0){
+    if (ctx->pid == 0) {
         ctx->pid = getpid();
     }
 
-    snprintf(filename, sizeof(filename), "%s/%s.%d", PHPTRACE_G(logdir),"phptrace.log", ctx->pid);
-
-    if(ctrl[ctx->pid] == 0 && !PHPTRACE_G(dotrace)){
+    if (ctrl[ctx->pid] == 0 && !PHPTRACE_G(dotrace)) {
         /*unmap tracelog if phptrace was shutdown*/
-        if(ctx->tracelog.shmaddr){
+        if (ctx->tracelog.shmaddr) {
             phptrace_reset_tracelog(ctx);
         }
         goto exec;
     
     }
 
-    if(ctrl[ctx->pid] & HEARTBEAT_FLAG){
+    snprintf(filename, sizeof(filename), "%s/%s.%d", PHPTRACE_G(logdir), PHPTRACE_TRACE_FILENAME, ctx->pid);
+
+    if (ctrl[ctx->pid] & HEARTBEAT_FLAG) {
         ctrl[ctx->pid] &= ~HEARTBEAT_FLAG & 0x00FF;
         ctx->heartbeat = phptrace_time_usec();
     }
-    if(((ctrl[ctx->pid] & HEARTBEAT_FLAG) == 0) && ctx->heartbeat){
+    if (((ctrl[ctx->pid] & HEARTBEAT_FLAG) == 0) && ctx->heartbeat) {
         now = phptrace_time_usec();
-        if(now - ctx->heartbeat > ctx->heartbeat_timedout * 1000000){
+        if (now - ctx->heartbeat > ctx->heartbeat_timedout * 1000000) {
+            ctrl[ctx->pid] = 0;
             phptrace_reset_tracelog(ctx);
             goto exec;
         }
@@ -530,11 +545,10 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
 
     /*do trace*/
     /*first startup*/
-    if(ctx->tracelog.shmaddr == NULL){
-        ctx->tracelog = phptrace_mmap_write(filename, PHPTRACE_G(logsize));
-        if(ctx->tracelog.shmaddr == MAP_FAILED){
+    if (ctx->tracelog.shmaddr == NULL) {
+        ctx->tracelog = phptrace_mmap_create(filename, PHPTRACE_G(logsize));
+        if (ctx->tracelog.shmaddr == MAP_FAILED) {
             ctx->tracelog.shmaddr = NULL;
-            /*TODO write log here*/
             goto exec;
         }
         ctx->shmoffset = ctx->tracelog.shmaddr;
@@ -544,33 +558,35 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
         ctx->rotate_count = 0;
     }
     /*should do rotate*/
-    if((ctx->shmoffset - ctx->tracelog.shmaddr) > PHPTRACE_G(logsize)-1024*1024){ /*FIXME Use a more safty condition to rotate*/
+    if ((ctx->shmoffset - ctx->tracelog.shmaddr) > PHPTRACE_G(logsize)-1024*1024) { /*FIXME Use a more safty condition to rotate*/
         ctx->rotate = 1;
     }
 
     /*ex MUST NOT be NULL*/
-    if(ctx->rotate){
+    if (ctx->rotate) {
         ctx->rotate = 0;
         ++ctx->rotate_count;
 
         /*set waitflag at header before rotate*/
         phptrace_mem_write_waitflag(ctx->tracelog.shmaddr);
 
-        tailer.filename = phptrace_str_new(filename, strlen(filename));
+        tailer.filename = sdsnew(filename);
         ctx->shmoffset = phptrace_mem_write_tailer(&tailer, ctx->shmoffset);
-        phptrace_str_free(tailer.filename);
+        sdsfree(tailer.filename);
 
         ctx->shmoffset = ctx->tracelog.shmaddr;
         ctx->shmoffset = phptrace_mem_write_header(&header, ctx->shmoffset);
     }
 
-    record.params = NULL;
-    record.func_name = NULL;
-    record.ret_values = NULL;
+    RECORD_ENTRY(&record, params) = NULL;
+    record.function_name = NULL;
+    p = zend_get_executed_filename();
+    RECORD_ENTRY(&record, filename) = sdsnew(p);
+    RECORD_ENTRY(&record, lineno) = zend_get_executed_lineno();
 
     phptrace_get_callinfo(&record, ex);
 
-    if(!px->internal){
+    if (!px->internal) {
         /* register return_values's address
          * it will be setting if needed after execute
          * */
@@ -581,99 +597,131 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
     record.seq = ctx->seq ++;
     record.level = ctx->level;
     record.start_time = phptrace_time_usec();
-    record.time_cost = 0;
 
-    if(ctx->cli && PHPTRACE_G(dotrace)){
+    if (ctx->cli && PHPTRACE_G(dotrace)) {
         phptrace_print_callinfo(&record);
     }
 
+    record.flag = RECORD_FLAG_ENTRY;
     ctx->shmoffset = phptrace_mem_write_record(&record, ctx->shmoffset);
 
-    phptrace_str_free(record.func_name);
-    phptrace_str_free(record.params);
+    /* params and filename MUST be freed before we
+     * assign cost_time and return_value.
+     * It maybe hear strange to you; but this is true !
+     * These all because the member entry and exit of
+     * structure phptrace_record_t are UNION. The entry member
+     * will be overwritten when set some value to exit.
+     * TODO : use a more appropriate design
+     * */
+    sdsfree(RECORD_ENTRY(&record, params));
+    sdsfree(RECORD_ENTRY(&record, filename));
 
-    retoffset = ctx->shmoffset - sizeof(uint64_t) - RET_VALUE_SIZE;
-    rotate_count = ctx->rotate_count;
+    RECORD_EXIT(&record, cost_time) = 0;
+    RECORD_EXIT(&record, return_value) = NULL;
 
-    if(!px->internal){
+    zend_try {
+        if (!px->internal) {
 #if PHP_VERSION_ID < 50500
-        phptrace_old_execute(px->op_array TSRMLS_CC);
+            phptrace_old_execute(px->op_array TSRMLS_CC);
 #else
-        phptrace_old_execute_ex(px->current_execute_data TSRMLS_CC);
+            phptrace_old_execute_ex(px->current_execute_data TSRMLS_CC);
 #endif
-    }else{
+        } else {
 #if PHP_VERSION_ID < 50500
-        if(phptrace_old_execute_internal){
-            phptrace_old_execute_internal(px->current_execute_data, px->return_value_used TSRMLS_DC);
-        }else{
-            execute_internal(px->current_execute_data, px->return_value_used TSRMLS_DC);
-        }
+            if (phptrace_old_execute_internal) {
+                phptrace_old_execute_internal(px->current_execute_data, px->return_value_used TSRMLS_DC);
+            } else {
+                execute_internal(px->current_execute_data, px->return_value_used TSRMLS_DC);
+            }
 #else
-        if(phptrace_old_execute_internal){
-            phptrace_old_execute_internal(px->current_execute_data, px->fci, px->return_value_used TSRMLS_DC);
-        }else{
-            execute_internal(px->current_execute_data, px->fci, px->return_value_used TSRMLS_DC);
-        }
+            if (phptrace_old_execute_internal) {
+                phptrace_old_execute_internal(px->current_execute_data, px->fci, px->return_value_used TSRMLS_DC);
+            } else {
+                execute_internal(px->current_execute_data, px->fci, px->return_value_used TSRMLS_DC);
+            }
 #endif
-    }
+        }
+    } zend_catch {
+        /* do some cleanup when catch an exception
+         * remeber to free the memory we allocated whether explicitly or implicitly
+         * */
+        --ctx->level;
+        sdsfree(record.function_name);
+        if (!px->internal && return_value) {
+            /*registered by phptrace, dtor the return value other causes a memleak*/
+            zval_ptr_dtor(EG(return_value_ptr_ptr));
+            EG(return_value_ptr_ptr) = NULL;
+        }
+        zend_bailout();
+    }zend_end_try();
 
     -- ctx->level;
     now = phptrace_time_usec();
 
-    if(!px->internal){
+    if (!px->internal) {
         /* return_value was setted
          * now get the value
          * */
-        if(return_value){
-            phptrace_get_execute_return_value(&record, return_value);
-        }
-    }else{
+        phptrace_get_execute_return_value(&record, return_value);
+    } else {
         phptrace_get_execute_internal_return_value(&record, ex);
     }
 
-    record.time_cost = now - record.start_time;
+    RECORD_EXIT(&record, cost_time) = now - record.start_time;
     /*write the return value and cost time*/
-    if(record.ret_values == NULL){
-        record.ret_values = phptrace_str_empty();
+    if (RECORD_EXIT(&record, return_value) == NULL) {
+        RECORD_EXIT(&record, return_value) = sdsempty();
+    }
+    
+    /*ctx->shmoffset may have been reset in the inner level 
+     * of the phptrace_execute_core, so all the return info
+     * will be dropped
+     * */
+    if(ctx->shmoffset){
+        record.seq = ctx->seq ++;
+        record.flag = RECORD_FLAG_EXIT;
+        ctx->shmoffset = phptrace_mem_write_record(&record, ctx->shmoffset);
     }
 
-    if(ctx->tracelog.shmaddr && (ctx->rotate_count - rotate_count)*ctx->tracelog.size 
-            + ctx->shmoffset - retoffset < ctx->tracelog.size){
-        /*make sure the retoffset is still valid*/
-        phptrace_mem_fix_record(&record, retoffset);
-    }
-
-    if(ctx->cli && PHPTRACE_G(dotrace)){
+    if (ctx->cli && PHPTRACE_G(dotrace)) {
         phptrace_print_call_result(&record);
     }
-    phptrace_str_free(record.ret_values);
+    sdsfree(record.function_name);
+    sdsfree(RECORD_EXIT(&record, return_value));
     return;
 
 exec:
-    if(!px->internal){
+    zend_try {
+        if (!px->internal) {
 #if PHP_VERSION_ID < 50500
-        phptrace_old_execute(px->op_array TSRMLS_CC);
+            phptrace_old_execute(px->op_array TSRMLS_CC);
 #else
-        phptrace_old_execute_ex(px->current_execute_data TSRMLS_CC);
+            phptrace_old_execute_ex(px->current_execute_data TSRMLS_CC);
 #endif
-    }else{
+        } else {
 #if PHP_VERSION_ID < 50500
-        if(phptrace_old_execute_internal){
-            phptrace_old_execute_internal(px->current_execute_data, px->return_value_used TSRMLS_DC);
-        }else{
-            execute_internal(px->current_execute_data, px->return_value_used TSRMLS_DC);
-        }
+            if (phptrace_old_execute_internal) {
+                phptrace_old_execute_internal(px->current_execute_data, px->return_value_used TSRMLS_DC);
+            } else {
+                execute_internal(px->current_execute_data, px->return_value_used TSRMLS_DC);
+            }
 #else
-        if(phptrace_old_execute_internal){
-            phptrace_old_execute_internal(px->current_execute_data, px->fci, px->return_value_used TSRMLS_DC);
-        }else{
-            execute_internal(px->current_execute_data, px->fci, px->return_value_used TSRMLS_DC);
-        }
+            if (phptrace_old_execute_internal) {
+                phptrace_old_execute_internal(px->current_execute_data, px->fci, px->return_value_used TSRMLS_DC);
+            } else {
+                execute_internal(px->current_execute_data, px->fci, px->return_value_used TSRMLS_DC);
+            }
 #endif
-    }
-    if(ex){
-        -- ctx->level;
-    }
+        }
+        if (ex) {
+            -- ctx->level;
+        }
+    } zend_catch {
+        if (ex) {
+            -- ctx->level;
+        }
+        zend_bailout();
+    } zend_end_try();
 }
 
 #if PHP_VERSION_ID < 50500
@@ -772,6 +820,6 @@ PHP_FUNCTION(phptrace_mmap_test)
 /*
  * Local variables:
  * End:
- * vim600: noet fdm=marker
- * vim<600: noet
+ * vim600: et fdm=marker
+ * vim<600: et
  */
