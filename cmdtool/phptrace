@@ -127,7 +127,7 @@ if [ $STACK_FLAG -eq 1 ] ; then
                 params=($lines)
                 params_num=${#params[@]}
                 if [ $params_num -eq 2 ]; then
-                    "$SCRIPT_PATH/php-trace" --php-version $version -p $PID --sapi-globals ${params[0]} --executor-globals ${params[1]}
+                    "$SCRIPT_PATH/phptrace" --php-version $version -p $PID --sapi-globals ${params[0]} --executor-globals ${params[1]}
                     #"$SCRIPT_PATH/stack" --php-version $version -p $PID --sapi-globals ${params[0]} --executor-globals ${params[1]}
                     break
                 fi
@@ -141,6 +141,6 @@ if [ $STACK_FLAG -eq 1 ] ; then
         echo "can not print php stack"
     fi
 else
-    "$SCRIPT_PATH/php-trace" $@
+    "$SCRIPT_PATH/phptrace" $@
 fi
 
