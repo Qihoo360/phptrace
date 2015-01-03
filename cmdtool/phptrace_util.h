@@ -56,13 +56,6 @@
 #define MAX_RETRY 3
 
 enum {
-    PHPTRACE_ERROR = -1,
-    PHPTRACE_OK = 0,
-    PHPTRACE_AGAIN,
-    PHPTRACE_IGNORE
-};
-
-enum {
     STATE_START = 0,
     STATE_OPEN,
     STATE_HEADER,
@@ -118,7 +111,7 @@ typedef struct phptrace_context_s {
     int retry;
     address_info_t addr_info;
 
-}phptrace_context_t;
+} phptrace_context_t;
 
 enum {
     ERR_OK = 0,
@@ -144,7 +137,7 @@ void phptrace_context_init(phptrace_context_t *ctx);
 void trace_start_ctrl(phptrace_context_t *ctx);
 void process_opt_c(phptrace_context_t *ctx);
 
-int open_mmap(phptrace_context_t *ctx);
+int update_mmap_filename(phptrace_context_t *ctx);
 void interrupt(int sig);
 void usage();
 

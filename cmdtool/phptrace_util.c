@@ -111,6 +111,7 @@ void error_msg(phptrace_context_t *ctx, int err_no, const char *fmt, ...)
     verror_msg(ctx, err_no, fmt, p);
     va_end(p);
 }
+
 void die(phptrace_context_t *ctx, int exit_code)
 {
     trace_cleanup(ctx);
@@ -123,7 +124,7 @@ void error_msg_and_die(phptrace_context_t *ctx, const char *fmt, ...)
     va_start(p, fmt);
     verror_msg(ctx, 0, fmt, p);
     va_end(p);
-    die(ctx, PHPTRACE_ERROR);
+    die(ctx, -1);
 }
 
 void phptrace_context_init(phptrace_context_t *ctx)
@@ -175,7 +176,7 @@ void process_opt_c(phptrace_context_t *ctx)
     phptrace_ctrl_destroy(&(ctx->ctrl));
 }
 
-int open_mmap(phptrace_context_t *ctx)
+int update_mmap_filename(phptrace_context_t *ctx)
 {
     char buf[MAX_TEMP_LENGTH];
 
@@ -183,29 +184,24 @@ int open_mmap(phptrace_context_t *ctx)
         snprintf(buf, MAX_TEMP_LENGTH, "%s.%d", PHPTRACE_LOG_DIR "/" PHPTRACE_TRACE_FILENAME,  ctx->php_pid);
         ctx->mmap_filename = sdsnew(buf);
     } else if (!ctx->file.tailer.filename) {
-        if ((ctx->seg.shmaddr != MAP_FAILED) && (ctx->seg.shmaddr != NULL)) {
-            return PHPTRACE_OK;
-        }
+        return 0;
     } else if (!sdscmp(ctx->file.tailer.filename, ctx->mmap_filename)) {
-        if ((ctx->seg.shmaddr != MAP_FAILED) && (ctx->seg.shmaddr != NULL)) {
-            return PHPTRACE_OK;
-        }
+        return 0;
     } else {
         sdsfree(ctx->mmap_filename);
-        ctx->mmap_filename = sdsnew(ctx->file.tailer.filename);
-        if (ctx->mmap_filename == NULL) {
-            return PHPTRACE_ERROR;
+        if (ctx->seg.shmaddr && ctx->seg.shmaddr != MAP_FAILED) {
+            if (phptrace_unmap(ctx->seg.shmaddr) < 0) {
+                return -1;
+            }
         }
+        ctx->seg.shmaddr = MAP_FAILED;
+        ctx->mmap_filename = sdsnew(ctx->file.tailer.filename);
+    }
+    if (ctx->mmap_filename == NULL) {
+        return -1;
     }
 
-    ctx->seg = phptrace_mmap_read(ctx->mmap_filename);
-    if (ctx->seg.shmaddr == MAP_FAILED) {
-        log_printf (LL_DEBUG, " [error] phptrace_mmap '%s' failed!\n", ctx->mmap_filename);
-        return PHPTRACE_AGAIN;
-    } else {
-        log_printf (LL_DEBUG, " [ok]   phptrace_mmap '%s' successfully!\n", ctx->mmap_filename);
-    }
-    return PHPTRACE_OK;
+    return 0;
 }
 
 void interrupt(int sig)
@@ -335,7 +331,7 @@ void trace(phptrace_context_t *ctx)
 
     while (1) {
         if (interrupted) {
-            die(ctx, PHPTRACE_OK);
+            die(ctx, 0);
         }
 
         if (state == STATE_ERROR) {
@@ -348,21 +344,29 @@ void trace(phptrace_context_t *ctx)
          */
         while (state == STATE_START || state == STATE_TAILER) {
             if (interrupted) {
-                die(ctx, PHPTRACE_OK);
+                die(ctx, 0);
             }
 
-            log_printf (LL_DEBUG, "  open data mmap sleep %d ms.\n", opendata_wait_interval);
+            log_printf(LL_DEBUG, "open trace mmap file, sleep %d ms.\n", opendata_wait_interval);
             phptrace_msleep(opendata_wait_interval);
             opendata_wait_interval = grow_interval(opendata_wait_interval, MAX_OPEN_DATA_WAIT_INTERVAL);
 
-            rc = open_mmap(ctx);
-            if (rc == PHPTRACE_OK) {
-                state = STATE_OPEN;
-                mem_ptr = ctx->seg.shmaddr;
-                break;
-            } else if (rc == PHPTRACE_ERROR) {
-                error_msg_and_die(ctx, "Sorry, open data mmap failed!");
+            rc = update_mmap_filename(ctx);
+            if (rc < 0) {
+                error_msg_and_die(ctx, "Sorry, update trace mmap filename failed!");
             }
+
+            if (!ctx->seg.shmaddr || ctx->seg.shmaddr == MAP_FAILED) {
+                ctx->seg = phptrace_mmap_read(ctx->mmap_filename);
+                if (ctx->seg.shmaddr == MAP_FAILED) {
+                    log_printf(LL_NOTICE, "phptrace_mmap_read '%s' failed!", ctx->mmap_filename);
+                    continue;
+                }
+            }
+
+            log_printf(LL_DEBUG, "phptrace_mmap_read '%s' successfully!", ctx->mmap_filename);
+            state = STATE_OPEN;
+            mem_ptr = ctx->seg.shmaddr;
         }
         opendata_wait_interval = OPEN_DATA_WAIT_INTERVAL;
 
@@ -552,8 +556,8 @@ void process_opt_s(phptrace_context_t *ctx)
     printf("%s %s, published by %s\n", PHPTRACE_NAME, PHPTRACE_VERSION, PHPTRACE_DEVELOPER);
 
     if (sys_trace_attach(ctx->php_pid)) {
-        log_printf(LL_ERROR, "sys_trace_attach failed");
-        return ; 
+        log_printf(LL_NOTICE, "sys_trace_attach failed");
+        return; 
     }
 
     ret = stack_dump(ctx);
@@ -561,7 +565,10 @@ void process_opt_s(phptrace_context_t *ctx)
         printf("dump stack failed!\n");
     }
 
-    sys_trace_detach(ctx->php_pid);
+    if (sys_trace_detach(ctx->php_pid) < 0) {
+        log_printf(LL_NOTICE, "sys_trace_detach failed");
+    }
+
     sys_trace_kill(ctx->php_pid, SIGCONT);
 }
 
@@ -588,7 +595,7 @@ void init(phptrace_context_t *ctx, int argc, char *argv[])
 
     if (argc < 2) {      /* no  options */
         usage();
-        exit(PHPTRACE_OK);
+        exit(-1);
     }
 
     phptrace_context_init(ctx);
@@ -599,24 +606,24 @@ void init(phptrace_context_t *ctx, int argc, char *argv[])
             case 0:             /* args for stack */
                 if (!optarg) {
                     printf("invalid param\n");
-                    exit(PHPTRACE_ERROR);
+                    exit(-1);
                 }
                 if (opt_index == 0) {
                     if (strlen(optarg) < 5 || optarg[0] != '5' || optarg[1] != '.') {
                         printf("invalid php-version param: %s\n", optarg);
-                        exit(PHPTRACE_ERROR);
+                        exit(-1);
                     }
                     ctx->php_version = optarg[2] - '0';
                 } else if (opt_index == 1) {
                     if ((addr = hexstring2long(optarg, strlen(optarg))) == -1) {
                         printf("invalid sapi-globals param %s\n", optarg);
-                        exit(PHPTRACE_ERROR);
+                        exit(-1);
                     }
                     sapi_globals_addr = addr;
                 } else if (opt_index == 2) {
                     if ((addr = hexstring2long(optarg, strlen(optarg))) == -1) {
                         printf("invalid sapi-globals param %s\n", optarg);
-                        exit(PHPTRACE_ERROR);
+                        exit(-1);
                     }
                     executor_globals_addr = addr;
                 }
@@ -625,12 +632,12 @@ void init(phptrace_context_t *ctx, int argc, char *argv[])
             case 'p':
                 ctx->php_pid = string2uint(optarg);
                 if (ctx->php_pid <= 0 || ctx->php_pid > PID_MAX) {
-                    printf ("Invalid process id: '%s'\n", optarg);
-                    exit (PHPTRACE_ERROR);
+                    printf("Invalid process id: '%s'\n", optarg);
+                    exit(-1);
                 }
                 if (ctx->php_pid == ctx->tracer_pid) {
-                    printf ("Sorry not a php process.\n");
-                    exit (PHPTRACE_ERROR);
+                    printf("Sorry not a php process.\n");
+                    exit(-1);
                 }
                 ctx->opt_p_flag = 1;
                 break;
@@ -639,13 +646,13 @@ void init(phptrace_context_t *ctx, int argc, char *argv[])
                 break;
             case 'e':
                 show_err_msg();
-                exit(PHPTRACE_OK);
+                exit(0);
                 break;
             case 'l':
                 len = string2uint(optarg);
                 if (len < 0) {
                     printf ("Sorry, length need to be bigger than 0!\n");
-                    exit (PHPTRACE_ERROR);
+                    exit(-1);
                 }
                 ctx->max_print_len = len;
                 break;
@@ -655,7 +662,7 @@ void init(phptrace_context_t *ctx, int argc, char *argv[])
                 break;
             default:
                 usage();
-                exit(PHPTRACE_OK);
+                exit(0);
                 break;
         }
     }
@@ -665,7 +672,7 @@ void init(phptrace_context_t *ctx, int argc, char *argv[])
             && !ctx->opt_p_flag) { 
         printf ("Sorry, parameter error!\n"); 
         usage();
-        exit (PHPTRACE_ERROR);
+        exit(-1);
     }
 
     if (signal(SIGINT, interrupt) == SIG_ERR) {
@@ -675,11 +682,11 @@ void init(phptrace_context_t *ctx, int argc, char *argv[])
     if (ctx->opt_s_flag > 0) {
         if (!sapi_globals_addr || !executor_globals_addr) {
             printf("address info not enough\n");
-            exit(PHPTRACE_ERROR);
+            exit(-1);
         }
         if (ctx->php_version < PHP52 || ctx->php_version > PHP55) {
             printf("php version is not supported\n");
-            exit(PHPTRACE_ERROR);
+            exit(-1);
         }
 
         memcpy(&(ctx->addr_info), &address_templates[ctx->php_version], sizeof(address_info_t));
@@ -696,13 +703,13 @@ void process(phptrace_context_t *ctx)
     /* stack */
     if (ctx->opt_s_flag > 0) {
         process_opt_s(ctx);
-        exit(PHPTRACE_OK);
+        exit(0);
     }
 
     /* clean */
     if (ctx->opt_c_flag > 0) {
         process_opt_c(ctx);
-        exit(PHPTRACE_OK);
+        exit(0);
     }
 
     /* trace */
