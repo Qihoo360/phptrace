@@ -63,6 +63,7 @@ enum {
     STATE_TAILER,
     STATE_ERROR
 };
+
 static volatile int interrupted;        /* flag of interrupt (ctrl + c) */
 
 /* stack address info */
@@ -85,14 +86,12 @@ typedef struct address_info_s {
 } address_info_t;
 
 typedef struct phptrace_context_s {
-    int tracer_pid;                     /* pid of cmdtool */
+    int php_pid;                        /* pid of the -p option */
     uint64_t start_time;                /* start time of cmdtool */
 
-    char *progname;
     FILE *log;                          /* output stream */
     int log_level;                      /* log level */
     sds mmap_filename;
-    int php_pid;                        /* pid of the -p option */
 
     int trace_flag;                     /* flag of trace data, default 0 */
     int opt_c_flag;                     /* flag of cmdtool option -c, default 0 */
@@ -110,28 +109,14 @@ typedef struct phptrace_context_s {
     int stack_deep;
     int retry;
     address_info_t addr_info;
-
 } phptrace_context_t;
-
-enum {
-    ERR_OK = 0,
-    ERR_OPEN_CTRL,
-    ERR_STATE,
-    ERR_SEQ,
-    ERR_MALLOC,
-    ERR_READ,
-    ERR_SIG,
-    ERR_END
-};
 
 long hexstring2long(const char*s, size_t len);
 unsigned int string2uint(const char *str);
 
-void verror_msg(phptrace_context_t *ctx, int err_no, const char *fmt, va_list p);
-void error_msg(phptrace_context_t *ctx, int err_no, const char *fmt, ...);
+void verror_msg(phptrace_context_t *ctx, int err_code, const char *fmt, va_list p);
+void error_msg(phptrace_context_t *ctx, int err_code, const char *fmt, ...);
 void die(phptrace_context_t *ctx, int exit_code);
-void error_msg_and_die(phptrace_context_t *ctx, const char *fmt, ...);
-void show_err_msg();
 
 void phptrace_context_init(phptrace_context_t *ctx);
 void trace_start_ctrl(phptrace_context_t *ctx);
