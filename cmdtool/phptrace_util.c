@@ -124,21 +124,21 @@ void phptrace_context_init(phptrace_context_t *ctx)
     ctx->log = stdout;
     ctx->mmap_filename = NULL;
     ctx->php_pid = -1;
-
     ctx->max_print_len = MAX_PRINT_LENGTH;
 
     log_level_set(LL_ERROR + 1);
+}
+
+void trace_start_ctrl(phptrace_context_t *ctx)
+{
+    int8_t num = -1;
+
     if (!phptrace_ctrl_init(&(ctx->ctrl))) {                    
         error_msg(ctx, ERR_CTRL, "cannot open control mmap file %s (%s)", 
                   PHPTRACE_LOG_DIR "/" PHPTRACE_CTRL_FILENAME, (errno ? strerror(errno) : "null"));
         die(ctx, -1);
     }
     log_printf (LL_DEBUG, " [ok] ctrl_init open (%s)", PHPTRACE_LOG_DIR "/" PHPTRACE_CTRL_FILENAME);
-}
-
-void trace_start_ctrl(phptrace_context_t *ctx)
-{
-    int8_t num = -1;
 
     phptrace_ctrl_get(&(ctx->ctrl), &num, ctx->php_pid);
     if (num > 0) {
