@@ -569,6 +569,7 @@ void init(phptrace_context_t *ctx, int argc, char *argv[])
         {"clear",  no_argument, 0, 'c'},                    /* clean switches of pid | all */
         {"max-string-length",  required_argument, 0, 'l'},  /* max string length to print */
         {"pid",  required_argument, 0, 'p'},                /* trace pid */
+        {"stack",  no_argument, 0, 's'},                    /* dump stack */
         {"verbose",  no_argument, 0, 'v'},                  /* print verbose information */
         {0, 0, 0, 0}
     };
@@ -606,7 +607,6 @@ void init(phptrace_context_t *ctx, int argc, char *argv[])
                     }
                     executor_globals_addr = addr;
                 }
-                ctx->opt_s_flag = 1;
                 break;
             case 'h':
                 usage();
@@ -634,6 +634,9 @@ void init(phptrace_context_t *ctx, int argc, char *argv[])
                 }
                 ctx->opt_p_flag = 1;
                 break;
+            case 's':
+                ctx->opt_s_flag = 1;
+                break;
             case 'v':
                 log_level_set(log_level_get() - 1);
                 break;
@@ -643,16 +646,13 @@ void init(phptrace_context_t *ctx, int argc, char *argv[])
         }
     }
 
-    if (!(ctx->opt_s_flag && ctx->opt_p_flag) 
-            && !(ctx->opt_c_flag && ctx->opt_p_flag)
-            && !ctx->opt_p_flag) { 
-        error_msg(ctx, ERR_INVALID_PARAM, "no operation");
-        usage();
+    if (!ctx->opt_p_flag) {
+        error_msg(ctx, ERR_INVALID_PARAM, "no process id");
         exit(-1);
     }
 
-    if (signal(SIGINT, interrupt) == SIG_ERR) {
-        error_msg(ctx, ERR, "install signal handler failed (%s)", (errno ? strerror(errno) : "null"));
+    if (ctx->opt_s_flag > 0 && ctx->opt_c_flag > 0) {
+        error_msg(ctx, ERR_INVALID_PARAM, "-s conflicts with -c");
         exit(-1);
     }
 
@@ -672,6 +672,11 @@ void init(phptrace_context_t *ctx, int argc, char *argv[])
         log_printf(LL_DEBUG, "php version: %d", ctx->php_version);
         log_printf(LL_DEBUG, "sapi_globals_addr: %d", ctx->addr_info.sapi_globals_addr);
         log_printf(LL_DEBUG, "executor_globals_addr: %d", ctx->addr_info.executor_globals_addr);
+    }
+
+    if (signal(SIGINT, interrupt) == SIG_ERR) {
+        error_msg(ctx, ERR, "install signal handler failed (%s)", (errno ? strerror(errno) : "null"));
+        exit(-1);
     }
 }
 
