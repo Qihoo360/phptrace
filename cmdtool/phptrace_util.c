@@ -122,13 +122,12 @@ void phptrace_context_init(phptrace_context_t *ctx)
     ctx->start_time = phptrace_time_usec();
 
     ctx->log = stdout;
-    ctx->log_level = LL_ERROR;
     ctx->mmap_filename = NULL;
     ctx->php_pid = -1;
 
     ctx->max_print_len = MAX_PRINT_LENGTH;
 
-    log_level_set(ctx->log_level);
+    log_level_set(LL_ERROR + 1);
     if (!phptrace_ctrl_init(&(ctx->ctrl))) {                    
         error_msg(ctx, ERR_CTRL, "cannot open control mmap file %s (%s)", 
                   PHPTRACE_LOG_DIR "/" PHPTRACE_CTRL_FILENAME, (errno ? strerror(errno) : "null"));
@@ -568,9 +567,9 @@ void init(phptrace_context_t *ctx, int argc, char *argv[])
         {"executor-globals", required_argument, 0, 0},
         {"help",   no_argument, 0, 'h'},                    /* help */
         {"clear",  no_argument, 0, 'c'},                    /* clean switches of pid | all */
-        {"pid",  required_argument, 0, 'p'},                /* trace pid */
         {"max-string-length",  required_argument, 0, 'l'},  /* max string length to print */
-        {"log-debug",  no_argument, 0, 'v'},                /* log_level to debug */
+        {"pid",  required_argument, 0, 'p'},                /* trace pid */
+        {"verbose",  no_argument, 0, 'v'},                  /* print verbose information */
         {0, 0, 0, 0}
     };
 
@@ -581,33 +580,47 @@ void init(phptrace_context_t *ctx, int argc, char *argv[])
 
     phptrace_context_init(ctx);
 
-    while ((c = getopt_long(argc, argv, "hcel:vp:", long_options, &opt_index)) != -1) {
+    while ((c = getopt_long(argc, argv, "hcl:p:sv", long_options, &opt_index)) != -1) {
         switch (c) {
             case 0:             /* args for stack */
-                if (!optarg) {
-                    printf("invalid param\n");
-                    exit(-1);
-                }
                 if (opt_index == 0) {
+                    if (!optarg) {
+                        error_msg(ctx, ERR_INVALID_PARAM, "php-version: null");
+                        exit(-1);
+                    }
                     if (strlen(optarg) < 5 || optarg[0] != '5' || optarg[1] != '.') {
                         error_msg(ctx, ERR_INVALID_PARAM, "php-version: %s", optarg);
                         exit(-1);
                     }
                     ctx->php_version = optarg[2] - '0';
                 } else if (opt_index == 1) {
-                    if ((addr = hexstring2long(optarg, strlen(optarg))) == -1) {
-                        error_msg(ctx, ERR_INVALID_PARAM, "sapi-globals: %s", optarg);
+                    if (!optarg || (addr = hexstring2long(optarg, strlen(optarg))) == -1) {
+                        error_msg(ctx, ERR_INVALID_PARAM, "sapi-globals: %s", (optarg ? optarg : "null"));
                         exit(-1);
                     }
                     sapi_globals_addr = addr;
                 } else if (opt_index == 2) {
-                    if ((addr = hexstring2long(optarg, strlen(optarg))) == -1) {
-                        error_msg(ctx, ERR_INVALID_PARAM, "executor-globals: %s", optarg);
+                    if (!optarg || (addr = hexstring2long(optarg, strlen(optarg))) == -1) {
+                        error_msg(ctx, ERR_INVALID_PARAM, "executor-globals: %s", (optarg ? optarg : "null"));
                         exit(-1);
                     }
                     executor_globals_addr = addr;
                 }
                 ctx->opt_s_flag = 1;
+                break;
+            case 'h':
+                usage();
+                exit(0);
+            case 'c':
+                ctx->opt_c_flag = 1;
+                break;
+            case 'l':
+                len = string2uint(optarg);
+                if (len < 0) {
+                    error_msg(ctx, ERR_INVALID_PARAM, "max string length should be larger than 0");
+                    exit(-1);
+                }
+                ctx->max_print_len = len;
                 break;
             case 'p':
                 ctx->php_pid = string2uint(optarg);
@@ -621,25 +634,12 @@ void init(phptrace_context_t *ctx, int argc, char *argv[])
                 }
                 ctx->opt_p_flag = 1;
                 break;
-            case 'c':
-                ctx->opt_c_flag = 1;
-                break;
-            case 'l':
-                len = string2uint(optarg);
-                if (len < 0) {
-                    error_msg(ctx, ERR_INVALID_PARAM, "max string length should be larger than 0");
-                    exit(-1);
-                }
-                ctx->max_print_len = len;
-                break;
             case 'v':
-                ctx->log_level = LL_DEBUG;
-                log_level_set(ctx->log_level);
+                log_level_set(log_level_get() - 1);
                 break;
             default:
                 usage();
                 exit(0);
-                break;
         }
     }
 

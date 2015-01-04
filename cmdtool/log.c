@@ -16,10 +16,15 @@ inline void log_level_set(int level)
     if (level < LL_DEBUG) {
         level = LL_DEBUG;
     } else if (level > LL_ERROR) {
-        level = LL_ERROR;
+        level = LL_ERROR + 1;
     }
 
     s_log_level = level;
+}
+
+int log_level_get()
+{
+    return s_log_level;
 }
 
 void log_msg(int level, const char *msg)
