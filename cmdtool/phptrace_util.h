@@ -90,7 +90,6 @@ typedef struct phptrace_context_s {
     uint64_t start_time;                /* start time of cmdtool */
 
     FILE *log;                          /* output stream */
-    int log_level;                      /* log level */
     sds mmap_filename;
 
     int trace_flag;                     /* flag of trace data, default 0 */
