@@ -134,7 +134,7 @@ if [ $STACK_FLAG -eq 1 ] ; then
             fi
         fi
         let ++retry
-        usleep 100000
+        sleep 0.1
     done
 
     if [ $retry -ge 11 ] ; then
