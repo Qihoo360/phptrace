@@ -204,8 +204,8 @@ void usage()
     -c          -- clear the trace switches of pid, or all the switches if no pid parameter\n\
     -p pid      -- access the php process i\n\
     -s          -- print call stack of php process by the pid\n\
-    -l size     -- specify the maximun string length to print\n\
-    -v          -- set log level to debug\n\
+    -l size     -- specify the max string length to print\n\
+    -v          -- print verbose information\n\
     \n");
 }
 
