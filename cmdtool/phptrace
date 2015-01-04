@@ -66,30 +66,11 @@ EOF
 
 }
 
-usage() { 
-    echo "usage: phptrace [ -chs ] [ -p pid ]"
-    echo "          -h          -- show this help"
-    echo "          -c          -- clear the trace switches of pid, or all the switches if no pid paramete"
-    echo "          -p pid      -- access the php process i"
-    echo "          -s          -- print call stack of php process by the pid."
-    echo "          -l size     -- specify the maximun string length to print"
-    echo "          -e          -- show error message of error code"
-    echo "          -v          -- set log level to debug"
-}
-
-if [ $# -lt 1 ] ; then
-    usage
-    exit
-fi
-
-while getopts "p:cshl:ev" arg
+while getopts ":p:s"  arg
 do
     case "$arg" in
         "p")
             PID=$OPTARG
-            ;;  
-        "c")
-            CLEAR_FLAG=1
             ;;  
         "s")
             STACK_FLAG=1
@@ -97,15 +78,11 @@ do
         "l" | "e" | "v")
         ;;
         *)
-            usage
-            exit 1
-            ;;  
+            break
+            ;;
     esac
 done
 
-if [ $STACK_FLAG -eq 1 ] && [ $CLEAR_FLAG -eq 1 ] ; then
-    exit 1
-fi
 
 if [ -n "${PID}" ] && [ ! -d "/proc/${PID}" ]; then
     echo "Oops, process ${PID} does not exist."
@@ -128,7 +105,6 @@ if [ $STACK_FLAG -eq 1 ] ; then
                 params_num=${#params[@]}
                 if [ $params_num -eq 2 ]; then
                     "$SCRIPT_PATH/php-trace" --php-version $version -p $PID --sapi-globals ${params[0]} --executor-globals ${params[1]}
-                    #"$SCRIPT_PATH/stack" --php-version $version -p $PID --sapi-globals ${params[0]} --executor-globals ${params[1]}
                     break
                 fi
             fi
