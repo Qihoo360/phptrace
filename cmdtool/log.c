@@ -11,7 +11,7 @@
 
 static int s_log_level;
 
-inline void log_level_set(int level)
+void log_level_set(int level)
 {
     if (level < LL_DEBUG) {
         level = LL_DEBUG;

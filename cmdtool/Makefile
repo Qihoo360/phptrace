@@ -1,6 +1,6 @@
 
 LIBS    = -lpthread
-CFLAGS	= -std=gnu89 -g -Wall -O2 -fno-strict-aliasing -D_GNU_SOURCE
+CFLAGS	= -g -Wall -O2 -fno-strict-aliasing -D_GNU_SOURCE
 CC      = gcc
 
 TARGET  = php-trace 
