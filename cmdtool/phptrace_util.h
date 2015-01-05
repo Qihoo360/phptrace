@@ -56,6 +56,14 @@
 #define MAX_RETRY 3
 
 enum {
+    ERR = 0,
+    ERR_INVALID_PARAM,
+    ERR_STACK,
+    ERR_CTRL,
+    ERR_TRACE,
+};
+
+enum {
     STATE_START = 0,
     STATE_OPEN,
     STATE_HEADER,
@@ -63,8 +71,6 @@ enum {
     STATE_TAILER,
     STATE_ERROR
 };
-
-static volatile int interrupted;        /* flag of interrupt (ctrl + c) */
 
 /* stack address info */
 typedef struct address_info_s {
@@ -122,7 +128,6 @@ void trace_start_ctrl(phptrace_context_t *ctx);
 void process_opt_c(phptrace_context_t *ctx);
 
 int update_mmap_filename(phptrace_context_t *ctx);
-void interrupt(int sig);
 void usage();
 
 /* print utils */

@@ -10,14 +10,6 @@ static address_info_t address_templates[] = {
     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 };
 
-enum {
-    ERR = 0,
-    ERR_INVALID_PARAM,
-    ERR_STACK,
-    ERR_CTRL,
-    ERR_TRACE,
-};
-
 static const char *ERR_MSG[] = {
     "ERROR",
     "INVALID PARAM",
@@ -190,12 +182,6 @@ int update_mmap_filename(phptrace_context_t *ctx)
     return 0;
 }
 
-void interrupt(int sig)
-{
-   log_printf (LL_DEBUG, " Handle Ctrl+C interrupt\n");
-   interrupted = sig;
-}
-
 void usage()
 {
     printf ("usage: phptrace [ -chsel ]  [-p pid] \n\
@@ -291,6 +277,8 @@ void phptrace_record_free(phptrace_file_record_t *r)
         }
     }
 }
+
+extern int interrupted;
 
 void trace(phptrace_context_t *ctx)
 {
@@ -671,11 +659,6 @@ void init(phptrace_context_t *ctx, int argc, char *argv[])
         log_printf(LL_DEBUG, "php version: %d", ctx->php_version);
         log_printf(LL_DEBUG, "sapi_globals_addr: %d", ctx->addr_info.sapi_globals_addr);
         log_printf(LL_DEBUG, "executor_globals_addr: %d", ctx->addr_info.executor_globals_addr);
-    }
-
-    if (signal(SIGINT, interrupt) == SIG_ERR) {
-        error_msg(ctx, ERR, "install signal handler failed (%s)", (errno ? strerror(errno) : "null"));
-        exit(-1);
     }
 }
 
