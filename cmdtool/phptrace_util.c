@@ -625,7 +625,7 @@ void init(phptrace_context_t *ctx, int argc, char *argv[])
             case 'p':
                 ctx->php_pid = string2uint(optarg);
                 if (ctx->php_pid <= 0 || ctx->php_pid > PID_MAX) {
-                    error_msg(ctx, ERR_INVALID_PARAM, "process '%s' is out of the range (0, 32768)", optarg);
+                    error_msg(ctx, ERR_INVALID_PARAM, "process '%s' is out of the range (0, %d)", optarg, PID_MAX);
                     exit(-1);
                 }
                 if (ctx->php_pid == getpid()) {
