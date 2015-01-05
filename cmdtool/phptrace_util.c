@@ -119,13 +119,12 @@ void phptrace_context_init(phptrace_context_t *ctx)
 {
     memset(ctx, 0, sizeof(phptrace_context_t));
 
+    ctx->php_pid = -1;
     ctx->start_time = phptrace_time_usec();
-
     ctx->log = stdout;
     ctx->mmap_filename = NULL;
-    ctx->php_pid = -1;
     ctx->max_print_len = MAX_PRINT_LENGTH;
-
+    ctx->seg.shmaddr = MAP_FAILED;
     log_level_set(LL_ERROR + 1);
 }
 

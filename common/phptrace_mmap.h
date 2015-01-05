@@ -5,12 +5,10 @@
 #include <string.h>
 #include <sys/mman.h>
 
-typedef struct _phptrace_segment_t phptrace_segment_t;
-
-struct _phptrace_segment_t {
+typedef struct phptrace_segment_s {
     size_t size;
     void* shmaddr;
-};
+} phptrace_segment_t;
 
 phptrace_segment_t phptrace_mmap_create(const char *file, size_t size);
 phptrace_segment_t phptrace_mmap_write(const char *file);
