@@ -1,21 +1,21 @@
 phptrace
 ========
 
-## Introduction [中文](https://github.com/Qihoo360/phptrace/blob/master/README_ZH.md)
+## 介绍 [English](https://github.com/Qihoo360/phptrace/blob/master/README.md)
 
-Phptrace is a tracking and analyzing tool for PHP scripts. The information of php execute context and php function calls are fetched from PHP Runtime. It is very useful to locate blocking problems, heavy-load problems and tricky bugs both in the online environment and the development environment.
+PhpTrace是一款跟踪和分析PHP脚本的工具，从PHP Runtime中获取程序的上下文及函数调用情况，适用于线上快速分析定位阻塞、负载高等疑难杂症。
 
-[Introduction and Usage](https://github.com/Qihoo360/phptrace/wiki)
+[phptrace介绍及使用](https://github.com/Qihoo360/phptrace/wiki)
 
-## Building
+## 编译
 
-* Extracting the tarball
+* 解压源码包
 ```shell
 tar -zxf phptrace-<version>.tar.gz
 cd phptrace-<version>
 ```
 
-* Compile the PHP extension
+* 编译PHP扩展
 ```shell
 cd phpext
 phpize
@@ -23,33 +23,33 @@ phpize
 make
 ```
 
-* Compile the command tool
+* 编译命令行工具
 ```shell
 cd cmdtool
 make
 ```
 
-## Installing
-* Install the php extension (phptrace.so) to the PHP extension directory.
+## 安装
+* 安装PHP扩展 (phptrace.so)到扩展目录
 ```shell
 make install
 ```
 
-* Edit php.ini and restart the php process if needed.
+* 编辑php.ini，如果需要的话重启PHP进程
 ```
 extension=phptrace.so
 phptrace.enabled=1
 ```
 
-* Use the phptrace tool directly under the cmdtool directory.
+* 切换到cmdtool目录直接使用phptrace命令
 ```shell
 cd cmdtool
 ./phptrace  [options]
 ```
 
-## Examples
+## 举例
 
-* Trace php function calls.
+* 跟踪PHP函数的执行
 
 ```shell
 $ ./phptrace -p 2459                # phptrace -p <PID>
@@ -61,7 +61,7 @@ $ ./phptrace -p 2459                # phptrace -p <PID>
 1417506347.727358 run =>        nil     1.000135
 ```
 
-* Print the stack of function call.
+* 打印函数调用堆栈
 ```shell
 $ ./phptrace -p 3130 -s             # phptrace -p <PID> -s
 phptrace 0.1 demo, published by infra webcore team
@@ -72,7 +72,7 @@ script_filename = /home/xxx/opt/nginx/webapp/block.php
 [0x7f27b9a99c50]  run /home/xxx/opt/nginx/webapp/block.php:10 
 ```
 
-## Contact
+## 联系方式
 
-* Email: g-infra-webcore@list.qihoo.net
-* QQ Group: 428631461
+* 邮箱: g-infra-webcore@list.qihoo.net
+* QQ群: 428631461
