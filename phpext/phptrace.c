@@ -37,7 +37,8 @@
 #endif
 
 #define PHPTRACE_LOG_SIZE 52428800
-#define PHPTRACE_LOG_SIZE_STR "52428800"
+#define _STR(s) #s
+#define PHPTRACE_CONST_STR(s) _STR(s)
 #define HEARTBEAT_TIMEDOUT 30 /*30 seconds*/
 #define HEARTBEAT_FLAG (1<<7)
 
@@ -103,7 +104,8 @@ ZEND_GET_MODULE(phptrace)
 PHP_INI_BEGIN()
     STD_PHP_INI_ENTRY("phptrace.enabled",      "0", PHP_INI_ALL, OnUpdateLong, enabled, zend_phptrace_globals, phptrace_globals)
     STD_PHP_INI_ENTRY("phptrace.dotrace",      "0", PHP_INI_ALL, OnUpdateLong, dotrace, zend_phptrace_globals, phptrace_globals)
-    STD_PHP_INI_ENTRY("phptrace.logsize",      PHPTRACE_LOG_SIZE_STR, PHP_INI_ALL, OnUpdateLong, logsize, zend_phptrace_globals, phptrace_globals)
+    STD_PHP_INI_ENTRY("phptrace.logsize",      PHPTRACE_CONST_STR(PHPTRACE_LOG_SIZE), PHP_INI_ALL, OnUpdateLong, logsize, zend_phptrace_globals, phptrace_globals)
+    STD_PHP_INI_ENTRY("phptrace.pid_max",      PHPTRACE_CONST_STR(PID_MAX), PHP_INI_ALL, OnUpdateLong, pid_max, zend_phptrace_globals, phptrace_globals)
     STD_PHP_INI_ENTRY("phptrace.logdir",      NULL, PHP_INI_ALL, OnUpdateString, logdir, zend_phptrace_globals, phptrace_globals)
 PHP_INI_END()
 /* }}} */
@@ -116,6 +118,7 @@ static void php_phptrace_init_globals(zend_phptrace_globals *phptrace_globals)
     phptrace_globals->dotrace = 0;
     phptrace_globals->logsize = PHPTRACE_LOG_SIZE;
     phptrace_globals->logdir = NULL;
+    phptrace_globals->pid_max = PID_MAX;
     memset(&phptrace_globals->ctx, 0, sizeof(phptrace_context_t));
 }
 /* }}} */
@@ -135,7 +138,7 @@ PHP_MINIT_FUNCTION(phptrace)
     }
     if (PHPTRACE_G(logsize) < PHPTRACE_LOG_SIZE) {
         php_error_docref(NULL TSRMLS_CC, E_WARNING, "phptrace.logsize is too small"
-                " to run trace, expected >= %d , actually is %d",
+                " to run trace, expected >= %d , actually is %ld",
                 PHPTRACE_LOG_SIZE, PHPTRACE_G(logsize));
     }
     /*phptrace enabled*/
@@ -155,8 +158,8 @@ PHP_MINIT_FUNCTION(phptrace)
     snprintf(filename, sizeof(filename), "%s/%s", PHPTRACE_G(logdir), PHPTRACE_CTRL_FILENAME);
     if (access(filename, R_OK|W_OK) == -1) {
         if (errno == ENOENT) {
-            ctx->ctrl = phptrace_mmap_create(filename, PID_MAX);
-            memset(ctx->ctrl.shmaddr, 0, PID_MAX);
+            ctx->ctrl = phptrace_mmap_create(filename, PHPTRACE_G(pid_max)+1);
+            memset(ctx->ctrl.shmaddr, 0, PHPTRACE_G(pid_max)+1);
         } else {
             php_error_docref(NULL TSRMLS_CC, E_WARNING, "phptrace_mmap_create %s failed: %s", filename, strerror(errno));
             return FAILURE;

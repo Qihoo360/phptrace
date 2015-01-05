@@ -68,6 +68,7 @@ ZEND_BEGIN_MODULE_GLOBALS(phptrace)
     long  enabled;
     long  dotrace;
     long  logsize;
+    long  pid_max;
     char *logdir;
     phptrace_context_t ctx;
 ZEND_END_MODULE_GLOBALS(phptrace)
