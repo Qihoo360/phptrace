@@ -123,12 +123,10 @@ void verror_msg(phptrace_context_t *ctx, int err_code, const char *fmt, va_list 
 void error_msg(phptrace_context_t *ctx, int err_code, const char *fmt, ...);
 void die(phptrace_context_t *ctx, int exit_code);
 
-void phptrace_context_init(phptrace_context_t *ctx);
-void trace_start_ctrl(phptrace_context_t *ctx);
-void process_opt_c(phptrace_context_t *ctx);
-
-int update_mmap_filename(phptrace_context_t *ctx);
 void usage();
+void phptrace_context_init(phptrace_context_t *ctx);
+
+void process_opt_c(phptrace_context_t *ctx);
 
 /* print utils */
 sds sdscatrepr_noquto(sds s, const char *p, size_t len);
@@ -136,6 +134,8 @@ sds print_indent_str(sds s, char* str, int32_t size);
 sds print_time(sds s, uint64_t t);
 void print_record(phptrace_context_t *ctx, phptrace_file_record_t *r);
 void phptrace_record_free(phptrace_file_record_t *r);
+int update_mmap_filename(phptrace_context_t *ctx);
+void trace_start(phptrace_context_t *ctx);
 void trace(phptrace_context_t *ctx);
 void trace_cleanup(phptrace_context_t *ctx);
 
@@ -143,8 +143,4 @@ void trace_cleanup(phptrace_context_t *ctx);
 int stack_dump_once(phptrace_context_t* ctx);
 int stack_dump(phptrace_context_t* ctx);
 void process_opt_s(phptrace_context_t *ctx);
-
-void init(phptrace_context_t *ctx, int argc, char *argv[]);
-void process(phptrace_context_t *ctx);
-
 #endif
