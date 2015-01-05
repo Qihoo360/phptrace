@@ -2,6 +2,7 @@
 #define _SYS_TRACE_H_
 
 #include <errno.h>
+#include <string.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/ptrace.h>

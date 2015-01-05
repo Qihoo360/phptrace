@@ -5,7 +5,7 @@
 int sys_trace_attach(pid_t pid)
 {
     if (0 > ptrace(PTRACE_ATTACH, pid, 0, 0)) {
-        log_printf(LL_ERROR, "failed to ptrace(ATTACH) child %d", pid);
+        log_printf(LL_ERROR, "failed to ptrace(ATTACH) child %d (%s)", pid, (errno ? strerror(errno) : "null"));
         return -1;
     }
     return 0;
@@ -14,7 +14,7 @@ int sys_trace_attach(pid_t pid)
 int sys_trace_detach(pid_t pid)
 {
     if (0 > ptrace(PTRACE_DETACH, pid, (void *) 1, 0)) {
-        log_printf(LL_ERROR, "failed to ptrace(DETACH) child %d", pid);
+        log_printf(LL_ERROR, "failed to ptrace(DETACH) child %d (%s)", pid, (errno ? strerror(errno) : "null"));
         return -1;
     }
     return 0;
@@ -31,13 +31,13 @@ int sys_trace_get_long(pid_t pid, long addr, long *data)
     };
 
     if (0 > ptrace(PT_IO, pid, (void *) &ptio, 0)) {
-        log_printf(LL_ERROR, "failed to ptrace(PT_IO) pid %d", pid);
+        log_printf(LL_ERROR, "failed to ptrace(PT_IO) pid %d (%s)", pid, (errno ? strerror(errno) : "null"));
         return -1;
     }
 #else
     *data = ptrace(PTRACE_PEEKDATA, pid, (void *) addr, 0);
     if (errno) {
-        log_printf(LL_ERROR, "failed to ptrace(PEEKDATA) pid %d", pid);
+        log_printf(LL_ERROR, "failed to ptrace(PEEKDATA) pid %d (%s)", pid, strerror(errno));
         return -1;
     }
 #endif
