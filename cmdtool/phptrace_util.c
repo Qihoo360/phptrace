@@ -1,4 +1,7 @@
 #include "phptrace_util.h"
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 static const char *ERR_MSG[] = {
     "ERROR",
@@ -113,6 +116,8 @@ void phptrace_context_init(phptrace_context_t *ctx)
 void trace_start(phptrace_context_t *ctx)
 {
     int8_t num = -1;
+    uint8_t flag = 1;
+    struct stat st;
 
     if (!phptrace_ctrl_init(&(ctx->ctrl))) {                    
         error_msg(ctx, ERR_CTRL, "cannot open control mmap file %s (%s)", 
@@ -128,8 +133,19 @@ void trace_start(phptrace_context_t *ctx)
     }
     log_printf (LL_DEBUG, " [ok] read ctrl data: ctrl[pid=%d]=%d is closed!\n", ctx->php_pid, num);
 
-    phptrace_ctrl_set(&(ctx->ctrl), (uint8_t)1, ctx->php_pid);
-    ctx->trace_flag = 1;
+    if (ctx->mmap_filename == NULL) {
+        ctx->mmap_filename = sdscatprintf(sdsempty(),"%s.%d", PHPTRACE_LOG_DIR "/" PHPTRACE_TRACE_FILENAME,  ctx->php_pid);
+    }
+
+    if (stat(ctx->mmap_filename, &st) == 0) {
+        if (unlink(ctx->mmap_filename) < 0) {
+            error_msg(ctx, ERR_TRACE, "can not delete the old traced file %s(%s)", ctx->mmap_filename, strerror(errno));
+            die(ctx, -1);
+        }
+        flag |= 1<<1 ;
+    }
+    phptrace_ctrl_set(&(ctx->ctrl), flag, ctx->php_pid);
+    ctx->trace_flag = flag;
 }
 
 void process_opt_c(phptrace_context_t *ctx)
@@ -321,6 +337,7 @@ void trace(phptrace_context_t *ctx)
             log_printf(LL_DEBUG, "phptrace_mmap_read '%s' successfully!", ctx->mmap_filename);
             state = STATE_OPEN;
             mem_ptr = ctx->seg.shmaddr;
+            unlink(ctx->mmap_filename);
         }
         opendata_wait_interval = OPEN_DATA_WAIT_INTERVAL;
 

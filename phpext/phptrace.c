@@ -41,6 +41,7 @@
 #define PHPTRACE_CONST_STR(s) _STR(s)
 #define HEARTBEAT_TIMEDOUT 30 /*30 seconds*/
 #define HEARTBEAT_FLAG (1<<7)
+#define REOPEN_FLAG (1<<1)
 
 #if PHP_VERSION_ID < 50500
 void (*phptrace_old_execute)(zend_op_array *op_array TSRMLS_DC);
@@ -550,6 +551,10 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
             phptrace_reset_tracelog(ctx);
             goto exec;
         }
+    }
+    if (ctrl[ctx->pid] & REOPEN_FLAG) {
+        ctrl[ctx->pid] &= ~REOPEN_FLAG & 0x00FF;
+        phptrace_reset_tracelog(ctx);
     }
 
     /*do trace*/
