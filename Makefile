@@ -4,7 +4,7 @@ all: cmdtool ext
 
 cmdtool:cmdtool/php-trace 
 
-cmdtool/php-trace:
+cmdtool/php-trace:cmdtool/*.h cmdtool/*.c
 	cd cmdtool && make
 
 ext:phpext/phptrace.c
