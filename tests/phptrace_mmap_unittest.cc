@@ -155,7 +155,7 @@ TEST_F(PhptraceMmapCreate, file_already_exist)
         "(seg.shmaddr is "<< seg.shmaddr << ")";
 
     ASSERT_EQ(sdslen(filename), seg.size);
-    ASSERT_EQ(0, ((char *)seg.shmaddr)[0]);
+    ASSERT_EQ('f', ((char *)seg.shmaddr)[0]);
 
     ((char *)seg.shmaddr)[0] = 't';
     ASSERT_EQ('t', ((char *)seg.shmaddr)[0]);
