@@ -3,7 +3,7 @@ phptrace
 
 ## Introduction [中文](https://github.com/Qihoo360/phptrace/blob/master/README_ZH.md)
 
-Phptrace is a tracking and analyzing tool for PHP scripts. The information of php execute context and php function calls are fetched from PHP Runtime. It is very useful to locate blocking problems, heavy-load problems and tricky bugs both in the online environment and the development environment.
+Phptrace is a tracing and troubleshooting tool for PHP scripts. The information of php execute context and php function calls are fetched from PHP Runtime. It is very useful to locate blocking problems, heavy-load problems and tricky bugs both in the online environment and the development environment.
 
 [Introduction and Usage](https://github.com/Qihoo360/phptrace/wiki)
 
@@ -71,6 +71,30 @@ script_filename = /home/xxx/opt/nginx/webapp/block.php
 [0x7f27b9a99d08]  say /home/xxx/opt/nginx/webapp/block.php:3
 [0x7f27b9a99c50]  run /home/xxx/opt/nginx/webapp/block.php:10 
 ```
+
+## Comparation
+
+* PhpTrace
+It can print call stack of executing php process, which is similar to pstack.
+It can trace php function callls, which is similar to strace.
+It cannot get performance summary of php scripts, which will be supported in the future.
+It can not debug php scripts.
+
+* Phpdbg
+It is used to debug php program, which is similar to gdb.
+It cannot print call stack of executing php process.
+It cannot trace php function calls.
+
+* Xhprof
+It is used to get performance summary, which is similar to gprof.
+It cannot print call stack of executing php process.
+It cannot trace php function calls.
+
+* Xdebug
+It can print call stack only if some error occurs.
+Xdebug would hook many opcode handlers even you did not set the auto_trace flag in php.ini; it traces all the processes at the same time just without output. This is a big overhea
+d in production envirenment.
+It can not be enabled to trace without modifying the ini or the php script.
 
 ## Contact
 
