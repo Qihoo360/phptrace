@@ -60,7 +60,7 @@ phptrace_segment_t phptrace_mmap_create(const char *file, size_t size)
 
     /*Give all users rw permissions*/
     umask(0);
-    fd = phptrace_file_open(file, O_RDWR|O_CREAT|O_TRUNC, 
+    fd = phptrace_file_open(file, O_RDWR|O_CREAT,
             S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH);
     if (fd == -1) {
         goto error;

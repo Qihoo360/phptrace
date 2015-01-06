@@ -128,6 +128,7 @@ static void php_phptrace_init_globals(zend_phptrace_globals *phptrace_globals)
 PHP_MINIT_FUNCTION(phptrace)
 {
     char filename[256];
+    struct stat st;
     ZEND_INIT_MODULE_GLOBALS(phptrace, php_phptrace_init_globals, NULL);
     REGISTER_INI_ENTRIES();
     if (!PHPTRACE_G(enabled)) {
@@ -156,7 +157,7 @@ PHP_MINIT_FUNCTION(phptrace)
     phptrace_context_t *ctx;
     ctx = &PHPTRACE_G(ctx);
     snprintf(filename, sizeof(filename), "%s/%s", PHPTRACE_G(logdir), PHPTRACE_CTRL_FILENAME);
-    if (access(filename, R_OK|W_OK) == -1) {
+    if (stat(filename, &st) == -1) {
         if (errno == ENOENT) {
             ctx->ctrl = phptrace_mmap_create(filename, PHPTRACE_G(pid_max)+1);
             memset(ctx->ctrl.shmaddr, 0, PHPTRACE_G(pid_max)+1);
@@ -164,6 +165,11 @@ PHP_MINIT_FUNCTION(phptrace)
             php_error_docref(NULL TSRMLS_CC, E_WARNING, "phptrace_mmap_create %s failed: %s", filename, strerror(errno));
             return FAILURE;
         }
+    } else if (st.st_size < PHPTRACE_G(pid_max)+1) {
+        /*Reopen phptrace.ctrl and truncate to a correct size
+         *This is useful when upgrade phpext and increment the size of phptrace.ctrl
+         * */
+        ctx->ctrl = phptrace_mmap_create(filename, PHPTRACE_G(pid_max)+1);
     } else {
         ctx->ctrl = phptrace_mmap_write(filename);
     }
