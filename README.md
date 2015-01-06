@@ -74,27 +74,27 @@ script_filename = /home/xxx/opt/nginx/webapp/block.php
 
 ## Comparation
 
-* PhpTrace
-It can print call stack of executing php process, which is similar to pstack.
-It can trace php function callls, which is similar to strace.
-It cannot get performance summary of php scripts, which will be supported in the future.
-It can not debug php scripts.
+### PhpTrace
+* It can print call stack of executing php process, which is similar to pstack.
+* It can trace php function callls, which is similar to strace.
+* It cannot get performance summary of php scripts, which will be supported in the future.
+* It can not debug php scripts.
 
-* Phpdbg
-It is used to debug php program, which is similar to gdb.
-It cannot print call stack of executing php process.
-It cannot trace php function calls.
+### Phpdbg
+* It is used to debug php program, which is similar to gdb.
+* It cannot print call stack of executing php process.
+* It cannot trace php function calls.
 
-* Xhprof
-It is used to get performance summary, which is similar to gprof.
-It cannot print call stack of executing php process.
-It cannot trace php function calls.
+### Xhprof
+* It is used to get performance summary, which is similar to gprof.
+* It cannot print call stack of executing php process.
+* It cannot trace php function calls.
 
-* Xdebug
-It can print call stack only if some error occurs.
-Xdebug would hook many opcode handlers even you did not set the auto_trace flag in php.ini; it traces all the processes at the same time just without output. This is a big overhea
+### Xdebug
+* It can print call stack only if some error occurs.
+* It would hook many opcode handlers even you did not set the auto_trace flag in php.ini; it traces all the processes at the same time just without output. This is a big overhea
 d in production envirenment.
-It can not be enabled to trace without modifying the ini or the php script.
+* It can not be enabled to trace without modifying the ini or the php script.
 
 ## Contact
 
