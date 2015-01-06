@@ -3,6 +3,7 @@
 CLEAR_FLAG=0
 STACK_FLAG=0
 SCRIPT_PATH=`dirname $0`
+SYS=`uname -s`
 
 function get_php_version()
 {
@@ -65,6 +66,21 @@ EOF
     -e '/^Thread/p' | awk '{print $NF}'
 
 }
+function check_pid_exist(){
+    case $SYS in
+        Darwin*)
+            if [ "`ps -p ${PID} -o pid=`" = "" ];then
+                return 0;
+            fi
+            ;;
+        *)
+            if [ -n "${PID}" ] && [ ! -d "/proc/${PID}" ]; then
+                return 0;
+            fi
+            ;;
+    esac
+    return 1;
+}
 
 while getopts ":p:s"  arg
 do
@@ -83,10 +99,16 @@ do
     esac
 done
 
-
-if [ -n "${PID}" ] && [ ! -d "/proc/${PID}" ]; then
-    echo "Oops, process ${PID} does not exist."
-    exit 1
+if [ -n "$PID" ]; then
+    check_pid_exist
+    if [ $? -eq 0 ]; then
+        echo "Oops, process ${PID} does not exist."
+        exit 1
+    fi
+fi
+if [ $STACK_FLAG -eq 1 ] && [ "$SYS" = "Darwin" ];then
+    echo "Dump stack on Mac OS X is not supported now ..."
+    exit 1;
 fi
 
 if [ $STACK_FLAG -eq 1 ] ; then
