@@ -2,7 +2,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include "../common/phptrace_mmap.h"
-#define PID_MAX 32768
+#define PID_MAX 4*1024*1024 
 int main(int argc, char *argv[]){
     int pid, i, c;
     uint8_t *flags, flag;
@@ -17,7 +17,7 @@ int main(int argc, char *argv[]){
     cmd = argv[1];
     c = 0;
     if(strncmp("scan", cmd, sizeof("scan")-1) == 0){
-        for(i = 0; i < PID_MAX; ++i){
+        for(i = 0; i < PID_MAX+1; ++i){
             flag = flags[i];
             if(flag!=0){
                 printf("%d %d\n", i, flag);
@@ -28,7 +28,7 @@ int main(int argc, char *argv[]){
         return 0;
     }
     if(strncmp("clear", cmd, sizeof("clear")-1) == 0){
-        for(i = 0; i < PID_MAX; ++i){
+        for(i = 0; i < PID_MAX+1; ++i){
             if(flags[i]!=0){
                 printf("set %d %d\n", i, 0);
                 ++c;
