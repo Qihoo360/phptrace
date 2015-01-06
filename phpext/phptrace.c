@@ -518,7 +518,7 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
     phptrace_file_tailer_t tailer = {MAGIC_NUMBER_TAILER, 0};
     phptrace_file_header_t header = {MAGIC_NUMBER_HEADER, 1, 0};
 
-    if(ex == NULL){
+    if (ex == NULL) {
         goto exec;
     }
 
@@ -529,7 +529,7 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
         ctx->pid = getpid();
     }
 
-    if (ctrl[ctx->pid] == 0 && !PHPTRACE_G(dotrace)) {
+    if ((ctrl[ctx->pid] & 0x01) == 0 && !PHPTRACE_G(dotrace)) {
         /*unmap tracelog if phptrace was shutdown*/
         if (ctx->tracelog.shmaddr) {
             phptrace_reset_tracelog(ctx);
@@ -537,8 +537,6 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
         goto exec;
     
     }
-
-    snprintf(filename, sizeof(filename), "%s/%s.%d", PHPTRACE_G(logdir), PHPTRACE_TRACE_FILENAME, ctx->pid);
 
     if (ctrl[ctx->pid] & HEARTBEAT_FLAG) {
         ctrl[ctx->pid] &= ~HEARTBEAT_FLAG & 0x00FF;
@@ -552,6 +550,7 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
             goto exec;
         }
     }
+
     if (ctrl[ctx->pid] & REOPEN_FLAG) {
         ctrl[ctx->pid] &= ~REOPEN_FLAG & 0x00FF;
         phptrace_reset_tracelog(ctx);
@@ -560,6 +559,7 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
     /*do trace*/
     /*first startup*/
     if (ctx->tracelog.shmaddr == NULL) {
+        snprintf(filename, sizeof(filename), "%s/%s.%d", PHPTRACE_G(logdir), PHPTRACE_TRACE_FILENAME, ctx->pid);
         ctx->tracelog = phptrace_mmap_create(filename, PHPTRACE_G(logsize));
         if (ctx->tracelog.shmaddr == MAP_FAILED) {
             ctx->tracelog.shmaddr = NULL;
