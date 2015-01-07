@@ -2,7 +2,7 @@ phptrace
 ========
 
 
-[![Build Status](https://travis-ci.org/Qihoo360/phptrace.svg?branch=master)](https://travis-ci.org/Qihoo360/phptrace)
+[![Build Status](https://travis-ci.org/Qihoo360/phptrace.svg?branch=nightly)](https://travis-ci.org/Qihoo360/phptrace)
 
 ## Introduction [中文](https://github.com/Qihoo360/phptrace/blob/master/README_ZH.md)
 
