@@ -271,7 +271,7 @@ typedef struct phptrace_execute_data_s{
     int internal;
 }phptrace_execute_data;
 
-sds phptrace_repr_zval(zval *val)
+sds phptrace_repr_zval(zval *val TSRMLS_DC)
 {
     char value[128], *type_name;
     switch (Z_TYPE_P(val)) {
@@ -296,7 +296,7 @@ sds phptrace_repr_zval(zval *val)
             sprintf(value, "object<%p>", &Z_OBJVAL_P(val));
             break;
         case IS_RESOURCE:
-            type_name = (char *) zend_rsrc_list_get_rsrc_type(Z_LVAL_P(val));
+            type_name = (char *) zend_rsrc_list_get_rsrc_type(Z_LVAL_P(val) TSRMLS_CC);
             sprintf(value, "%s(%ld)", type_name, Z_LVAL_P(val));
             break;
         default:
@@ -307,7 +307,7 @@ sds phptrace_repr_zval(zval *val)
 
 #define EXF_COMMON(e) ex->function_state.function->common.e
 #define EXF(e) ex->function_state.function->e
-sds phptrace_get_funcname(zend_execute_data *ex)
+sds phptrace_get_funcname(zend_execute_data *ex TSRMLS_DC)
 {
     sds funcname;
     const char *scope;
@@ -355,7 +355,7 @@ sds phptrace_get_funcname(zend_execute_data *ex)
     }
     return funcname;
 }
-sds phptrace_get_parameters(zend_execute_data *ex)
+sds phptrace_get_parameters(zend_execute_data *ex TSRMLS_DC)
 {
     sds parameters, param;
     zend_arg_info *arg_info;
@@ -392,7 +392,7 @@ sds phptrace_get_parameters(zend_execute_data *ex)
             parameters = sdscat(parameters, "optional");
         }
         parameters = sdscat(parameters, " = ");
-        param = phptrace_repr_zval(args[i]);
+        param = phptrace_repr_zval(args[i] TSRMLS_CC);
         parameters = sdscatsds(parameters, param);
         sdsfree(param);
         if(i != n-1){
@@ -401,16 +401,16 @@ sds phptrace_get_parameters(zend_execute_data *ex)
     }
     return parameters;
 }
-sds phptrace_get_return_value(zval *return_value)
+sds phptrace_get_return_value(zval *return_value TSRMLS_DC)
 {
     if (return_value) {
-        return phptrace_repr_zval(return_value); 
+        return phptrace_repr_zval(return_value TSRMLS_CC); 
     } else {
         return NULL;
     }
 }
 
-void phptrace_reset_tracelog(phptrace_context_t *ctx)
+void phptrace_reset_tracelog(phptrace_context_t *ctx TSRMLS_DC)
 {
     char filename[256];
 
@@ -424,39 +424,39 @@ void phptrace_reset_tracelog(phptrace_context_t *ctx)
     ctx->shmoffset = NULL;
     ctx->heartbeat = 0;
 }
-void phptrace_get_callinfo(phptrace_file_record_t *record, zend_execute_data *ex)
+void phptrace_get_callinfo(phptrace_file_record_t *record, zend_execute_data *ex TSRMLS_DC)
 {
     sds funcname, parameters;
-    funcname = phptrace_get_funcname(ex);
+    funcname = phptrace_get_funcname(ex TSRMLS_CC);
     if (funcname) {
         record->function_name = funcname;
     }
 
-    parameters = phptrace_get_parameters(ex);
+    parameters = phptrace_get_parameters(ex TSRMLS_CC);
     if (parameters) {
         RECORD_ENTRY(record, params) = parameters;
     }
 }
-void phptrace_register_return_value(zval **return_value)
+void phptrace_register_return_value(zval **return_value TSRMLS_DC)
 {
     if (EG(return_value_ptr_ptr) == NULL) {
         EG(return_value_ptr_ptr) = return_value;
     }
 }
-void phptrace_get_execute_return_value(phptrace_file_record_t *record, zval *return_value)
+void phptrace_get_execute_return_value(phptrace_file_record_t *record, zval *return_value TSRMLS_DC)
 {
     if (return_value) {
         /*registered by phptrace*/
-        RECORD_EXIT(record, return_value) = phptrace_get_return_value(return_value);
+        RECORD_EXIT(record, return_value) = phptrace_get_return_value(return_value TSRMLS_CC);
         zval_ptr_dtor(EG(return_value_ptr_ptr));
         EG(return_value_ptr_ptr) = NULL;
     } else if (*EG(return_value_ptr_ptr)) {
         /*registered by someone else, just fetch it*/
-        RECORD_EXIT(record, return_value) = phptrace_get_return_value(*EG(return_value_ptr_ptr));
+        RECORD_EXIT(record, return_value) = phptrace_get_return_value(*EG(return_value_ptr_ptr) TSRMLS_CC);
     }
 
 }
-void phptrace_get_execute_internal_return_value(phptrace_file_record_t *record, zend_execute_data *ex)
+void phptrace_get_execute_internal_return_value(phptrace_file_record_t *record, zend_execute_data *ex TSRMLS_DC)
 {
     zend_op *opline;
     zval *return_value;
@@ -466,16 +466,16 @@ void phptrace_get_execute_internal_return_value(phptrace_file_record_t *record, 
         opline = *EG(opline_ptr);
 #if PHP_VERSION_ID >= 50500
         if (opline && opline->result_type & 0x0F) {
-            return_value = zend_get_zval_ptr((opline->result_type&0x0F), &opline->result, ex, &should_free, 0);
+            return_value = zend_get_zval_ptr((opline->result_type&0x0F), &opline->result, ex, &should_free, 0 TSRMLS_CC);
 #elif PHP_VERSION_ID >= 50400
         if (opline && opline->result_type & 0x0F) {
-            return_value = zend_get_zval_ptr((opline->result_type&0x0F), &opline->result, ex->Ts, &should_free, 0);
+            return_value = zend_get_zval_ptr((opline->result_type&0x0F), &opline->result, ex->Ts, &should_free, 0 TSRMLS_CC);
 #else
         if (opline && opline->result.op_type & 0x0F) {
-            return_value = zend_get_zval_ptr(&opline->result, ex->Ts, &should_free, 0);
+            return_value = zend_get_zval_ptr(&opline->result, ex->Ts, &should_free, 0 TSRMLS_CC);
 #endif
             if (return_value) {
-                RECORD_EXIT(record, return_value) = phptrace_get_return_value(return_value);
+                RECORD_EXIT(record, return_value) = phptrace_get_return_value(return_value TSRMLS_CC);
             }
         }
         /*
@@ -505,7 +505,7 @@ void phptrace_print_call_result(phptrace_file_record_t *record)
     printf("%f\n", RECORD_EXIT(record, cost_time)/1000000.0);
 }
 
-void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
+void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px TSRMLS_DC)
 {
     uint64_t now;
     uint8_t *ctrl;
@@ -532,7 +532,7 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
     if ((ctrl[ctx->pid] & 0x01) == 0 && !PHPTRACE_G(dotrace)) {
         /*unmap tracelog if phptrace was shutdown*/
         if (ctx->tracelog.shmaddr) {
-            phptrace_reset_tracelog(ctx);
+            phptrace_reset_tracelog(ctx TSRMLS_CC);
         }
         goto exec;
     
@@ -546,14 +546,14 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
         now = phptrace_time_usec();
         if (now - ctx->heartbeat > ctx->heartbeat_timedout * 1000000) {
             ctrl[ctx->pid] = 0;
-            phptrace_reset_tracelog(ctx);
+            phptrace_reset_tracelog(ctx TSRMLS_CC);
             goto exec;
         }
     }
 
     if (ctrl[ctx->pid] & REOPEN_FLAG) {
         ctrl[ctx->pid] &= ~REOPEN_FLAG & 0x00FF;
-        phptrace_reset_tracelog(ctx);
+        phptrace_reset_tracelog(ctx TSRMLS_CC);
     }
 
     /*do trace*/
@@ -594,18 +594,18 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
 
     RECORD_ENTRY(&record, params) = NULL;
     record.function_name = NULL;
-    p = zend_get_executed_filename();
+    p = zend_get_executed_filename(TSRMLS_C);
     RECORD_ENTRY(&record, filename) = sdsnew(p);
-    RECORD_ENTRY(&record, lineno) = zend_get_executed_lineno();
+    RECORD_ENTRY(&record, lineno) = zend_get_executed_lineno(TSRMLS_C);
 
-    phptrace_get_callinfo(&record, ex);
+    phptrace_get_callinfo(&record, ex TSRMLS_CC);
 
     if (!px->internal) {
         /* register return_values's address
          * it will be setting if needed after execute
          * */
         return_value = NULL;
-        phptrace_register_return_value(&return_value);
+        phptrace_register_return_value(&return_value TSRMLS_CC);
     }
 
     record.seq = ctx->seq ++;
@@ -643,15 +643,15 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
         } else {
 #if PHP_VERSION_ID < 50500
             if (phptrace_old_execute_internal) {
-                phptrace_old_execute_internal(px->current_execute_data, px->return_value_used TSRMLS_DC);
+                phptrace_old_execute_internal(px->current_execute_data, px->return_value_used TSRMLS_CC);
             } else {
-                execute_internal(px->current_execute_data, px->return_value_used TSRMLS_DC);
+                execute_internal(px->current_execute_data, px->return_value_used TSRMLS_CC);
             }
 #else
             if (phptrace_old_execute_internal) {
-                phptrace_old_execute_internal(px->current_execute_data, px->fci, px->return_value_used TSRMLS_DC);
+                phptrace_old_execute_internal(px->current_execute_data, px->fci, px->return_value_used TSRMLS_CC);
             } else {
-                execute_internal(px->current_execute_data, px->fci, px->return_value_used TSRMLS_DC);
+                execute_internal(px->current_execute_data, px->fci, px->return_value_used TSRMLS_CC);
             }
 #endif
         }
@@ -676,9 +676,9 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px)
         /* return_value was setted
          * now get the value
          * */
-        phptrace_get_execute_return_value(&record, return_value);
+        phptrace_get_execute_return_value(&record, return_value TSRMLS_CC);
     } else {
-        phptrace_get_execute_internal_return_value(&record, ex);
+        phptrace_get_execute_internal_return_value(&record, ex TSRMLS_CC);
     }
 
     RECORD_EXIT(&record, cost_time) = now - record.start_time;
@@ -715,15 +715,15 @@ exec:
         } else {
 #if PHP_VERSION_ID < 50500
             if (phptrace_old_execute_internal) {
-                phptrace_old_execute_internal(px->current_execute_data, px->return_value_used TSRMLS_DC);
+                phptrace_old_execute_internal(px->current_execute_data, px->return_value_used TSRMLS_CC);
             } else {
-                execute_internal(px->current_execute_data, px->return_value_used TSRMLS_DC);
+                execute_internal(px->current_execute_data, px->return_value_used TSRMLS_CC);
             }
 #else
             if (phptrace_old_execute_internal) {
-                phptrace_old_execute_internal(px->current_execute_data, px->fci, px->return_value_used TSRMLS_DC);
+                phptrace_old_execute_internal(px->current_execute_data, px->fci, px->return_value_used TSRMLS_CC);
             } else {
-                execute_internal(px->current_execute_data, px->fci, px->return_value_used TSRMLS_DC);
+                execute_internal(px->current_execute_data, px->fci, px->return_value_used TSRMLS_CC);
             }
 #endif
         }
