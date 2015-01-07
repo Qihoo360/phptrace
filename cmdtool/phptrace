@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 CLEAR_FLAG=0
 STACK_FLAG=0
