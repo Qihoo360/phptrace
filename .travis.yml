@@ -1,0 +1,23 @@
+language: c
+
+cache:
+    - apt
+
+before_install:
+    - sudo apt-get update -qq
+    - sudo apt-get install php5 php5-dev
+    - sudo apt-get install libgtest-dev 
+    - sudo apt-get install cmake
+    - cd /usr/src/gtest
+    - sudo cmake CMakeLists.txt
+    - sudo make
+    - sudo cp *.a /usr/lib
+    - cd -
+
+before_script:
+    - make all PHPDIR=/usr
+    - cd tests && make && cd -
+
+
+script:
+    - tests/phptrace_unittest
