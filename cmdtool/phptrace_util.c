@@ -111,7 +111,9 @@ void phptrace_context_init(phptrace_context_t *ctx)
     ctx->max_print_len = MAX_PRINT_LENGTH;
     ctx->seg.shmaddr = MAP_FAILED;
     log_level_set(LL_ERROR + 1);
+#if 0
     log_level_set(LL_DEBUG);            /* for test only */
+#endif 
 }
 
 void trace_start(phptrace_context_t *ctx)
@@ -182,6 +184,7 @@ int update_mmap_filename(phptrace_context_t *ctx)
         return 0;
     } else {
         sdsfree(ctx->mmap_filename);
+        ctx->mmap_filename = NULL;
         if (ctx->seg.shmaddr && ctx->seg.shmaddr != MAP_FAILED) {
             if (phptrace_unmap(ctx->seg.shmaddr) < 0) {
                 return -1;
