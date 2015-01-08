@@ -111,9 +111,6 @@ void phptrace_context_init(phptrace_context_t *ctx)
     ctx->max_print_len = MAX_PRINT_LENGTH;
     ctx->seg.shmaddr = MAP_FAILED;
     log_level_set(LL_ERROR + 1);
-#if 0
-    log_level_set(LL_DEBUG);            /* for test only */
-#endif 
 }
 
 void trace_start(phptrace_context_t *ctx)
@@ -155,8 +152,8 @@ void trace_start(phptrace_context_t *ctx)
 
 void process_opt_c(phptrace_context_t *ctx)
 {
-    if (!phptrace_ctrl_init(&(ctx->ctrl))) {                    
-        error_msg(ctx, ERR_CTRL, "cannot open control mmap file %s (%s)", 
+    if (!phptrace_ctrl_init(&(ctx->ctrl))) {
+        error_msg(ctx, ERR_CTRL, "cannot open control mmap file %s (%s)",
                   PHPTRACE_LOG_DIR "/" PHPTRACE_CTRL_FILENAME, (errno ? strerror(errno) : "null"));
         die(ctx, -1);
     }
@@ -341,7 +338,6 @@ void trace(phptrace_context_t *ctx)
                 }
 
                 if (!ctx->seg.shmaddr || ctx->seg.shmaddr == MAP_FAILED) {
-                    errno = 0;
                     ctx->seg = phptrace_mmap_read(ctx->mmap_filename);
                     if (ctx->seg.shmaddr == MAP_FAILED) {
                         if (errno == ENOENT) {              /* file not exist, should wait */
