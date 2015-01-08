@@ -1,6 +1,9 @@
 phptrace
 ========
 
+
+[![Build Status](https://travis-ci.org/Qihoo360/phptrace.svg?branch=nightly)](https://travis-ci.org/Qihoo360/phptrace)
+
 ## Introduction [中文](https://github.com/Qihoo360/phptrace/blob/master/README_ZH.md)
 
 Phptrace is a tracing and troubleshooting tool for PHP scripts. The information of php execute context and php function calls are fetched from PHP Runtime. It is very useful to locate blocking problems, heavy-load problems and tricky bugs both in the online environment and the development environment.
