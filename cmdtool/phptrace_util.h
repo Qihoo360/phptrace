@@ -64,12 +64,10 @@ enum {
 };
 
 enum {
-    STATE_START = 0,
-    STATE_OPEN,
+    STATE_OPEN = 0,
     STATE_HEADER,
     STATE_RECORD,
-    STATE_TAILER,
-    STATE_ERROR
+    STATE_TAILER
 };
 
 /* stack address info */
@@ -133,6 +131,7 @@ sds sdscatrepr_noquto(sds s, const char *p, size_t len);
 sds print_indent_str(sds s, char* str, int32_t size);
 sds print_time(sds s, uint64_t t);
 void print_record(phptrace_context_t *ctx, phptrace_file_record_t *r);
+
 void phptrace_record_free(phptrace_file_record_t *r);
 int update_mmap_filename(phptrace_context_t *ctx);
 void trace_start(phptrace_context_t *ctx);

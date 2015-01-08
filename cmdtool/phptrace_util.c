@@ -111,6 +111,7 @@ void phptrace_context_init(phptrace_context_t *ctx)
     ctx->max_print_len = MAX_PRINT_LENGTH;
     ctx->seg.shmaddr = MAP_FAILED;
     log_level_set(LL_ERROR + 1);
+    log_level_set(LL_DEBUG);            /* for test only */
 }
 
 void trace_start(phptrace_context_t *ctx)
@@ -146,10 +147,17 @@ void trace_start(phptrace_context_t *ctx)
     }
     phptrace_ctrl_set(&(ctx->ctrl), flag, ctx->php_pid);
     ctx->trace_flag = flag;
+    log_printf (LL_DEBUG, " [ok] set ctrl data: ctrl[pid=%d]=%u is opened!\n", ctx->php_pid, flag);
 }
 
 void process_opt_c(phptrace_context_t *ctx)
 {
+    if (!phptrace_ctrl_init(&(ctx->ctrl))) {                    
+        error_msg(ctx, ERR_CTRL, "cannot open control mmap file %s (%s)", 
+                  PHPTRACE_LOG_DIR "/" PHPTRACE_CTRL_FILENAME, (errno ? strerror(errno) : "null"));
+        die(ctx, -1);
+    }
+    log_printf (LL_DEBUG, " [ok] ctrl_init open (%s)", PHPTRACE_LOG_DIR "/" PHPTRACE_CTRL_FILENAME);
     if (ctx->php_pid >= 0) {
         phptrace_ctrl_clean_one(&(ctx->ctrl), ctx->php_pid);
         printf ("clean process %d.\n", ctx->php_pid);
@@ -290,9 +298,9 @@ void trace(phptrace_context_t *ctx)
 {
     int rc;
     phptrace_file_record_t rcd;
-    int state = STATE_START;
-    int64_t flag;
-    int64_t seq = -1;
+    int state = STATE_OPEN;
+    uint64_t flag;
+    uint64_t seq = 0;
 
     void *mem_ptr = NULL;
     int opendata_wait_interval = OPEN_DATA_WAIT_INTERVAL;
@@ -303,103 +311,87 @@ void trace(phptrace_context_t *ctx)
             die(ctx, 0);
         }
 
-        if (state == STATE_ERROR) {
-            break;
-        }
-
-        /* open mmap has 2 entries:
-         *  a. first time(STATE_START);
-         *  b. another time(STATE_TAILER)
-         */
-        while (state == STATE_START || state == STATE_TAILER) {
-            if (interrupted) {
-                die(ctx, 0);
-            }
-
-            log_printf(LL_DEBUG, "open trace mmap file, sleep %d ms.\n", opendata_wait_interval);
-            phptrace_msleep(opendata_wait_interval);
-            opendata_wait_interval = grow_interval(opendata_wait_interval, MAX_OPEN_DATA_WAIT_INTERVAL);
-
-            rc = update_mmap_filename(ctx);
-            if (rc < 0) {
-                error_msg(ctx, ERR_TRACE, "update trace mmap filename failed");
-                die(ctx, -1);
-            }
-
-            if (!ctx->seg.shmaddr || ctx->seg.shmaddr == MAP_FAILED) {
-                ctx->seg = phptrace_mmap_read(ctx->mmap_filename);
-                if (ctx->seg.shmaddr == MAP_FAILED) {
-                    log_printf(LL_NOTICE, "phptrace_mmap_read '%s' failed!", ctx->mmap_filename);
-                    continue;
-                }
-            }
-
-            log_printf(LL_DEBUG, "phptrace_mmap_read '%s' successfully!", ctx->mmap_filename);
-            state = STATE_OPEN;
-            mem_ptr = ctx->seg.shmaddr;
-            unlink(ctx->mmap_filename);
-        }
-        opendata_wait_interval = OPEN_DATA_WAIT_INTERVAL;
-
         phptrace_ctrl_heartbeat_ping(&(ctx->ctrl), ctx->php_pid);
 
-        /* read header */
-        phptrace_mem_read_64b(flag, mem_ptr);
+        if (state != STATE_OPEN) {
+            phptrace_mem_read_64b(flag, mem_ptr);
+            log_printf (LL_DEBUG, "flag=(%lld) (0x%llx)", flag, flag);
 
-        log_printf (LL_DEBUG, "flag=(%lld) (0x%llx)", flag, flag);
-        if (flag != WAIT_FLAG) {
-            data_wait_interval = DATA_WAIT_INTERVAL;
-        } else {
-            log_printf (LL_DEBUG, "  WAIT_FLAG, will wait %d ms.\n", flag, data_wait_interval);
-        }
-
-        switch (flag) {
-            case MAGIC_NUMBER_HEADER:
-                if (state != STATE_OPEN) {
-                    error_msg(ctx, ERR_TRACE, "state is not correct (STATE_OPEN), trace file may be damaged");
-                    die(ctx, -1);
-                }
-
-                mem_ptr = phptrace_mem_read_header(&(ctx->file.header), mem_ptr);
-                state = STATE_HEADER;
-                log_printf (LL_DEBUG, " [ok load header]");
-                break;
-            case MAGIC_NUMBER_TAILER:
-                if (state != STATE_HEADER && state != STATE_RECORD) {
-                    error_msg(ctx, ERR_TRACE, "state is not correct (STATE_HEADER or STATE_RECORD). trace file may be damaged");
-                    die(ctx, -1);
-                }
-
-                state = STATE_TAILER;
-                mem_ptr = phptrace_mem_read_tailer(&(ctx->file.tailer), mem_ptr);
-                log_printf (LL_DEBUG, " [ok load tailer]");
-                break;
-            case WAIT_FLAG:
+            if (flag == WAIT_FLAG) {                        /* wait flag */
+                log_printf (LL_DEBUG, "  WAIT_FLAG, will wait %d ms.\n", flag, data_wait_interval);
                 phptrace_msleep(data_wait_interval);
                 data_wait_interval = grow_interval(data_wait_interval, MAX_DATA_WAIT_INTERVAL);
-                continue;
-            default:
-                if (state == STATE_HEADER) {
-                    state = STATE_RECORD;
-                }
-                if (state != STATE_RECORD) {
-                    error_msg(ctx, ERR_TRACE, "state is not correct (STATE_RECORD). trace file may be damaged");
+                continue; 
+            } else if (flag == MAGIC_NUMBER_TAILER) {       /* check tailer */
+                state = STATE_TAILER;
+            }
+            data_wait_interval = DATA_WAIT_INTERVAL;        /* reset the data wait interval */
+        }
+        
+        switch (state) { 
+            case STATE_OPEN:
+                rc = update_mmap_filename(ctx);
+                if (rc < 0) {
+                    error_msg(ctx, ERR_TRACE, "update trace mmap filename failed");
                     die(ctx, -1);
                 }
-                if (flag != seq + 1) {
-                    error_msg(ctx, ERR_TRACE, "sequence number is incorrect. trace file may be damaged");
+
+                if (!ctx->seg.shmaddr || ctx->seg.shmaddr == MAP_FAILED) {
+                    errno = 0;
+                    ctx->seg = phptrace_mmap_read(ctx->mmap_filename);
+                    if (ctx->seg.shmaddr == MAP_FAILED) {
+                        if (errno == ENOENT) {              /* file not exist, should wait */
+                            log_printf(LL_DEBUG, "trace mmap file not exist, will sleep %d ms.\n", opendata_wait_interval);
+                            phptrace_msleep(opendata_wait_interval);
+                            opendata_wait_interval = grow_interval(opendata_wait_interval, MAX_OPEN_DATA_WAIT_INTERVAL);
+                            continue;
+                        } else {
+                            log_printf(LL_NOTICE, "phptrace_mmap_read '%s' failed!", ctx->mmap_filename);
+                            die(ctx, -1);
+                        }
+                    }
+                }
+
+                /* open tracelog success */
+                opendata_wait_interval = OPEN_DATA_WAIT_INTERVAL;
+                state = STATE_HEADER;
+
+                mem_ptr = ctx->seg.shmaddr;
+                unlink(ctx->mmap_filename);
+                break;
+            case STATE_HEADER:
+                if (flag != MAGIC_NUMBER_HEADER) {
+                    error_msg(ctx, ERR_TRACE, "header's magic number is not correct, trace file may be damaged");
+                    die(ctx, -1);
+                }
+                mem_ptr = phptrace_mem_read_header(&(ctx->file.header), mem_ptr);
+                state = STATE_RECORD;
+                log_printf (LL_DEBUG, " [ok load header]");
+                break;
+            case STATE_RECORD:
+                if (flag != seq) {
+                    error_msg(ctx, ERR_TRACE, "sequence number is incorrect, trace file may be damaged");
                     die(ctx, -1);
                 }
 
                 mem_ptr = phptrace_mem_read_record(&(rcd), mem_ptr, flag);
                 if (!mem_ptr) {
-                    error_msg(ctx, ERR_TRACE, "read record failed. maybe write too fast");
+                    error_msg(ctx, ERR_TRACE, "read record failed, maybe write too fast");
                     die(ctx, -1);
                 }
 
                 print_record(ctx, &(rcd));
                 phptrace_record_free(&(rcd));
                 seq++;
+                break;
+            case STATE_TAILER:
+                if (flag != MAGIC_NUMBER_TAILER) {
+                    error_msg(ctx, ERR_TRACE, "tailer's magic number is not correct, trace file may be damaged");
+                    die(ctx, -1);
+                }
+                mem_ptr = phptrace_mem_read_tailer(&(ctx->file.tailer), mem_ptr);
+                state = STATE_OPEN;
+                log_printf (LL_DEBUG, " [ok load tailer]");
                 break;
         }
     }
