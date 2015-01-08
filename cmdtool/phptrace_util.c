@@ -142,8 +142,9 @@ void trace_start(phptrace_context_t *ctx)
             error_msg(ctx, ERR_TRACE, "can not delete the old traced file %s(%s)", ctx->mmap_filename, strerror(errno));
             die(ctx, -1);
         }
-        flag |= 1<<1 ;
     }
+    /*force to reopen when start a new trace*/
+    flag |= 1<<1 ;
     phptrace_ctrl_set(&(ctx->ctrl), flag, ctx->php_pid);
     ctx->trace_flag = flag;
 }
