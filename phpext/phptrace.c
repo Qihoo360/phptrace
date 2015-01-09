@@ -678,7 +678,18 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px TSRM
          * */
         phptrace_get_execute_return_value(&record, return_value TSRMLS_CC);
     } else {
-        phptrace_get_execute_internal_return_value(&record, ex TSRMLS_CC);
+#if PHP_VERSION_ID >= 50500
+        /* if px->fci is set, return value will be stored in *px->fci->retval_ptr_ptr
+         * see what execute_internal dose in Zend/zend_execute.c
+         * */
+        if (px->fci && px->fci->retval_ptr_ptr && *px->fci->retval_ptr_ptr) {
+            RECORD_EXIT(&record, return_value) = phptrace_repr_zval(*px->fci->retval_ptr_ptr TSRMLS_CC);
+        } else {
+            phptrace_get_execute_internal_return_value(&record, ex TSRMLS_CC);
+        }
+#else
+            phptrace_get_execute_internal_return_value(&record, ex TSRMLS_CC);
+#endif
     }
 
     RECORD_EXIT(&record, cost_time) = now - record.start_time;
