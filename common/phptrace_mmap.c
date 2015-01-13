@@ -40,6 +40,9 @@ phptrace_segment_t phptrace_mmap_fd(int fd, size_t size, int prot)
         segment.size = 0;
     }
     segment.size = size;
+    if( fd != -1) {
+        close(fd);
+    }
     return segment;
 }
 
