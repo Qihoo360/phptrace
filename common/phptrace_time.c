@@ -3,5 +3,5 @@
 uint64_t phptrace_time_usec() {
     struct timeval tv;
     gettimeofday(&tv, 0);
-    return tv.tv_sec * 1000000 + tv.tv_usec;
+    return (uint64_t)tv.tv_sec * 1000000 + (uint64_t)tv.tv_usec;
 }
