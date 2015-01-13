@@ -460,28 +460,23 @@ void phptrace_get_execute_internal_return_value(phptrace_file_record_t *record, 
 {
     zend_op *opline;
     zval *return_value;
-    zend_free_op should_free;
 
     if (*EG(opline_ptr)) {
         opline = *EG(opline_ptr);
 #if PHP_VERSION_ID >= 50500
         if (opline && opline->result_type & 0x0F) {
-            return_value = zend_get_zval_ptr((opline->result_type&0x0F), &opline->result, ex, &should_free, 0 TSRMLS_CC);
+            return_value = EX_TMP_VAR(ex, ex->opline->result.var)->var.ptr;
 #elif PHP_VERSION_ID >= 50400
         if (opline && opline->result_type & 0x0F) {
-            return_value = zend_get_zval_ptr((opline->result_type&0x0F), &opline->result, ex->Ts, &should_free, 0 TSRMLS_CC);
+            return_value = (*(temp_variable *)((char *) ex->Ts + ex->opline->result.var)).var.ptr;
 #else
         if (opline && opline->result.op_type & 0x0F) {
-            return_value = zend_get_zval_ptr(&opline->result, ex->Ts, &should_free, 0 TSRMLS_CC);
+            return_value = (*(temp_variable *)((char *) ex->Ts + ex->opline->result.u.var)).var.ptr;
 #endif
             if (return_value) {
                 RECORD_EXIT(record, return_value) = phptrace_get_return_value(return_value TSRMLS_CC);
             }
         }
-        /*
-         * let alone should_free here
-         * Because what we get here is return_value which will be freed by Zend later
-         * */
     }
 }
 
