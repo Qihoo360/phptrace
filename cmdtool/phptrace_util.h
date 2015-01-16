@@ -23,7 +23,7 @@
 #endif
 
 #define PHPTRACE_NAME "phptrace"
-#define PHPTRACE_VERSION "0.2.0 release candidate"
+#define PHPTRACE_VERSION "0.2.0 stable"
 #define PHPTRACE_DEVELOPER "360 infra webcore team"
 
 #define MAX_TEMP_LENGTH 100
