@@ -75,7 +75,7 @@ script_filename = /home/xxx/opt/nginx/webapp/block.php
 [0x7f27b9a99c50]  run /home/xxx/opt/nginx/webapp/block.php:10 
 ```
 
-## Comparation
+## Comparison
 
 ### PhpTrace
 * It can print call stack of executing php process, which is similar to pstack.
