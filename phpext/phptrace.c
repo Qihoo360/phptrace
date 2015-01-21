@@ -461,7 +461,13 @@ void phptrace_get_execute_internal_return_value(phptrace_file_record_t *record, 
     zend_op *opline;
     zval *return_value;
 
-    if (*EG(opline_ptr)) {
+    /* Ensure that there is no exception occurs
+     * When some exception was thrown, opline would
+     * be replaced by the Exception opline. It may
+     * cause a segfault if we get the return value
+     * from a exception opline.
+     * */
+    if (*EG(opline_ptr) && !EG(exception)) {
         opline = *EG(opline_ptr);
 #if PHP_VERSION_ID >= 50500
         if (opline && opline->result_type & 0x0F) {
