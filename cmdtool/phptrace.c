@@ -52,6 +52,8 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
         {"pid",  required_argument, 0, 'p'},                /* trace pid */
         {"stack",  no_argument, 0, 's'},                    /* dump stack */
         {"verbose",  no_argument, 0, 'v'},                  /* print verbose information */
+        {"dump",  required_argument, 0, 'w'},                     /* dump trace log */
+        {"read",  required_argument, 0, 'w'},                     /* dump trace log */
         {0, 0, 0, 0}
     };
 
@@ -61,7 +63,7 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
         exit(-1);
     }
 
-    while ((c = getopt_long(argc, argv, "hcl:p:sv", long_options, &opt_index)) != -1) {
+    while ((c = getopt_long(argc, argv, "hcl:p:svw:r:", long_options, &opt_index)) != -1) {
         switch (c) {
             case 0:             /* args for stack */
                 if (opt_index == 0) {
@@ -120,14 +122,20 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
             case 'v':
                 log_level_set(log_level_get() - 1);
                 break;
+            case 'w':
+                ctx->out_filename = sdsnew(optarg);
+                break;
+            case 'r':
+                ctx->in_filename = sdsnew(optarg);
+                break;
             default:
                 usage();
                 exit(0);
         }
     }
 
-    if (!ctx->opt_p_flag) {
-        error_msg(ctx, ERR_INVALID_PARAM, "no process id");
+    if (!ctx->opt_p_flag && !ctx->in_filename) {
+        error_msg(ctx, ERR_INVALID_PARAM, " need option -p process id or -r file to read");
         exit(-1);
     }
 
@@ -182,7 +190,23 @@ int main(int argc, char *argv[])
         error_msg(&context, ERR, "install signal handler failed (%s)", (errno ? strerror(errno) : "null"));
         exit(-1);
     }
-    trace_start(&context);
+
+    /* -r option, read from file */
+    if (context.in_filename) {
+        context.mmap_filename = sdsdup(context.in_filename);
+    } else {
+        trace_start(&context);
+    }
+
+    /* -w option, dump to file */
+    if (context.out_filename) {
+        context.out_fp = fopen(context.out_filename, "w");
+        if (!context.out_fp) {
+            error_msg(&context, ERR, "Can not open %s to dump. (%s)", context.out_filename, (errno ? strerror(errno) : "null"));
+            die(&context, -1);
+        }
+        context.record_printer = dump_print_record;
+    }
     trace(&context);
 
     return 0;

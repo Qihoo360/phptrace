@@ -56,7 +56,7 @@
 #define MAX_RETRY 3
 
 enum {
-    ERR = 0,
+    ERR = 1,
     ERR_INVALID_PARAM,
     ERR_STACK,
     ERR_CTRL,
@@ -89,15 +89,21 @@ typedef struct address_info_s {
     long opline_ln_offset;
 } address_info_t;
 
+typedef void (*phptrace_record_printer_t)(void *ctx, phptrace_file_record_t *r, size_t raw_size);
+ 
 typedef struct phptrace_context_s {
     int php_pid;                        /* pid of the -p option */
     uint64_t start_time;                /* start time of cmdtool */
 
-    FILE *log;                          /* output stream */
+    FILE *log;                          /* log output stream */
     sds mmap_filename;
 
+    sds in_filename;                    /* input filename */
+    FILE *out_fp;                       /* output stream */
+    sds out_filename;                   /* output filename */
+
     int trace_flag;                     /* flag of trace data, default 0 */
-    int opt_c_flag;                     /* flag of cmdtool option -c, default 0 */
+    int opt_c_flag;                     /* flag of cmdtool option -c(clean), default 0 */
     int opt_s_flag;                     /* flag of cmdtool option -s(stack), default 0 */
     int opt_p_flag;                     /* flag of cmdtool option -p(pid), default 0 */
 
@@ -106,6 +112,8 @@ typedef struct phptrace_context_s {
     phptrace_file_t file;
     phptrace_segment_t seg;
     phptrace_ctrl_t ctrl;
+
+    phptrace_record_printer_t record_printer;  /* printer,  a function pointer */
 
     /* stack only */
     int php_version;
@@ -130,7 +138,9 @@ void process_opt_c(phptrace_context_t *ctx);
 sds sdscatrepr_noquto(sds s, const char *p, size_t len);
 sds print_indent_str(sds s, char* str, int32_t size);
 sds print_time(sds s, uint64_t t);
-void print_record(phptrace_context_t *ctx, phptrace_file_record_t *r);
+
+void standard_print_record(phptrace_context_t *ctx, phptrace_file_record_t *r, size_t raw_size);
+void dump_print_record(phptrace_context_t *ctx, phptrace_file_record_t *r, size_t raw_size);
 
 void phptrace_record_free(phptrace_file_record_t *r);
 int update_mmap_filename(phptrace_context_t *ctx);

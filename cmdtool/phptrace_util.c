@@ -4,6 +4,7 @@
 #include <sys/stat.h>
 
 static const char *ERR_MSG[] = {
+    "", 
     "ERROR",
     "INVALID PARAM",
     "STACK ERROR",
@@ -61,6 +62,16 @@ void trace_cleanup(phptrace_context_t *ctx)
     if (!ctx->seg.shmaddr && ctx->seg.shmaddr != MAP_FAILED) {
         phptrace_unmap(&(ctx->seg));
     }
+    if (ctx->in_filename) {
+        sdsfree(ctx->in_filename);
+        ctx->in_filename = NULL;
+    }
+    if (ctx->out_filename) {
+        fclose(ctx->out_fp);
+
+        sdsfree(ctx->out_filename);
+        ctx->out_filename = NULL;
+    }
     if (ctx->mmap_filename) {
         sdsfree(ctx->mmap_filename);
         ctx->mmap_filename = NULL;
@@ -108,8 +119,15 @@ void phptrace_context_init(phptrace_context_t *ctx)
     ctx->start_time = phptrace_time_usec();
     ctx->log = stdout;
     ctx->mmap_filename = NULL;
+
+    ctx->in_filename = NULL;
+    ctx->out_fp = stdout;
+    ctx->out_filename = NULL;
+
     ctx->max_print_len = MAX_PRINT_LENGTH;
     ctx->seg.shmaddr = MAP_FAILED;
+
+    ctx->record_printer = standard_print_record;
     log_level_set(LL_ERROR + 1);
 }
 
@@ -199,13 +217,15 @@ int update_mmap_filename(phptrace_context_t *ctx)
 
 void usage()
 {
-    printf ("usage: phptrace [ -chsel ]  [-p pid] \n\
+    printf ("usage: phptrace [ -chslvw ]  [-p pid] [ -r ]\n\
     -h          -- show this help\n\
     -c          -- clear the trace switches of pid, or all the switches if no pid parameter\n\
     -p pid      -- access the php process i\n\
     -s          -- print call stack of php process by the pid\n\
     -l size     -- specify the max string length to print\n\
     -v          -- print verbose information\n\
+    -w outfile  -- dump the trace log to file in original format\n\
+    -r infile   -- read the trace file of original format, instead of the process\n\
     \n");
 }
 
@@ -245,7 +265,7 @@ sds sdscatrepr_noquto(sds s, const char *p, size_t len)
     return s;
 }
 
-void print_record(phptrace_context_t *ctx, phptrace_file_record_t *r)
+void standard_print_record(phptrace_context_t *ctx, phptrace_file_record_t *r, size_t raw_size)
 {
     sds buf = sdsempty();
     if (r->flag == RECORD_FLAG_ENTRY) {
@@ -265,9 +285,22 @@ void print_record(phptrace_context_t *ctx, phptrace_file_record_t *r)
         buf = print_time(buf, RECORD_EXIT(r, cost_time));
     }
     log_printf (LL_DEBUG, " record_sds[%s]\n", buf);
-    printf ("%s\n", buf);
+    fprintf (ctx->out_fp, "%s\n", buf);
     sdsfree (buf);
     fflush(NULL);
+}
+
+void dump_print_record(phptrace_context_t *ctx, phptrace_file_record_t *r, size_t raw_size)
+{
+    sds buf;
+    
+    buf = sdsempty();    
+    buf = sdsMakeRoomFor(buf, raw_size);
+    phptrace_mem_write_record(r, buf);
+    fwrite(buf, sizeof(char), raw_size, (ctx->out_fp));
+
+    log_printf(LL_DEBUG, "state_record raw_size=%u", raw_size);
+    sdsfree(buf);
 }
 
 void phptrace_record_free(phptrace_file_record_t *r)
@@ -303,7 +336,10 @@ void trace(phptrace_context_t *ctx)
     uint64_t flag;
     uint64_t seq = 0;
 
+    sds buf;
+    size_t raw_size;
     void *mem_ptr = NULL;
+    void *tmp_ptr = NULL;
     int opendata_wait_interval = OPEN_DATA_WAIT_INTERVAL;
     int data_wait_interval = DATA_WAIT_INTERVAL;
 
@@ -312,14 +348,20 @@ void trace(phptrace_context_t *ctx)
             die(ctx, 0);
         }
 
-        phptrace_ctrl_heartbeat_ping(&(ctx->ctrl), ctx->php_pid);
+        if (!ctx->in_filename) {
+            phptrace_ctrl_heartbeat_ping(&(ctx->ctrl), ctx->php_pid);
+        }
 
         if (state != STATE_OPEN) {
             phptrace_mem_read_64b(flag, mem_ptr);
             log_printf (LL_DEBUG, "flag=(%lld) (0x%llx)", flag, flag);
 
             if (flag == WAIT_FLAG) {                        /* wait flag */
-                log_printf (LL_DEBUG, "  WAIT_FLAG, will wait %d ms.\n", flag, data_wait_interval);
+                if (ctx->in_filename) {
+                    break;
+                }
+
+                log_printf (LL_DEBUG, "  WAIT_FLAG, will wait %d ms.\n", data_wait_interval);
                 phptrace_msleep(data_wait_interval);
                 data_wait_interval = grow_interval(data_wait_interval, MAX_DATA_WAIT_INTERVAL);
                 continue; 
@@ -337,9 +379,16 @@ void trace(phptrace_context_t *ctx)
                     die(ctx, -1);
                 }
 
+                log_printf(LL_DEBUG, "phptrace_mmap_read '%s' before if", ctx->mmap_filename);
                 if (!ctx->seg.shmaddr || ctx->seg.shmaddr == MAP_FAILED) {
                     ctx->seg = phptrace_mmap_read(ctx->mmap_filename);
+                    log_printf(LL_DEBUG, "phptrace_mmap_read '%s' after if", ctx->mmap_filename);
                     if (ctx->seg.shmaddr == MAP_FAILED) {
+                        if (ctx->in_filename) {             /* -r option, open failed */
+                            error_msg(ctx, ERR_TRACE, "Can not open %s to read, %s!", ctx->in_filename, strerror(errno));
+                            die(ctx, -1);
+                        }
+
                         if (errno == ENOENT) {              /* file not exist, should wait */
                             log_printf(LL_DEBUG, "trace mmap file not exist, will sleep %d ms.\n", opendata_wait_interval);
                             phptrace_msleep(opendata_wait_interval);
@@ -353,20 +402,38 @@ void trace(phptrace_context_t *ctx)
                 }
 
                 /* open tracelog success */
+                if (!ctx->in_filename) {
+                    unlink(ctx->mmap_filename);
+                }
                 opendata_wait_interval = OPEN_DATA_WAIT_INTERVAL;
                 state = STATE_HEADER;
 
                 mem_ptr = ctx->seg.shmaddr;
-                unlink(ctx->mmap_filename);
                 break;
             case STATE_HEADER:
                 if (flag != MAGIC_NUMBER_HEADER) {
                     error_msg(ctx, ERR_TRACE, "header's magic number is not correct, trace file may be damaged");
                     die(ctx, -1);
                 }
-                mem_ptr = phptrace_mem_read_header(&(ctx->file.header), mem_ptr);
+                tmp_ptr = phptrace_mem_read_header(&(ctx->file.header), mem_ptr);
+                raw_size = tmp_ptr - mem_ptr;
+                mem_ptr = tmp_ptr;
+
                 state = STATE_RECORD;
                 log_printf (LL_DEBUG, " [ok load header]");
+
+                if (ctx->out_filename) {                          /* dump header to out_fp */
+                    buf = sdsempty();    
+                    buf = sdsMakeRoomFor(buf, raw_size);
+                    phptrace_mem_write_header(&(ctx->file.header), buf);
+                    fwrite(buf, sizeof(char), raw_size, (ctx->out_fp));
+
+                    log_printf(LL_DEBUG, "state_header raw_size=%u", raw_size);
+                    sdsfree(buf);
+
+                    //@TEST
+                    //return;
+                }
                 break;
             case STATE_RECORD:
                 if (flag != seq) {
@@ -374,13 +441,16 @@ void trace(phptrace_context_t *ctx)
                     die(ctx, -1);
                 }
 
-                mem_ptr = phptrace_mem_read_record(&(rcd), mem_ptr, flag);
-                if (!mem_ptr) {
+                tmp_ptr = phptrace_mem_read_record(&(rcd), mem_ptr, flag);
+                if (!tmp_ptr) {
                     error_msg(ctx, ERR_TRACE, "read record failed, maybe write too fast");
                     die(ctx, -1);
                 }
+                raw_size = tmp_ptr - mem_ptr;
+                mem_ptr = tmp_ptr;
 
-                print_record(ctx, &(rcd));
+                //print_record(ctx, &(rcd));
+                ctx->record_printer(ctx, &(rcd), raw_size);
                 phptrace_record_free(&(rcd));
                 seq++;
                 break;
@@ -389,12 +459,30 @@ void trace(phptrace_context_t *ctx)
                     error_msg(ctx, ERR_TRACE, "tailer's magic number is not correct, trace file may be damaged");
                     die(ctx, -1);
                 }
-                mem_ptr = phptrace_mem_read_tailer(&(ctx->file.tailer), mem_ptr);
+                tmp_ptr = phptrace_mem_read_tailer(&(ctx->file.tailer), mem_ptr);
+                raw_size = tmp_ptr - mem_ptr;
+                mem_ptr = tmp_ptr;
+
                 state = STATE_OPEN;
                 log_printf (LL_DEBUG, " [ok load tailer]");
+
+                if (ctx->out_filename) {                          /* dump tailer to out_fp */
+                    buf = sdsempty();    
+                    buf = sdsMakeRoomFor(buf, raw_size);
+                    phptrace_mem_write_tailer(&(ctx->file.tailer), buf);
+                    fwrite(buf, sizeof(char), raw_size, ctx->out_fp);
+
+                    log_printf(LL_DEBUG, "state_tailer raw_size=%u", raw_size);
+                    sdsfree(buf);
+
+                    goto TRACE_END;
+                }
                 break;
         }
     }
+
+TRACE_END:
+    trace_cleanup(ctx);
 }
 
 int stack_dump_once(phptrace_context_t* ctx)
