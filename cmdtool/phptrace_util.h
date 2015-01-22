@@ -97,10 +97,12 @@ typedef struct phptrace_context_s {
 
     FILE *log;                          /* log output stream */
     sds mmap_filename;
+    int rotate_cnt;                     /* count of rotate file */
 
     sds in_filename;                    /* input filename */
     FILE *out_fp;                       /* output stream */
     sds out_filename;                   /* output filename */
+    int opt_w_flag;                     /* flag of cmdtool option -w(dump), default 0 */
 
     int trace_flag;                     /* flag of trace data, default 0 */
     int opt_c_flag;                     /* flag of cmdtool option -c(clean), default 0 */

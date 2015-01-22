@@ -124,6 +124,7 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
                 break;
             case 'w':
                 ctx->out_filename = sdsnew(optarg);
+                ctx->opt_w_flag = 1;
                 break;
             case 'r':
                 ctx->in_filename = sdsnew(optarg);
@@ -205,7 +206,10 @@ int main(int argc, char *argv[])
             error_msg(&context, ERR, "Can not open %s to dump. (%s)", context.out_filename, (errno ? strerror(errno) : "null"));
             die(&context, -1);
         }
-        context.record_printer = dump_print_record;
+
+        if (context.opt_w_flag) {
+            context.record_printer = dump_print_record;
+        }
     }
     trace(&context);
 
