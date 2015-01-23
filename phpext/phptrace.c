@@ -557,10 +557,10 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px TSRM
         phptrace_reset_tracelog(ctx TSRMLS_CC);
     }
 
+    snprintf(filename, sizeof(filename), "%s/%s.%d", PHPTRACE_G(logdir), PHPTRACE_TRACE_FILENAME, ctx->pid);
     /*do trace*/
     /*first startup*/
     if (ctx->tracelog.shmaddr == NULL) {
-        snprintf(filename, sizeof(filename), "%s/%s.%d", PHPTRACE_G(logdir), PHPTRACE_TRACE_FILENAME, ctx->pid);
         ctx->tracelog = phptrace_mmap_create(filename, PHPTRACE_G(logsize));
         if (ctx->tracelog.shmaddr == MAP_FAILED) {
             ctx->tracelog.shmaddr = NULL;
