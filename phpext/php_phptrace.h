@@ -25,7 +25,7 @@
 extern zend_module_entry phptrace_module_entry;
 #define phpext_phptrace_ptr &phptrace_module_entry
 
-#define PHP_PHPTRACE_VERSION "0.1.0" /* Replace with version number for your extension */
+#define PHP_PHPTRACE_VERSION "0.2.1" /* Replace with version number for your extension */
 #define PHPTRACE_UNIT_TEST 0
 
 #ifdef PHP_WIN32
