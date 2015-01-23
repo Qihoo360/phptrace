@@ -294,7 +294,7 @@ void dump_print_record(phptrace_context_t *ctx, phptrace_file_record_t *r, size_
 {
     sds buf;
 
-    buf = sdsempty();    
+    buf = sdsempty();
     buf = sdsMakeRoomFor(buf, raw_size);
     phptrace_mem_write_record(r, buf);
     fwrite(buf, sizeof(char), raw_size, (ctx->out_fp));
