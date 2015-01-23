@@ -227,6 +227,11 @@ void *phptrace_mem_read_tailer(phptrace_file_tailer_t *tailer, void *mem)
     mem += sizeof(uint64_t);
     len = *(uint32_t *)mem;
     mem += sizeof(uint32_t);
-    tailer->filename = sdsnewlen(mem, len);
+    if (len > 0) {
+        tailer->filename = sdsnewlen(mem, len);
+    } else {
+        tailer->filename = NULL;
+    }
+    mem += len;
     return mem;
 }

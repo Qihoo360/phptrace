@@ -90,7 +90,7 @@ typedef struct address_info_s {
 } address_info_t;
 
 typedef void (*phptrace_record_printer_t)(void *ctx, phptrace_file_record_t *r, size_t raw_size);
- 
+
 typedef struct phptrace_context_s {
     int php_pid;                        /* pid of the -p option */
     uint64_t start_time;                /* start time of cmdtool */

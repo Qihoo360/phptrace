@@ -4,7 +4,7 @@
 #include <sys/stat.h>
 
 static const char *ERR_MSG[] = {
-    "", 
+    "",
     "ERROR",
     "INVALID PARAM",
     "STACK ERROR",
@@ -293,7 +293,7 @@ void standard_print_record(phptrace_context_t *ctx, phptrace_file_record_t *r, s
 void dump_print_record(phptrace_context_t *ctx, phptrace_file_record_t *r, size_t raw_size)
 {
     sds buf;
-    
+
     buf = sdsempty();    
     buf = sdsMakeRoomFor(buf, raw_size);
     phptrace_mem_write_record(r, buf);
@@ -402,10 +402,10 @@ void trace(phptrace_context_t *ctx)
                         }
                     }
 
-                    ctx->rotate_cnt++;
                 }
 
                 /* open tracelog success */
+                ctx->rotate_cnt++;
                 if (!ctx->in_filename) {
                     unlink(ctx->mmap_filename);
                 }
@@ -427,7 +427,7 @@ void trace(phptrace_context_t *ctx)
                 log_printf (LL_DEBUG, " [ok load header]");
 
                 if (ctx->rotate_cnt == 1 && ctx->opt_w_flag) {                          /* dump header to out_fp */
-                    buf = sdsempty();    
+                    buf = sdsempty();
                     buf = sdsMakeRoomFor(buf, raw_size);
                     phptrace_mem_write_header(&(ctx->file.header), buf);
                     fwrite(buf, sizeof(char), raw_size, (ctx->out_fp));
@@ -459,6 +459,11 @@ void trace(phptrace_context_t *ctx)
                     error_msg(ctx, ERR_TRACE, "tailer's magic number is not correct, trace file may be damaged");
                     die(ctx, -1);
                 }
+
+                if (ctx->file.tailer.filename) {                    /* free tailer.filename */
+                    sdsfree(ctx->file.tailer.filename);
+                    ctx->file.tailer.filename = NULL;
+                }
                 tmp_ptr = phptrace_mem_read_tailer(&(ctx->file.tailer), mem_ptr);
                 raw_size = tmp_ptr - mem_ptr;
                 mem_ptr = tmp_ptr;
@@ -481,6 +486,7 @@ TRACE_END:
         fwrite(&magic_number, sizeof(uint64_t), 1, ctx->out_fp);
         fwrite(&len, sizeof(uint32_t), 1, ctx->out_fp);
 
+        flush(NULL);
         log_printf(LL_DEBUG, "[dump] empty tailer");
     }
 
