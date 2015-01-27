@@ -516,14 +516,92 @@ int stack_dump(phptrace_context_t* ctx)
     return -1;
 }
 
+int check_phpext_installed(phptrace_context_t *ctx)
+{
+    if (access(PHPTRACE_LOG_DIR "/" PHPTRACE_CTRL_FILENAME, R_OK|W_OK) < 0) {
+        if(errno != ENOENT) {
+            log_printf(LL_ERROR, "check_phpext_installed: %s", strerror(errno));
+        }
+        return 0;
+    }
+    return 1;
+}
+int status_dump(phptrace_context_t *ctx, int timeout /*milliseconds*/)
+{
+    int wait;
+    FILE *fp;
+    char filename[256];
+    char buf[256];
+    int  blen = sizeof(buf);
+    int  nread;
+    wait = timeout < OPEN_DATA_WAIT_INTERVAL ? timeout : OPEN_DATA_WAIT_INTERVAL;
+    sprintf(filename, PHPTRACE_LOG_DIR "/" PHPTRACE_STATUS_FILENAME ".%d", ctx->php_pid);
+    log_printf(LL_DEBUG, "dump status %s\n", filename);
+    while (1) {
+        fp = fopen(filename, "r");
+        if (fp == NULL) {
+            if (errno != ENOENT) {
+                log_printf(LL_ERROR, "open status file %s: %s", filename, strerror(errno));
+                return -1;
+            }
+            if (timeout > 0) {
+                log_printf(LL_DEBUG, "open status file %s: %s", filename, strerror(errno));
+                timeout -= wait;
+                phptrace_msleep(wait);
+                wait = grow_interval(wait, MAX_OPEN_DATA_WAIT_INTERVAL);
+                continue;
+            }
+        }
+        break;
+    }
+    /*timedout*/
+    if (fp == NULL) {
+        log_printf(LL_DEBUG, "dump status failed: timedout(%d)\n", timeout);
+        return -1;
+    }
+    unlink(filename);
+    /*success*/
+    while (! feof(fp)) {
+        nread = fread(buf, 1, blen, fp);
+        fwrite(buf, nread, 1, stdout);
+    }
+    fclose(fp);
+    return 0;
+}
+
 void process_opt_s(phptrace_context_t *ctx)
 {
     int ret;
+    int8_t num;
 
+    num = -1;
+
+    /*dump stauts from the extension*/
+    if (check_phpext_installed(ctx)) {
+        log_printf(LL_DEBUG, "phptrace extension has been installed, use extension\n");
+        if (!phptrace_ctrl_init(&(ctx->ctrl))) {
+            error_msg(ctx, ERR_CTRL, "cannot open control mmap file %s (%s)",
+                      PHPTRACE_LOG_DIR "/" PHPTRACE_CTRL_FILENAME, (errno ? strerror(errno) : "null"));
+            die(ctx, -1);
+        }
+
+        phptrace_ctrl_get(&(ctx->ctrl), &num, ctx->php_pid);
+        if (num > 0) {
+            error_msg(ctx, ERR_CTRL, "process %d is being dumped by others, please retry later", ctx->php_pid);
+            die(ctx, -1);
+        }
+        phptrace_ctrl_set(&(ctx->ctrl), 1<<2, ctx->php_pid);
+        if (status_dump(ctx, 500) == 0){
+            return;
+        }
+    }
+
+    /*dump stack without extension if above failed*/
+    log_printf(LL_DEBUG, "phptrace extension was not been installed, use ptrace\n");
     if (sys_trace_attach(ctx->php_pid)) {
         log_printf(LL_NOTICE, "sys_trace_attach failed");
         error_msg(ctx, ERR_STACK, "sys_trace_attach failed (%s)", (errno ? strerror(errno) : "null"));
-        return; 
+        return;
     }
 
     ret = stack_dump(ctx);
