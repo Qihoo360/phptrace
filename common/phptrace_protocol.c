@@ -135,7 +135,7 @@ void *phptrace_mem_read_header(phptrace_file_header_t *header, void *mem)
 
 size_t phptrace_record_rawsize(phptrace_file_record_t *record)
 {
-    size_t raw_size;
+    size_t raw_size = 0;
 
     raw_size += sizeof(uint64_t);                       /* seq */
     raw_size += sizeof(uint8_t);                        /* flag */

@@ -444,7 +444,7 @@ void trace(phptrace_context_t *ctx)
                 fflush(NULL);
 
                 phptrace_record_free(&(rcd));
-                //sdsfree(buf);
+                sdsfree(buf);
                 seq++;
                 break;
             case STATE_TAILER:
