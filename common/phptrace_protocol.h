@@ -103,6 +103,8 @@ void *phptrace_mem_write_header(phptrace_file_header_t *header, void *mem);
 void *phptrace_mem_read_record(phptrace_file_record_t *record, void *mem, uint64_t seq);
 void *phptrace_mem_write_record(phptrace_file_record_t *record, void *mem);
 
+size_t phptrace_record_rawsize(phptrace_file_record_t *record);
+
 void *phptrace_mem_write_waitflag(void *mem);
 void *phptrace_mem_read_waitflag(uint64_t *waitflag, void *mem);
 

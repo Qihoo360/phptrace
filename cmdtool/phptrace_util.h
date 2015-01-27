@@ -67,7 +67,8 @@ enum {
     STATE_OPEN = 0,
     STATE_HEADER,
     STATE_RECORD,
-    STATE_TAILER
+    STATE_TAILER,
+    STATE_END
 };
 
 /* stack address info */
@@ -89,10 +90,10 @@ typedef struct address_info_s {
     long opline_ln_offset;
 } address_info_t;
 
-typedef void (*phptrace_record_printer_t)(void *ctx, phptrace_file_record_t *r, size_t raw_size);
+typedef sds (*phptrace_record_transform_t)(void *ctx, phptrace_file_record_t *r);
 
 typedef struct phptrace_context_s {
-    int php_pid;                        /* pid of the -p option */
+    int php_pid;                        /* pid of the -p option, default -1 */
     uint64_t start_time;                /* start time of cmdtool */
 
     FILE *log;                          /* log output stream */
@@ -107,7 +108,6 @@ typedef struct phptrace_context_s {
     int trace_flag;                     /* flag of trace data, default 0 */
     int opt_c_flag;                     /* flag of cmdtool option -c(clean), default 0 */
     int opt_s_flag;                     /* flag of cmdtool option -s(stack), default 0 */
-    int opt_p_flag;                     /* flag of cmdtool option -p(pid), default 0 */
 
     int max_print_len;                  /* max length to print string, default is MAX_PRINT_LENGTH */
 
@@ -115,7 +115,7 @@ typedef struct phptrace_context_s {
     phptrace_segment_t seg;
     phptrace_ctrl_t ctrl;
 
-    phptrace_record_printer_t record_printer;  /* printer,  a function pointer */
+    phptrace_record_transform_t record_transformer;  /* transformer,  a function pointer */
 
     /* stack only */
     int php_version;
@@ -141,8 +141,8 @@ sds sdscatrepr_noquto(sds s, const char *p, size_t len);
 sds print_indent_str(sds s, char* str, int32_t size);
 sds print_time(sds s, uint64_t t);
 
-void standard_print_record(phptrace_context_t *ctx, phptrace_file_record_t *r, size_t raw_size);
-void dump_print_record(phptrace_context_t *ctx, phptrace_file_record_t *r, size_t raw_size);
+sds standard_transform(phptrace_context_t *ctx, phptrace_file_record_t *r);
+sds dump_transform(phptrace_context_t *ctx, phptrace_file_record_t *r);
 
 void phptrace_record_free(phptrace_file_record_t *r);
 int update_mmap_filename(phptrace_context_t *ctx);

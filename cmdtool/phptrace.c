@@ -47,13 +47,13 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
         {"sapi-globals", required_argument, 0, 0},
         {"executor-globals", required_argument, 0, 0},
         {"help",   no_argument, 0, 'h'},                    /* help */
-        {"clear",  no_argument, 0, 'c'},                    /* clean switches of pid | all */
+        {"cleanup",  no_argument, 0, 'c'},                    /* clean switches of pid | all */
         {"max-string-length",  required_argument, 0, 'l'},  /* max string length to print */
         {"pid",  required_argument, 0, 'p'},                /* trace pid */
         {"stack",  no_argument, 0, 's'},                    /* dump stack */
         {"verbose",  no_argument, 0, 'v'},                  /* print verbose information */
         {"dump",  required_argument, 0, 'w'},                     /* dump trace log */
-        {"read",  required_argument, 0, 'w'},                     /* dump trace log */
+        {"read",  required_argument, 0, 'r'},                     /* dump trace log */
         {0, 0, 0, 0}
     };
 
@@ -114,7 +114,6 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
                     error_msg(ctx, ERR_INVALID_PARAM, "cannot trace the current process '%d'", ctx->php_pid);
                     exit(-1);
                 }
-                ctx->opt_p_flag = 1;
                 break;
             case 's':
                 ctx->opt_s_flag = 1;
@@ -135,7 +134,7 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
         }
     }
 
-    if (!ctx->opt_p_flag && !ctx->in_filename) {
+    if (ctx->php_pid >= 0 && !ctx->in_filename) {
         error_msg(ctx, ERR_INVALID_PARAM, " need option -p process id or -r file to read");
         exit(-1);
     }
@@ -166,6 +165,7 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
 
 int main(int argc, char *argv[])
 {
+    char buf[MAX_TEMP_LENGTH];
     phptrace_context_t context;
 
     printf("%s %s, published by %s\n", PHPTRACE_NAME, PHPTRACE_VERSION, PHPTRACE_DEVELOPER);
@@ -196,10 +196,12 @@ int main(int argc, char *argv[])
     if (context.in_filename) {
         context.mmap_filename = sdsdup(context.in_filename);
     } else {
+        snprintf(buf, MAX_TEMP_LENGTH, "%s.%d", PHPTRACE_LOG_DIR "/" PHPTRACE_TRACE_FILENAME,  context.php_pid);
+        context.mmap_filename = sdsnew(buf);
         trace_start(&context);
     }
 
-    /* -w option, dump to file */
+    /* output to file */
     if (context.out_filename) {
         context.out_fp = fopen(context.out_filename, "w");
         if (!context.out_fp) {
@@ -207,8 +209,9 @@ int main(int argc, char *argv[])
             die(&context, -1);
         }
 
+        /* -w option, dump */
         if (context.opt_w_flag) {
-            context.record_printer = dump_print_record;
+            context.record_transformer = dump_transform;
         }
     }
     trace(&context);

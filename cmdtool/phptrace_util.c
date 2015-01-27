@@ -127,7 +127,7 @@ void phptrace_context_init(phptrace_context_t *ctx)
     ctx->max_print_len = MAX_PRINT_LENGTH;
     ctx->seg.shmaddr = MAP_FAILED;
 
-    ctx->record_printer = standard_print_record;
+    ctx->record_transformer = standard_transform;
     log_level_set(LL_ERROR + 1);
 }
 
@@ -150,10 +150,6 @@ void trace_start(phptrace_context_t *ctx)
         die(ctx, -1);
     }
     log_printf (LL_DEBUG, " [ok] read ctrl data: ctrl[pid=%d]=%d is closed!\n", ctx->php_pid, num);
-
-    if (ctx->mmap_filename == NULL) {
-        ctx->mmap_filename = sdscatprintf(sdsempty(),"%s.%d", PHPTRACE_LOG_DIR "/" PHPTRACE_TRACE_FILENAME,  ctx->php_pid);
-    }
 
     if (stat(ctx->mmap_filename, &st) == 0) {
         if (unlink(ctx->mmap_filename) < 0) {
@@ -188,14 +184,7 @@ void process_opt_c(phptrace_context_t *ctx)
 
 int update_mmap_filename(phptrace_context_t *ctx)
 {
-    char buf[MAX_TEMP_LENGTH];
-
-    if (ctx->mmap_filename == NULL) {
-        snprintf(buf, MAX_TEMP_LENGTH, "%s.%d", PHPTRACE_LOG_DIR "/" PHPTRACE_TRACE_FILENAME,  ctx->php_pid);
-        ctx->mmap_filename = sdsnew(buf);
-    } else if (!ctx->file.tailer.filename) {
-        return 0;
-    } else if (!sdscmp(ctx->file.tailer.filename, ctx->mmap_filename)) {
+    if (!ctx->file.tailer.filename || !sdscmp(ctx->file.tailer.filename, ctx->mmap_filename)) {
         return 0;
     } else {
         sdsfree(ctx->mmap_filename);
@@ -208,6 +197,7 @@ int update_mmap_filename(phptrace_context_t *ctx)
         ctx->seg.shmaddr = MAP_FAILED;
         ctx->mmap_filename = sdsnew(ctx->file.tailer.filename);
     }
+
     if (ctx->mmap_filename == NULL) {
         return -1;
     }
@@ -265,7 +255,7 @@ sds sdscatrepr_noquto(sds s, const char *p, size_t len)
     return s;
 }
 
-void standard_print_record(phptrace_context_t *ctx, phptrace_file_record_t *r, size_t raw_size)
+sds standard_transform(phptrace_context_t *ctx, phptrace_file_record_t *r)
 {
     sds buf = sdsempty();
     if (r->flag == RECORD_FLAG_ENTRY) {
@@ -284,23 +274,21 @@ void standard_print_record(phptrace_context_t *ctx, phptrace_file_record_t *r, s
         buf = sdscatprintf (buf, "    ");
         buf = print_time(buf, RECORD_EXIT(r, cost_time));
     }
+    buf = sdscat(buf, "\n");
     log_printf (LL_DEBUG, " record_sds[%s]\n", buf);
-    fprintf (ctx->out_fp, "%s\n", buf);
-    sdsfree (buf);
-    fflush(NULL);
+    return buf;
 }
 
-void dump_print_record(phptrace_context_t *ctx, phptrace_file_record_t *r, size_t raw_size)
+sds dump_transform(phptrace_context_t *ctx, phptrace_file_record_t *r)
 {
     sds buf;
+    size_t raw_size;
 
-    buf = sdsempty();
-    buf = sdsMakeRoomFor(buf, raw_size);
+    raw_size = phptrace_record_rawsize(r);
+    buf = sdsnewlen(NULL, raw_size);
     phptrace_mem_write_record(r, buf);
-    fwrite(buf, sizeof(char), raw_size, (ctx->out_fp));
-
     log_printf(LL_DEBUG, "[dump] record(sequence=%lld) raw_size=%u", r->seq, raw_size);
-    sdsfree(buf);
+    return buf;
 }
 
 void phptrace_record_free(phptrace_file_record_t *r)
@@ -347,6 +335,10 @@ void trace(phptrace_context_t *ctx)
 
     while (1) {
         if (interrupted) {
+            break;
+        }
+
+        if (state == STATE_END) {
             break;
         }
 
@@ -427,10 +419,9 @@ void trace(phptrace_context_t *ctx)
                 log_printf (LL_DEBUG, " [ok load header]");
 
                 if (ctx->rotate_cnt == 1 && ctx->opt_w_flag) {                          /* dump header to out_fp */
-                    buf = sdsempty();
-                    buf = sdsMakeRoomFor(buf, raw_size);
+                    buf = sdsnewlen(NULL, raw_size);
                     phptrace_mem_write_header(&(ctx->file.header), buf);
-                    fwrite(buf, sizeof(char), raw_size, (ctx->out_fp));
+                    fwrite(buf, sizeof(char), raw_size, ctx->out_fp);
 
                     log_printf(LL_DEBUG, "[dump] header raw_size=%u", raw_size);
                     sdsfree(buf);
@@ -442,16 +433,18 @@ void trace(phptrace_context_t *ctx)
                     die(ctx, -1);
                 }
 
-                tmp_ptr = phptrace_mem_read_record(&(rcd), mem_ptr, flag);
-                if (!tmp_ptr) {
+                mem_ptr = phptrace_mem_read_record(&(rcd), mem_ptr, flag);
+                if (!mem_ptr) {
                     error_msg(ctx, ERR_TRACE, "read record failed, maybe write too fast");
                     die(ctx, -1);
                 }
-                raw_size = tmp_ptr - mem_ptr;
-                mem_ptr = tmp_ptr;
 
-                ctx->record_printer(ctx, &(rcd), raw_size);
+                buf = ctx->record_transformer(ctx, &(rcd));
+                fwrite(buf, sizeof(char), sdslen(buf), ctx->out_fp);
+                fflush(NULL);
+
                 phptrace_record_free(&(rcd));
+                //sdsfree(buf);
                 seq++;
                 break;
             case STATE_TAILER:
@@ -468,25 +461,23 @@ void trace(phptrace_context_t *ctx)
                 raw_size = tmp_ptr - mem_ptr;
                 mem_ptr = tmp_ptr;
 
-                state = STATE_OPEN;
-                log_printf (LL_DEBUG, " [ok load tailer]");
-
                 if (ctx->in_filename) {                             /* -r option, read from file */
-                    goto TRACE_END;
+                    state = STATE_END;
+                } else {
+                    state = STATE_OPEN;
                 }
-
+                log_printf (LL_DEBUG, " [ok load tailer]");
                 break;
         }
     }
 
-TRACE_END:
     if (ctx->opt_w_flag) {                                          /* dump empty tailer to out_fp */
         len = 0;
         magic_number = MAGIC_NUMBER_TAILER;
         fwrite(&magic_number, sizeof(uint64_t), 1, ctx->out_fp);
         fwrite(&len, sizeof(uint32_t), 1, ctx->out_fp);
 
-        flush(NULL);
+        fflush(NULL);
         log_printf(LL_DEBUG, "[dump] empty tailer");
     }
 
