@@ -582,7 +582,13 @@ void phptrace_destroy_php_status(phptrace_status_t *status)
 }
 void phptrace_dump_php_status(phptrace_status_t *status)
 {
-    FILE *fp = fopen("/tmp/test.stack", "w");
+    FILE *fp;
+    char filename[256];
+    phptrace_context_t *ctx;
+    ctx = &PHPTRACE_G(ctx);
+
+    sprintf(filename, "%s/%s.%d", PHPTRACE_LOG_DIR, PHPTRACE_STATUS_FILENAME, ctx->pid);
+    fp = fopen(filename, "w");
     if (status->core_last_error) {
         fprintf(fp, "Last error\n");
         fprintf(fp, "%s\n\n", status->core_last_error);
