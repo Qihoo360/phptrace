@@ -537,7 +537,7 @@ int status_dump(phptrace_context_t *ctx, int timeout /*milliseconds*/)
     wait = timeout < OPEN_DATA_WAIT_INTERVAL ? timeout : OPEN_DATA_WAIT_INTERVAL;
     sprintf(filename, PHPTRACE_LOG_DIR "/" PHPTRACE_STATUS_FILENAME ".%d", ctx->php_pid);
     log_printf(LL_DEBUG, "dump status %s\n", filename);
-    while (1) {
+    while (!interrupted) {
         fp = fopen(filename, "r");
         if (fp == NULL) {
             if (errno != ENOENT) {
