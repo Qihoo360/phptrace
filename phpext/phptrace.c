@@ -591,7 +591,7 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px TSRM
 
         ctx->shmoffset = ctx->tracelog.shmaddr;
         ctx->shmoffset = phptrace_mem_write_header(&header, ctx->shmoffset);
-        phptrace_mem_write_waitflag(ctx->tracelog.shmoffset);
+        phptrace_mem_write_waitflag(ctx->shmoffset);
     }
 
     RECORD_ENTRY(&record, params) = NULL;
