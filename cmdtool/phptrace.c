@@ -134,7 +134,7 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
         }
     }
 
-    if (ctx->php_pid >= 0 && !ctx->in_filename) {
+    if (ctx->php_pid >= 0 && ctx->in_filename) {
         error_msg(ctx, ERR_INVALID_PARAM, " need option -p process id or -r file to read");
         exit(-1);
     }
