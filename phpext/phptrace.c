@@ -508,7 +508,8 @@ void phptrace_print_call_result(phptrace_file_record_t *record)
 
 void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px TSRMLS_DC)
 {
-    uint64_t now;
+    uint64_t now, cpu_time;
+    int64_t memory_usage, memory_peak_usage;
     uint8_t *ctrl;
     char filename[256];
     const char *p;
@@ -610,6 +611,9 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px TSRM
         phptrace_register_return_value(&return_value TSRMLS_CC);
     }
 
+    memory_usage = zend_memory_usage(0 TSRMLS_CC);
+    memory_peak_usage = zend_memory_peak_usage(0 TSRMLS_CC);
+
     record.seq = ctx->seq ++;
     record.level = ctx->level;
     record.start_time = phptrace_time_usec();
@@ -636,6 +640,7 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px TSRM
     RECORD_EXIT(&record, cost_time) = 0;
     RECORD_EXIT(&record, return_value) = NULL;
 
+    cpu_time = phptrace_cputime_usec();
     zend_try {
         if (!px->internal) {
 #if PHP_VERSION_ID < 50500
@@ -672,6 +677,7 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px TSRM
         zend_bailout();
     }zend_end_try();
 
+    RECORD_EXIT(&record, cpu_time) = phptrace_cputime_usec() - cpu_time;
     -- ctx->level;
     now = phptrace_time_usec();
 
@@ -700,6 +706,8 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px TSRM
     if (RECORD_EXIT(&record, return_value) == NULL) {
         RECORD_EXIT(&record, return_value) = sdsempty();
     }
+    RECORD_EXIT(&record, memory_usage) = zend_memory_usage(0 TSRMLS_CC) - memory_usage;
+    RECORD_EXIT(&record, memory_peak_usage) = zend_memory_peak_usage(0 TSRMLS_CC) - memory_peak_usage;
     
     /*ctx->shmoffset may have been reset in the inner level 
      * of the phptrace_execute_core, so all the return info

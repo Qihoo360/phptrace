@@ -85,6 +85,15 @@ void *phptrace_mem_write_record(phptrace_file_record_t *record, void *mem)
 
         *((uint64_t *)mem) = RECORD_EXIT(record, cost_time);
         mem += sizeof(uint64_t);
+
+        *((uint64_t *)mem) = RECORD_EXIT(record, cpu_time);
+        mem += sizeof(uint64_t);
+
+        *((int64_t *)mem) = RECORD_EXIT(record, memory_usage);
+        mem += sizeof(int64_t);
+
+        *((int64_t *)mem) = RECORD_EXIT(record, memory_peak_usage);
+        mem += sizeof(int64_t);
     }
 
     *((uint64_t *)waitaddr) = record->seq;
@@ -235,6 +244,15 @@ void *phptrace_mem_read_record(phptrace_file_record_t *record, void *mem, uint64
         }
         RECORD_EXIT(record, cost_time) = *((uint64_t *)mem); 
         mem += sizeof(uint64_t);
+
+        RECORD_EXIT(record, cpu_time) = *((uint64_t *)mem);
+        mem += sizeof(uint64_t);
+
+        RECORD_EXIT(record, memory_usage) = *((int64_t *)mem);
+        mem += sizeof(int64_t);
+
+        RECORD_EXIT(record, memory_peak_usage) = *((int64_t *)mem);
+        mem += sizeof(int64_t);
     }
     return mem;
 }
