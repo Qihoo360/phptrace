@@ -594,6 +594,8 @@ void process_opt_s(phptrace_context_t *ctx)
         if (status_dump(ctx, 500) == 0){
             return;
         }
+        /*clear the flag if dump failed*/
+        phptrace_ctrl_set(&(ctx->ctrl), 0, ctx->php_pid);
     }
 
     /*dump stack without extension if above failed*/
