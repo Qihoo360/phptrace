@@ -529,7 +529,11 @@ void phptrace_get_php_status(phptrace_status_t *status TSRMLS_DC)
     last_error_lineno = PG(last_error_lineno);
     user_ini_filename = PG(user_ini_filename);
 
+#if PHP_VERSION_ID < 50500
     ex = EG(current_execute_data);
+#else
+    ex = EG(current_execute_data)->prev_execute_data;
+#endif
 
     memory_usage = zend_memory_usage(1 TSRMLS_CC);
     memory_peak_usage = zend_memory_peak_usage(1 TSRMLS_CC);
