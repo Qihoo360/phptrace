@@ -42,7 +42,7 @@
 #define HEARTBEAT_TIMEDOUT 30 /*30 seconds*/
 #define HEARTBEAT_FLAG (1<<7)
 #define REOPEN_FLAG (1<<1)
-#define STACK_FLAG (1<<2)
+#define STATUS_FLAG (1<<2)
 
 #if PHP_VERSION_ID < 50500
 void (*phptrace_old_execute)(zend_op_array *op_array TSRMLS_DC);
@@ -633,12 +633,12 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px TSRM
         ctx->pid = getpid();
     }
 
-    if (ctrl[ctx->pid] & STACK_FLAG) {
+    if (ctrl[ctx->pid] & STATUS_FLAG) {
         phptrace_init_php_status(&status);
         phptrace_get_php_status(&status TSRMLS_CC);
         phptrace_dump_php_status(&status);
         phptrace_destroy_php_status(&status);
-        ctrl[ctx->pid] &= ~STACK_FLAG & 0x00FF;
+        ctrl[ctx->pid] &= ~STATUS_FLAG & 0x00FF;
     }
 
     if ((ctrl[ctx->pid] & 0x01) == 0 && !PHPTRACE_G(dotrace)) {
