@@ -589,12 +589,13 @@ void phptrace_destroy_php_status(phptrace_status_t *status)
 void phptrace_dump_php_status(phptrace_status_t *status)
 {
     FILE *fp;
-    char filename[256];
+    char filename[256], tmp[256];
     phptrace_context_t *ctx;
     ctx = &PHPTRACE_G(ctx);
 
     sprintf(filename, "%s/%s.%d", PHPTRACE_LOG_DIR, PHPTRACE_STATUS_FILENAME, ctx->pid);
-    fp = fopen(filename, "w");
+    sprintf(tmp, "%s/%s.%d.tmp", PHPTRACE_LOG_DIR, PHPTRACE_STATUS_FILENAME, ctx->pid);
+    fp = fopen(tmp, "w");
     if (status->core_last_error) {
         fprintf(fp, "Last error\n");
         fprintf(fp, "%s\n\n", status->core_last_error);
@@ -615,6 +616,7 @@ void phptrace_dump_php_status(phptrace_status_t *status)
         fprintf(fp, "%s\n", status->stack);
     }
     fclose(fp);
+    rename(tmp, filename);
 }
 void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px TSRMLS_DC)
 {
