@@ -620,7 +620,7 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px TSRM
 
     record.flag = RECORD_FLAG_ENTRY;
     ctx->shmoffset = phptrace_mem_write_record(&record, ctx->shmoffset);
-    phptrace_mem_write_waitflag(ctx->tracelog.shmoffset);
+    phptrace_mem_write_waitflag(ctx->shmoffset);
 
     /* params and filename MUST be freed before we
      * assign cost_time and return_value.
@@ -709,7 +709,7 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px TSRM
         record.seq = ctx->seq ++;
         record.flag = RECORD_FLAG_EXIT;
         ctx->shmoffset = phptrace_mem_write_record(&record, ctx->shmoffset);
-        phptrace_mem_write_waitflag(ctx->tracelog.shmoffset);
+        phptrace_mem_write_waitflag(ctx->shmoffset);
     }
 
     if (ctx->cli && PHPTRACE_G(dotrace)) {
