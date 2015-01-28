@@ -521,7 +521,6 @@ void phptrace_get_php_status(phptrace_status_t *status TSRMLS_DC)
     size_t memory_peak_usage;
 
     sapi_request_info request_info;
-    sapi_headers_struct sapi_headers;
 
     last_error_type = PG(last_error_type);
     last_error_message = PG(last_error_message);
@@ -535,7 +534,6 @@ void phptrace_get_php_status(phptrace_status_t *status TSRMLS_DC)
     memory_peak_usage = zend_memory_peak_usage(1 TSRMLS_CC);
 
     request_info = SG(request_info);
-    sapi_headers = SG(sapi_headers);
 
     if (last_error_message) {
         status->core_last_error = sdscatprintf(sdsempty(), "[%d] %s %s:%d",
