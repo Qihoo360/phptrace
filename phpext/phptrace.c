@@ -514,6 +514,7 @@ void phptrace_get_php_status(phptrace_status_t *status TSRMLS_DC)
     char *last_error_file;
     int  last_error_lineno;
     char *user_ini_filename;
+    double request_time;
 
     zend_execute_data *ex;
 
@@ -534,6 +535,7 @@ void phptrace_get_php_status(phptrace_status_t *status TSRMLS_DC)
     memory_peak_usage = zend_memory_peak_usage(1 TSRMLS_CC);
 
     request_info = SG(request_info);
+    request_time = SG(global_request_time);
 
     if (last_error_message) {
         status->core_last_error = sdscatprintf(sdsempty(), "[%d] %s %s:%d",
@@ -548,6 +550,8 @@ void phptrace_get_php_status(phptrace_status_t *status TSRMLS_DC)
                 request_info.proto_num/1000, 
                 request_info.proto_num - 1000);
     }
+
+    status->request_time = request_time;
 
     status->stack = sdsempty();
     while(ex) {
@@ -597,7 +601,10 @@ void phptrace_dump_php_status(phptrace_status_t *status)
     }
     if (status->request_line) {
         fprintf(fp, "Request\n");
-        fprintf(fp, "%s\n\n", status->request_line);
+        fprintf(fp, "%s\n", status->request_line);
+    }
+    if (status->request_time) {
+        fprintf(fp, "request_time:%f\n\n", status->request_time);
     }
     if (status->stack) {
         fprintf(fp, "Stack\n");

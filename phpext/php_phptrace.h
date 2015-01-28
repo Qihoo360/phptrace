@@ -58,6 +58,7 @@ typedef struct phptrace_status_s {
 	/*request info*/
 	sds request_line;
 	sds request_headers;
+	double request_time;
 	/*memory usage*/
 	unsigned long long memory_usage;
 	unsigned long long memory_peak_usage;
