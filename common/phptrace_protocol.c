@@ -168,6 +168,9 @@ size_t phptrace_record_rawsize(phptrace_file_record_t *record)
         raw_size += sdslen(RECORD_EXIT(record, return_value));
 
         raw_size += sizeof(uint64_t);                            /* cost time */
+        raw_size += sizeof(uint64_t);                            /* cpu time */
+        raw_size += sizeof(int64_t);                             /* memory usage */
+        raw_size += sizeof(int64_t);                             /* memory peak usage */
     }
     return raw_size;
 }

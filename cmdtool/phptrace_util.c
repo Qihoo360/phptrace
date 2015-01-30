@@ -10,6 +10,7 @@ static const char *ERR_MSG[] = {
     "STACK ERROR",
     "CONTROL ERROR",
     "TRACE ERROR",
+    "COUNT ERROR"
 };
 
 long hexstring2long(const char*s, size_t len)
@@ -164,7 +165,7 @@ void trace_start(phptrace_context_t *ctx)
     log_printf (LL_DEBUG, " [ok] set ctrl data: ctrl[pid=%d]=%u is opened!\n", ctx->php_pid, flag);
 }
 
-void process_opt_c(phptrace_context_t *ctx)
+void process_opt_e(phptrace_context_t *ctx)
 {
     if (!phptrace_ctrl_init(&(ctx->ctrl))) {
         error_msg(ctx, ERR_CTRL, "cannot open control mmap file %s (%s)",
@@ -314,6 +315,75 @@ void phptrace_record_free(phptrace_file_record_t *r)
     }
 }
 
+void count_record(phptrace_context_t *ctx, phptrace_file_record_t *r)
+{
+    record_count_t *find_rc;
+    record_count_t *tmp;
+
+    if (r->flag != RECORD_FLAG_EXIT) {
+        error_msg(ctx, ERR_COUNT, " record should be an exit type");
+        die(ctx, -1);
+    }
+
+    /* note:  HASH_FIND_STR will set out to null first!! */
+    HASH_FIND_STR(ctx->record_count, r->function_name, find_rc);
+    if (!find_rc) {                                         /* update */
+        tmp = (record_count_t *)calloc(1, sizeof(record_count_t));
+        tmp->function_name = sdsdup(r->function_name);
+        log_printf (LL_DEBUG, " hash miss, add new ");
+        ctx->record_num++;
+
+        HASH_ADD_KEYPTR(hh, ctx->record_count, tmp->function_name, sdslen(tmp->function_name), tmp);
+    } else {
+        tmp = find_rc;
+    }
+
+    tmp->cost_time += RECORD_EXIT(r, cost_time);
+    tmp->cpu_time += RECORD_EXIT(r, cpu_time);
+    tmp->memory_usage += RECORD_EXIT(r, memory_usage);
+    tmp->memory_peak_usage = MAX(tmp->memory_peak_usage, RECORD_EXIT(r, memory_peak_usage));
+    tmp->calls++;
+    log_printf (LL_DEBUG, "         function_name(%s) calls=%d\n cost_time=(%llu)\n", tmp->function_name, tmp->calls, tmp->cost_time);
+}
+
+static int (*sortfun)();
+
+/*
+void set_sortby(char *sortby)
+{
+    if (strcmp(sortby, "time") == 0)
+        sortfun = time_cmp;
+    else if (strcmp(sortby, "calls") == 0)
+        sortfun = count_cmp;
+    else if (strcmp(sortby, "name") == 0)
+        sortfun = syscall_cmp;
+    else if (strcmp(sortby, "nothing") == 0)
+        sortfun = NULL;
+    else {
+        error_msg(ctx, ERR_COUNT, "invalid sortby: '%s'", sortby);
+    }
+}
+*/
+void count_summary(phptrace_context_t *ctx)
+{
+    const char *dashes = "----------------";
+    uint32_t size;
+    record_count_t *rc;
+
+    size = HASH_COUNT(ctx->record_count);
+
+    fprintf(ctx->out_fp, "%6.6s %11.11s %11.11s %9.9s %s\n",
+            "% time", "seconds", "usecs/call",
+            "calls", "syscall");
+    fprintf(ctx->out_fp, "%6.6s %11.11s %11.11s %9.9s %s\n",
+            dashes, dashes, dashes, dashes, dashes);
+
+    printf ("size=%u ctx->record_num=%u\n", size, ctx->record_num);
+    for (rc = ctx->record_count; rc != NULL; rc = rc->hh.next) {
+        printf (" hash function_name=(%s) calls=%u\n", rc->function_name, rc->calls);
+    }
+}
+
 extern int interrupted;
 
 void trace(phptrace_context_t *ctx)
@@ -418,7 +488,7 @@ void trace(phptrace_context_t *ctx)
                 state = STATE_RECORD;
                 log_printf (LL_DEBUG, " [ok load header]");
 
-                if (ctx->rotate_cnt == 1 && ctx->opt_w_flag) {                          /* dump header to out_fp */
+                if (ctx->rotate_cnt == 1 && (ctx->opt_flag & PHPTRACE_FLAG_DUMP)) {                          /* dump header to out_fp */
                     buf = sdsnewlen(NULL, raw_size);
                     phptrace_mem_write_header(&(ctx->file.header), buf);
                     fwrite(buf, sizeof(char), raw_size, ctx->out_fp);
@@ -439,12 +509,18 @@ void trace(phptrace_context_t *ctx)
                     die(ctx, -1);
                 }
 
-                buf = ctx->record_transformer(ctx, &(rcd));
-                fwrite(buf, sizeof(char), sdslen(buf), ctx->out_fp);
-                fflush(NULL);
+                if (ctx->opt_flag & PHPTRACE_FLAG_COUNT) {
+                    if (rcd.flag == RECORD_FLAG_EXIT) {
+                        count_record(ctx, &(rcd));
+                    }
+                } else {
+                    buf = ctx->record_transformer(ctx, &(rcd));
+                    fwrite(buf, sizeof(char), sdslen(buf), ctx->out_fp);
+                    fflush(NULL);
+                    sdsfree(buf);
+                }
 
                 phptrace_record_free(&(rcd));
-                sdsfree(buf);
                 seq++;
                 break;
             case STATE_TAILER:
@@ -471,7 +547,7 @@ void trace(phptrace_context_t *ctx)
         }
     }
 
-    if (ctx->opt_w_flag) {                                          /* dump empty tailer to out_fp */
+    if (ctx->opt_flag & PHPTRACE_FLAG_DUMP) {                                          /* dump empty tailer to out_fp */
         len = 0;
         magic_number = MAGIC_NUMBER_TAILER;
         fwrite(&magic_number, sizeof(uint64_t), 1, ctx->out_fp);
@@ -479,6 +555,8 @@ void trace(phptrace_context_t *ctx)
 
         fflush(NULL);
         log_printf(LL_DEBUG, "[dump] empty tailer");
+    } else if (ctx->opt_flag & PHPTRACE_FLAG_COUNT) {
+        count_summary(ctx);
     }
 
     die(ctx, 0);

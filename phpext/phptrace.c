@@ -574,7 +574,7 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px TSRM
         ctx->rotate_count = 0;
     }
     /*should do rotate*/
-    if ((ctx->shmoffset - ctx->tracelog.shmaddr) > PHPTRACE_G(logsize)-1024*1024) { /*FIXME Use a more safty condition to rotate*/
+    if ((ctx->shmoffset - ctx->tracelog.shmaddr) > PHPTRACE_G(logsize)-1024) { /*FIXME Use a more safty condition to rotate*/
         ctx->rotate = 1;
     }
 
