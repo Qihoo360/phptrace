@@ -49,6 +49,7 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
         {"help",   no_argument, 0, 'h'},                    /* help */
         {"cleanup",  no_argument, 0, 'e'},                  /* clean switches of pid | all */
         {"count",  optional_argument, 0, 'c'},              /* count time, calls  */
+        {"sortby",  required_argument, 0, 'S'},             /* sort the output of count results */
         {"max-string-length",  required_argument, 0, 'l'},  /* max string length to print */
         {"pid",  required_argument, 0, 'p'},                /* trace pid */
         {"stack",  no_argument, 0, 's'},                    /* dump stack */
@@ -64,7 +65,7 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
         exit(-1);
     }
 
-    while ((c = getopt_long(argc, argv, "hec::l:p:svw:r:", long_options, &opt_index)) != -1) {
+    while ((c = getopt_long(argc, argv, "hec::S:l:p:svw:r:", long_options, &opt_index)) != -1) {
         switch (c) {
             case 0:             /* args for stack */
                 if (opt_index == 0) {
@@ -109,6 +110,12 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
                 ctx->top_n = len;
                 ctx->opt_flag |= PHPTRACE_FLAG_COUNT;
                 printf ("[test] len=%d\n", len);
+                break;
+            case 'S':
+                if (!set_sortby(ctx, optarg)) {
+                    error_msg(ctx, ERR_COUNT, "invalid sortby: '%s'", optarg);
+                    exit(-1);
+                }
                 break;
             case 'l':
                 len = string2uint(optarg);

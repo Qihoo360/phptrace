@@ -95,6 +95,7 @@ typedef struct record_count_s {
     UT_hash_handle hh;
 }record_count_t;
 
+
 /* stack address info */
 typedef struct address_info_s {
     long sapi_globals_addr;
@@ -137,6 +138,8 @@ typedef struct phptrace_context_s {
     record_count_t *record_count;                       /* record count structure */
     int32_t record_num;
 
+    int (*sortfunc)();
+
     phptrace_file_t file;
     phptrace_segment_t seg;
     phptrace_ctrl_t ctrl;
@@ -177,8 +180,14 @@ void trace(phptrace_context_t *ctx);
 void trace_cleanup(phptrace_context_t *ctx);
 
 /* count utils */
+int cost_time_cmp(record_count_t *p, record_count_t *q);
+int cpu_time_cmp(record_count_t *p, record_count_t *q);
+int calls_cmp(record_count_t *p, record_count_t *q);
+int name_cmp(record_count_t *p, record_count_t *q);
+
 void count_record(phptrace_context_t *ctx, phptrace_file_record_t *r);
 void count_summary(phptrace_context_t *ctx);
+int set_sortby(phptrace_context_t *ctx, char *sortby);
 
 /* stack related */
 int stack_dump_once(phptrace_context_t* ctx);

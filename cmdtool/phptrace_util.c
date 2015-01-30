@@ -125,6 +125,8 @@ void phptrace_context_init(phptrace_context_t *ctx)
     ctx->out_fp = stdout;
     ctx->out_filename = NULL;
 
+    ctx->sortfunc = cost_time_cmp;
+
     ctx->max_print_len = MAX_PRINT_LENGTH;
     ctx->seg.shmaddr = MAP_FAILED;
 
@@ -210,9 +212,11 @@ void usage()
 {
     printf ("usage: phptrace [ -chslvw ]  [-p pid] [ -r ]\n\
     -h          -- show this help\n\
-    -c          -- clear the trace switches of pid, or all the switches if no pid parameter\n\
+    -e          -- erase the trace switches of pid, or all the switches if no pid parameter\n\
     -p pid      -- access the php process i\n\
-    -s          -- print call stack of php process by the pid\n\
+    -s          -- print status of the php process by the pid\n\
+    -c          -- count the cost time, cpu time, memory usage for each function calls of the php process\n\
+    -S sortby   -- sort the output of the count results. Legal values are costtime, cputime and nothing(default costtime)\n\
     -l size     -- specify the max string length to print\n\
     -v          -- print verbose information\n\
     -w outfile  -- dump the trace log to file in original format\n\
@@ -346,24 +350,42 @@ void count_record(phptrace_context_t *ctx, phptrace_file_record_t *r)
     log_printf (LL_DEBUG, "         function_name(%s) calls=%d\n cost_time=(%llu)\n", tmp->function_name, tmp->calls, tmp->cost_time);
 }
 
-static int (*sortfun)();
 
-/*
-void set_sortby(char *sortby)
+int cost_time_cmp(record_count_t *p, record_count_t *q)
 {
-    if (strcmp(sortby, "time") == 0)
-        sortfun = time_cmp;
-    else if (strcmp(sortby, "calls") == 0)
-        sortfun = count_cmp;
-    else if (strcmp(sortby, "name") == 0)
-        sortfun = syscall_cmp;
-    else if (strcmp(sortby, "nothing") == 0)
-        sortfun = NULL;
-    else {
-        error_msg(ctx, ERR_COUNT, "invalid sortby: '%s'", sortby);
-    }
+    return (q->cost_time - p->cost_time);
 }
-*/
+int cpu_time_cmp(record_count_t *p, record_count_t *q)
+{
+    return (q->cpu_time - p->cpu_time);
+}
+int calls_cmp(record_count_t *p, record_count_t *q)
+{
+    return (q->calls - p->calls);
+}
+int name_cmp(record_count_t *p, record_count_t *q)
+{
+    return strcmp(p->function_name, q->function_name);
+}
+
+int set_sortby(phptrace_context_t *ctx, char *sortby)
+{
+    if (strcmp(sortby, "costtime") == 0) {
+        ctx->sortfunc = cost_time_cmp;
+    } else if (strcmp(sortby, "cputime") == 0) {
+        ctx->sortfunc = cpu_time_cmp;
+    } else if (strcmp(sortby, "call") == 0) {
+        ctx->sortfunc = calls_cmp;
+    } else if (strcmp(sortby, "name") == 0) {
+        ctx->sortfunc = name_cmp;
+    } else if (strcmp(sortby, "nothing") == 0) {
+        ctx->sortfunc = NULL;
+    } else {
+        return 0;
+    }
+    return 1;
+}
+
 void count_summary(phptrace_context_t *ctx)
 {
     const char *dashes = "----------------";
@@ -379,6 +401,12 @@ void count_summary(phptrace_context_t *ctx)
     record_count_t *tmp;
 
     size = HASH_COUNT(ctx->record_count);
+
+    if (ctx->sortfunc) {
+        HASH_SORT(ctx->record_count, ctx->sortfunc);
+        log_printf (LL_DEBUG, " count sortby\n");
+    }
+
     for (rc = ctx->record_count; rc != NULL; rc = rc->hh.next) {
         calls_all += rc->calls;
         cost_time_all += rc->cost_time;
