@@ -368,19 +368,55 @@ void count_summary(phptrace_context_t *ctx)
 {
     const char *dashes = "----------------";
     uint32_t size;
+    uint32_t calls_all = 0;
+    uint64_t cost_time_all = 0;
+    uint64_t cpu_time_all = 0;
+    int64_t memory_usage_all = 0;
+    int64_t memory_peak_usage_all = 0;
+    double percent;
+
     record_count_t *rc;
+    record_count_t *tmp;
 
     size = HASH_COUNT(ctx->record_count);
-
-    fprintf(ctx->out_fp, "%6.6s %11.11s %11.11s %9.9s %s\n",
-            "% time", "seconds", "usecs/call",
-            "calls", "syscall");
-    fprintf(ctx->out_fp, "%6.6s %11.11s %11.11s %9.9s %s\n",
-            dashes, dashes, dashes, dashes, dashes);
-
-    printf ("size=%u ctx->record_num=%u\n", size, ctx->record_num);
     for (rc = ctx->record_count; rc != NULL; rc = rc->hh.next) {
-        printf (" hash function_name=(%s) calls=%u\n", rc->function_name, rc->calls);
+        calls_all += rc->calls;
+        cost_time_all += rc->cost_time;
+        cpu_time_all += rc->cpu_time;
+        memory_usage_all += rc->memory_usage;
+        memory_peak_usage_all = MAX(memory_peak_usage_all, rc->memory_peak_usage);
+    }
+
+    fprintf(ctx->out_fp, "%11.11s %11.11s %11.11s %9.9s %14.14s %s\n",
+            "cost time %", "seconds", "usecs/call",
+            "calls", "cpu time usecs", "function name");
+    fprintf(ctx->out_fp, "%11.11s %11.11s %11.11s %9.9s %14.14s %s\n",
+            dashes, dashes, dashes, dashes, dashes, dashes);
+
+    log_printf (LL_DEBUG, " hash table size=%u ctx->record_num=%u\n", size, ctx->record_num);
+    for (rc = ctx->record_count; rc != NULL; rc = rc->hh.next) {
+        percent = 0;
+        if (cost_time_all > 0) {
+            percent = 100.0 * rc->cost_time / cost_time_all;
+        }
+        fprintf(ctx->out_fp, "%11.2f %11.6f %11llu %9u %14llu %s\n",
+            percent,
+            rc->cost_time / 1000000.0,
+            rc->cost_time / rc->calls,
+            rc->calls,
+            rc->cpu_time,
+            rc->function_name);
+    }
+
+    fprintf(ctx->out_fp, "%11.11s %11.11s %11.11s %9.9s %14.14s %s\n",
+            dashes, dashes, dashes, dashes, dashes, dashes);
+    fprintf(ctx->out_fp, "%11.11s %11.6f %11.11s %9u %14llu %s\n",
+        "100.00", cost_time_all / 1000000.0, "", calls_all, cpu_time_all, "total");
+
+    HASH_ITER(hh, ctx->record_count, rc, tmp) {
+        sdsfree(rc->function_name);
+        HASH_DEL(ctx->record_count, rc);
+        free(rc);
     }
 }
 
