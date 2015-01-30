@@ -137,11 +137,7 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
     }
 
     if (ctx->opt_s_flag > 0) {
-        if (!sapi_globals_addr || !executor_globals_addr) {
-            error_msg(ctx, ERR_INVALID_PARAM, "address info not enough");
-            exit(-1);
-        }
-        if (ctx->php_version < PHP52 || ctx->php_version > PHP55) {
+        if (ctx->php_version && (ctx->php_version < PHP52 || ctx->php_version > PHP55)) {
             error_msg(ctx, ERR_INVALID_PARAM, "php version is not supported\n");
             exit(-1);
         }

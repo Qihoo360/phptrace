@@ -578,7 +578,7 @@ void process_opt_s(phptrace_context_t *ctx)
     num = -1;
 
     /*dump stauts from the extension*/
-    if (check_phpext_installed(ctx)) {
+    if (!ctx->addr_info.sapi_globals_addr && check_phpext_installed(ctx)) {
         log_printf(LL_DEBUG, "phptrace extension has been installed, use extension\n");
         if (!phptrace_ctrl_init(&(ctx->ctrl))) {
             error_msg(ctx, ERR_CTRL, "cannot open control mmap file %s (%s)",
@@ -597,6 +597,7 @@ void process_opt_s(phptrace_context_t *ctx)
         }
         /*clear the flag if dump failed*/
         phptrace_ctrl_set(&(ctx->ctrl), 0, ctx->php_pid);
+        die(ctx, -1);
     }
 
     /*dump stack without extension if above failed*/

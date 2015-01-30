@@ -116,6 +116,9 @@ if [ $STACK_FLAG -eq 1 ] ; then
         echo "Oops, need a pid"
         exit 1
     fi
+    #Try to get status from phptrace extension first
+    "$SCRIPT_PATH/php-trace" $@ && exit 0;
+    echo "STACK ERROR: Can not fetch PHP status from extension, fallback to get stack by ptrace"
     declare -i retry=1
     while ((retry<=10))
     do
