@@ -115,7 +115,9 @@ typedef struct address_info_s {
     long opline_ln_offset;
 } address_info_t;
 
-typedef sds (*phptrace_record_transform_t)(void *ctx, phptrace_file_record_t *r);
+typedef struct phptrace_context_s phptrace_context_t;
+
+typedef sds (*phptrace_record_transform_t)(phptrace_context_t *ctx, phptrace_file_record_t *r);
 
 typedef struct phptrace_context_s {
     int32_t php_pid;                                    /* pid of the -p option, default -1 */

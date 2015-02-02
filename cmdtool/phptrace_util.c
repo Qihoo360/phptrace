@@ -234,7 +234,7 @@ sds print_indent_str(sds s, char* str, int32_t size)
 
 sds print_time(sds s, uint64_t t)
 {
-    return sdscatprintf (s, "%lld.%06d", (long long)(t / 1000000), (int)(t % 1000000));
+    return sdscatprintf (s, "%lld.%06d", (long long)(t / 1000000), (int)(t % 1000000LL));
 }
 
 sds sdscatrepr_noquto(sds s, const char *p, size_t len)
@@ -329,7 +329,10 @@ void count_record(phptrace_context_t *ctx, phptrace_file_record_t *r)
         die(ctx, -1);
     }
 
-    /* note:  HASH_FIND_STR will set out to null first!! */
+    /* note:  HASH_FIND_STR(header, findstr, out)  is implemented by HASH_FIND
+     * 1. HASH_FIND will set out to null first!!
+     * 2. HASH_FIND will use strlen(findstr) as an argument!!
+     * */
     HASH_FIND_STR(ctx->record_count, r->function_name, find_rc);
     if (!find_rc) {                                         /* update */
         tmp = (record_count_t *)calloc(1, sizeof(record_count_t));
@@ -390,6 +393,7 @@ void count_summary(phptrace_context_t *ctx)
 {
     const char *dashes = "----------------";
     uint32_t size;
+    uint32_t cnt;
     uint32_t calls_all = 0;
     uint64_t cost_time_all = 0;
     uint64_t cpu_time_all = 0;
@@ -422,12 +426,12 @@ void count_summary(phptrace_context_t *ctx)
             dashes, dashes, dashes, dashes, dashes, dashes);
 
     log_printf (LL_DEBUG, " hash table size=%u ctx->record_num=%u\n", size, ctx->record_num);
-    for (rc = ctx->record_count; rc != NULL; rc = rc->hh.next) {
+    for (rc = ctx->record_count, cnt = 0; rc != NULL && cnt < ctx->top_n; rc = rc->hh.next, cnt++) {
         percent = 0;
         if (cost_time_all > 0) {
             percent = 100.0 * rc->cost_time / cost_time_all;
         }
-        fprintf(ctx->out_fp, "%11.2f %11.6f %11llu %9u %14llu %s\n",
+        fprintf(ctx->out_fp, "%11.2f %11.6f %11" PRIu64 " %9u %14" PRIu64 " %s\n",
             percent,
             rc->cost_time / 1000000.0,
             rc->cost_time / rc->calls,
@@ -438,7 +442,7 @@ void count_summary(phptrace_context_t *ctx)
 
     fprintf(ctx->out_fp, "%11.11s %11.11s %11.11s %9.9s %14.14s %s\n",
             dashes, dashes, dashes, dashes, dashes, dashes);
-    fprintf(ctx->out_fp, "%11.11s %11.6f %11.11s %9u %14llu %s\n",
+    fprintf(ctx->out_fp, "%11.11s %11.6f %11.11s %9u %14" PRIu64 " %s\n",
         "100.00", cost_time_all / 1000000.0, "", calls_all, cpu_time_all, "total");
 
     HASH_ITER(hh, ctx->record_count, rc, tmp) {

@@ -109,7 +109,7 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
                 }
                 ctx->top_n = len;
                 ctx->opt_flag |= PHPTRACE_FLAG_COUNT;
-                printf ("[test] len=%d\n", len);
+                log_printf (LL_DEBUG, "[top_n] len=%d\n", len);
                 break;
             case 'S':
                 if (!set_sortby(ctx, optarg)) {
