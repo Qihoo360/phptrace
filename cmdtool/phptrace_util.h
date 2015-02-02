@@ -119,7 +119,7 @@ typedef struct phptrace_context_s phptrace_context_t;
 
 typedef sds (*phptrace_record_transform_t)(phptrace_context_t *ctx, phptrace_file_record_t *r);
 
-typedef struct phptrace_context_s {
+struct phptrace_context_s {
     int32_t php_pid;                                    /* pid of the -p option, default -1 */
     uint64_t start_time;                                /* start time of cmdtool */
 
@@ -153,7 +153,7 @@ typedef struct phptrace_context_s {
     int32_t stack_deep;
     int32_t retry;
     address_info_t addr_info;
-} phptrace_context_t;
+};
 
 long hexstring2long(const char*s, size_t len);
 unsigned int string2uint(const char *str);
