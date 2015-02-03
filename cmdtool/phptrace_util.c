@@ -419,11 +419,24 @@ void count_summary(phptrace_context_t *ctx)
         memory_peak_usage_all = MAX(memory_peak_usage_all, rc->memory_peak_usage);
     }
 
-    fprintf(ctx->out_fp, "%11.11s %11.11s %11.11s %9.9s %14.14s %s\n",
-            "cost time %", "seconds", "usecs/call",
-            "calls", "cpu time usecs", "function name");
-    fprintf(ctx->out_fp, "%11.11s %11.11s %11.11s %9.9s %14.14s %s\n",
-            dashes, dashes, dashes, dashes, dashes, dashes);
+    fprintf(ctx->out_fp, "%11.11s %6.6s %8.8s %12.12s %9.9s %11.11s %8.8s %8.8s %s\n",
+            "cost time", "", "average ct", "cpu time", 
+            "total mem", "average mem", "peak mem",
+            "calls", "function name");
+    fprintf(ctx->out_fp, "%11.11s %6.6s %8.8s %12.12s %9.9s %11.11s %8.8s %8.8s %s\n",
+            "(seconds)", "%", "us/call",
+            "usecs",
+            "", "", "",
+            "",  "");
+  //  fprintf(ctx->out_fp, "%11.11s %6.6s %8.8s %12.12s %9.9s %11.11s %8.8s %8.8s %s\n",
+  //          "cost time(s)", "%", "us/call",
+  //          "cpu time(us)",
+  //          "total mem", "average mem", "peak mem",
+  //          "calls",  "function name");
+    fprintf(ctx->out_fp, "%11.11s %6.6s %8.8s %12.12s %9.9s %11.11s %8.8s %8.8s %s\n",
+            dashes, dashes, dashes, dashes, dashes, dashes, dashes, dashes, dashes);
+    //fprintf(ctx->out_fp, "%11.11s %11.11s %11.11s %9.9s %14.14s %s\n",
+            //dashes, dashes, dashes, dashes, dashes, dashes);
 
     log_printf (LL_DEBUG, " hash table size=%u ctx->record_num=%u\n", size, ctx->record_num);
     for (rc = ctx->record_count, cnt = 0; rc != NULL && cnt < ctx->top_n; rc = rc->hh.next, cnt++) {
@@ -431,19 +444,25 @@ void count_summary(phptrace_context_t *ctx)
         if (cost_time_all > 0) {
             percent = 100.0 * rc->cost_time / cost_time_all;
         }
-        fprintf(ctx->out_fp, "%11.2f %11.6f %11" PRIu64 " %9u %14" PRIu64 " %s\n",
-            percent,
+        fprintf(ctx->out_fp, "%11.6f %6.2f %8" PRIu64 " %12" PRIu64 " %9"PRId64" %11"PRId64" %8"PRId64" %8u %s\n",
             rc->cost_time / 1000000.0,
+            percent,
             rc->cost_time / rc->calls,
-            rc->calls,
             rc->cpu_time,
+            rc->memory_usage, 
+            rc->memory_usage / rc->calls,
+            rc->memory_peak_usage,
+            rc->calls,
             rc->function_name);
     }
 
-    fprintf(ctx->out_fp, "%11.11s %11.11s %11.11s %9.9s %14.14s %s\n",
-            dashes, dashes, dashes, dashes, dashes, dashes);
-    fprintf(ctx->out_fp, "%11.11s %11.6f %11.11s %9u %14" PRIu64 " %s\n",
-        "100.00", cost_time_all / 1000000.0, "", calls_all, cpu_time_all, "total");
+    fprintf(ctx->out_fp, "%11.11s %6.6s %8.8s %12.12s %9.9s %11.11s %8.8s %8.8s %s\n",
+            dashes, dashes, dashes, dashes, dashes, dashes, dashes, dashes, dashes);
+    //fprintf(ctx->out_fp, "%11.11s %11.11s %11.11s %9.9s %14.14s %s\n",
+     //       dashes, dashes, dashes, dashes, dashes, dashes);
+    fprintf(ctx->out_fp, "%11.6f %6.6s %8.8s %12" PRIu64" %9.9s %11.11s %8" PRId64 " %8u %s\n",
+    //fprintf(ctx->out_fp, "%11.11s %11.6f %11.11s %9u %14" PRIu64 " %s\n",
+        cost_time_all / 1000000.0, "100.00", "", cpu_time_all, "", "", memory_peak_usage_all, calls_all, "total");
 
     HASH_ITER(hh, ctx->record_count, rc, tmp) {
         sdsfree(rc->function_name);
