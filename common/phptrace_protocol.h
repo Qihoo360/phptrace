@@ -39,6 +39,7 @@
 #define PHPTRACE_LOG_DIR "/tmp"
 #define PHPTRACE_TRACE_FILENAME "phptrace.trace"
 #define PHPTRACE_CTRL_FILENAME "phptrace.ctrl"
+#define PHPTRACE_STATUS_FILENAME "phptrace.status"
 
 /*We use PID_MAX+1 as the size of file phptrace.ctrl
  *4 million is the hard limit of linux kernel so far,

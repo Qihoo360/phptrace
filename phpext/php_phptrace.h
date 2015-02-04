@@ -21,6 +21,7 @@
 #ifndef PHP_PHPTRACE_H
 #define PHP_PHPTRACE_H
 #include "phptrace_mmap.h"
+#include "sds/sds.h"
 
 extern zend_module_entry phptrace_module_entry;
 #define phpext_phptrace_ptr &phptrace_module_entry
@@ -51,6 +52,22 @@ PHP_FUNCTION(phptrace_info);
 PHP_FUNCTION(phptrace_mmap_test);
 #endif // PHPTRACE_UNIT_TEST
 
+typedef struct phptrace_status_s {
+    /*core global info*/
+    sds core_last_error;
+    sds user_ini_filename;
+    /*request info*/
+    sds request_line;
+    sds request_headers;
+    double request_time;
+    /*memory usage*/
+    unsigned long long memory_usage;
+    unsigned long long memory_peak_usage;
+    unsigned long long real_memory_usage;
+    unsigned long long real_memory_peak_usage;
+    /*executor info*/
+    sds stack;
+} phptrace_status_t;
 typedef struct phptrace_context_s{
     pid_t pid;
     int cli;
@@ -63,6 +80,8 @@ typedef struct phptrace_context_s{
     int rotate_count;
     unsigned long long seq;
     int level;
+
+    struct phptrace_status_s status;
 }phptrace_context_t;
 ZEND_BEGIN_MODULE_GLOBALS(phptrace)
     long  enabled;
@@ -90,10 +109,3 @@ ZEND_END_MODULE_GLOBALS(phptrace)
 #endif
 
 #endif    /* PHP_PHPTRACE_H */
-
-/*
- * Local variables:
- * End:
- * vim600: noet fdm=marker
- * vim<600: noet
- */
