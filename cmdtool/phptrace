@@ -117,7 +117,7 @@ if [ $STACK_FLAG -eq 1 ] ; then
         exit 1
     fi
     #Try to get status from phptrace extension first
-    "$SCRIPT_PATH/php-trace" $@ && exit 0;
+    "$SCRIPT_PATH/trace-php" $@ && exit 0;
     echo "STACK ERROR: Can not fetch PHP status from extension, fallback to get stack by ptrace"
     declare -i retry=1
     while ((retry<=10))

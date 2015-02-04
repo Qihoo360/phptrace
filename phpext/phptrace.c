@@ -507,7 +507,7 @@ void phptrace_print_call_result(phptrace_file_record_t *record)
     printf("%f\n", RECORD_EXIT(record, cost_time)/1000000.0);
 }
 
-void phptrace_get_php_status(phptrace_status_t *status TSRMLS_DC) 
+void phptrace_get_php_status(phptrace_status_t *status TSRMLS_DC)
 {
     int  last_error_type;
     char *last_error_message;
@@ -553,7 +553,7 @@ void phptrace_get_php_status(phptrace_status_t *status TSRMLS_DC)
                 request_info.request_uri,
                 request_info.query_string && *request_info.query_string ? "?":"",
                 request_info.query_string ? request_info.query_string:"",
-                request_info.proto_num/1000, 
+                request_info.proto_num/1000,
                 request_info.proto_num - 1000);
     }
 
