@@ -536,7 +536,7 @@ int status_dump(phptrace_context_t *ctx, int timeout /*milliseconds*/)
     int  nread;
     wait = timeout < OPEN_DATA_WAIT_INTERVAL ? timeout : OPEN_DATA_WAIT_INTERVAL;
     sprintf(filename, PHPTRACE_LOG_DIR "/" PHPTRACE_STATUS_FILENAME ".%d", ctx->php_pid);
-    log_printf(LL_DEBUG, "dump status %s\n", filename);
+    log_printf(LL_DEBUG, "dump status %s", filename);
     fp = NULL;
     while (!interrupted) {
         fp = fopen(filename, "r");
@@ -557,7 +557,11 @@ int status_dump(phptrace_context_t *ctx, int timeout /*milliseconds*/)
     }
     /*timedout*/
     if (fp == NULL) {
-        log_printf(LL_DEBUG, "dump status failed: timedout(%d)\n", timeout);
+        if (timeout <=0 ) {
+            log_printf(LL_DEBUG, "dump status failed: timedout(%d)", timeout);
+        } else {
+            log_printf(LL_DEBUG, "dump status failed: signal interrupt");
+        }
         return -1;
     }
     unlink(filename);

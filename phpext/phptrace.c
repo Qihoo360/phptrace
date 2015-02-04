@@ -513,13 +513,14 @@ void phptrace_get_php_status(phptrace_status_t *status TSRMLS_DC)
     char *last_error_message;
     char *last_error_file;
     int  last_error_lineno;
-    char *user_ini_filename;
     double request_time;
 
     zend_execute_data *ex;
 
     size_t memory_usage;
     size_t memory_peak_usage;
+    size_t real_memory_usage;
+    size_t real_memory_peak_usage;
 
     sapi_request_info request_info;
 
@@ -527,7 +528,6 @@ void phptrace_get_php_status(phptrace_status_t *status TSRMLS_DC)
     last_error_message = PG(last_error_message);
     last_error_file = PG(last_error_file);
     last_error_lineno = PG(last_error_lineno);
-    user_ini_filename = PG(user_ini_filename);
 
 #if PHP_VERSION_ID < 50500
     ex = EG(current_execute_data);
@@ -535,8 +535,10 @@ void phptrace_get_php_status(phptrace_status_t *status TSRMLS_DC)
     ex = EG(current_execute_data)->prev_execute_data;
 #endif
 
-    memory_usage = zend_memory_usage(1 TSRMLS_CC);
-    memory_peak_usage = zend_memory_peak_usage(1 TSRMLS_CC);
+    memory_usage = zend_memory_usage(0 TSRMLS_CC);
+    memory_peak_usage = zend_memory_peak_usage(0 TSRMLS_CC);
+    real_memory_usage = zend_memory_usage(1 TSRMLS_CC);
+    real_memory_peak_usage = zend_memory_peak_usage(1 TSRMLS_CC);
 
     request_info = SG(request_info);
     request_time = SG(global_request_time);
@@ -559,16 +561,18 @@ void phptrace_get_php_status(phptrace_status_t *status TSRMLS_DC)
 
     status->stack = sdsempty();
     while(ex) {
-       status->stack = sdscatprintf(status->stack, "[%p] %s(%s) %s:%d\n", ex,
+        status->stack = sdscatprintf(status->stack, "[%p] %s(%s) %s:%d\n", ex,
                phptrace_get_funcname(ex TSRMLS_CC),
                phptrace_get_parameters(ex TSRMLS_CC),
                zend_get_executed_filename(TSRMLS_C),
                zend_get_executed_lineno(TSRMLS_C));
-       ex = ex->prev_execute_data;
+        ex = ex->prev_execute_data;
     }
 
     status->memory_usage = memory_usage;
     status->memory_peak_usage = memory_peak_usage;
+    status->real_memory_usage = real_memory_usage;
+    status->real_memory_peak_usage = real_memory_peak_usage;
 }
 void phptrace_init_php_status(phptrace_status_t *status)
 {
@@ -596,13 +600,18 @@ void phptrace_dump_php_status(phptrace_status_t *status)
     sprintf(filename, "%s/%s.%d", PHPTRACE_LOG_DIR, PHPTRACE_STATUS_FILENAME, ctx->pid);
     sprintf(tmp, "%s/%s.%d.tmp", PHPTRACE_LOG_DIR, PHPTRACE_STATUS_FILENAME, ctx->pid);
     fp = fopen(tmp, "w");
+    if (fp == NULL) {
+        return;
+    }
     if (status->core_last_error) {
         fprintf(fp, "Last error\n");
         fprintf(fp, "%s\n\n", status->core_last_error);
     }
     if (status->memory_usage) {
         fprintf(fp, "Memory\n");
-        fprintf(fp, "usage: %d\npeak_usage:%d\n\n", status->memory_usage, status->memory_peak_usage);
+        fprintf(fp, "usage: %d\npeak_usage:%d\n", status->memory_usage, status->memory_peak_usage);
+        fprintf(fp, "real_usage: %d\nreal_peak_usage:%d\n\n", status->real_memory_usage,
+                status->real_memory_peak_usage);
     }
     if (status->request_line) {
         fprintf(fp, "Request\n");
