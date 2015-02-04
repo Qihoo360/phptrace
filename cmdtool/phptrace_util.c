@@ -216,7 +216,7 @@ void usage()
     -p pid      -- access the php process i\n\
     -s          -- print status of the php process by the pid\n\
     -c          -- count the cost time, cpu time, memory usage for each function calls of the php process\n\
-    -S sortby   -- sort the output of the count results. Legal values are costtime, cputime and nothing(default costtime)\n\
+    -S sortby   -- sort the output of the count results. Legal values are costtime, cputime, calls, name, mem, agvmem, peakmem and nothing(default costtime)\n\
     -l size     -- specify the max string length to print\n\
     -v          -- print verbose information\n\
     -w outfile  -- dump the trace log to file in original format\n\
@@ -370,6 +370,18 @@ int name_cmp(record_count_t *p, record_count_t *q)
 {
     return strcmp(p->function_name, q->function_name);
 }
+int mem_cmp(record_count_t *p, record_count_t *q)
+{
+    return (q->memory_usage - p->memory_usage);
+}
+int avgmem_cmp(record_count_t *p, record_count_t *q)
+{
+    return (q->memory_usage / q->calls - p->memory_usage / p->calls);
+}
+int peakmem_cmp(record_count_t *p, record_count_t *q)
+{
+    return (q->memory_peak_usage - p->memory_peak_usage);
+}
 
 int set_sortby(phptrace_context_t *ctx, char *sortby)
 {
@@ -381,6 +393,12 @@ int set_sortby(phptrace_context_t *ctx, char *sortby)
         ctx->sortfunc = calls_cmp;
     } else if (strcmp(sortby, "name") == 0) {
         ctx->sortfunc = name_cmp;
+    } else if (strcmp(sortby, "mem") == 0) {
+        ctx->sortfunc = mem_cmp;
+    } else if (strcmp(sortby, "avgmem") == 0) {
+        ctx->sortfunc = avgmem_cmp;
+    } else if (strcmp(sortby, "peakmem") == 0) {
+        ctx->sortfunc = peakmem_cmp;
     } else if (strcmp(sortby, "nothing") == 0) {
         ctx->sortfunc = NULL;
     } else {

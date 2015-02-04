@@ -46,8 +46,8 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
         {"php-version", required_argument, 0, 0},
         {"sapi-globals", required_argument, 0, 0},
         {"executor-globals", required_argument, 0, 0},
+        {"cleanup",  no_argument, 0, 1},                    /* clean switches of pid | all */
         {"help",   no_argument, 0, 'h'},                    /* help */
-        {"cleanup",  no_argument, 0, 'e'},                  /* clean switches of pid | all */
         {"count",  optional_argument, 0, 'c'},              /* count time, calls  */
         {"sortby",  required_argument, 0, 'S'},             /* sort the output of count results */
         {"max-string-length",  required_argument, 0, 'l'},  /* max string length to print */
@@ -65,7 +65,7 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
         exit(-1);
     }
 
-    while ((c = getopt_long(argc, argv, "hec::S:l:p:svw:r:", long_options, &opt_index)) != -1) {
+    while ((c = getopt_long(argc, argv, "hc::S:l:p:svw:r:", long_options, &opt_index)) != -1) {
         switch (c) {
             case 0:             /* args for stack */
                 if (opt_index == 0) {
@@ -92,12 +92,12 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
                     executor_globals_addr = addr;
                 }
                 break;
+            case 1:
+                ctx->opt_flag |= PHPTRACE_FLAG_CLEAN;
+                break;
             case 'h':
                 usage();
                 exit(0);
-            case 'e':
-                ctx->opt_flag |= PHPTRACE_FLAG_CLEAN;
-                break;
             case 'c':
                 len = DEFAULT_TOP_N;
                 if (optarg) {
@@ -155,14 +155,25 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
         }
     }
 
-    if (ctx->php_pid >= 0 && ctx->in_filename) {
-        error_msg(ctx, ERR_INVALID_PARAM, " need option -p process id or -r file to read");
-        exit(-1);
-    }
-
-    if ((ctx->opt_flag & PHPTRACE_FLAG_STATUS)
-            && (ctx->opt_flag & PHPTRACE_FLAG_CLEAN)) {
-        error_msg(ctx, ERR_INVALID_PARAM, "-s conflicts with -e");
+    if (ctx->php_pid >= 0) {
+        if ((ctx->opt_flag & PHPTRACE_FLAG_STATUS)
+                && (ctx->opt_flag & PHPTRACE_FLAG_CLEAN)) {
+            error_msg(ctx, ERR_INVALID_PARAM, "status conflicts with cleanup");
+            exit(-1);
+        }
+        if ((ctx->opt_flag & PHPTRACE_FLAG_DUMP)
+                && (ctx->opt_flag & PHPTRACE_FLAG_COUNT)) {
+            error_msg(ctx, ERR_INVALID_PARAM, "status conflicts with cleanup");
+            exit(-1);
+        }
+    } else if (ctx->in_filename) {
+        if ((ctx->opt_flag & PHPTRACE_FLAG_DUMP)
+                && (ctx->opt_flag & PHPTRACE_FLAG_COUNT)) {
+            error_msg(ctx, ERR_INVALID_PARAM, "status conflicts with cleanup");
+            exit(-1);
+        }
+    } else {
+        error_msg(ctx, ERR_INVALID_PARAM, " need either option -p to trace or -r to read");
         exit(-1);
     }
 
