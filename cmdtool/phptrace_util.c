@@ -608,12 +608,20 @@ void trace(phptrace_context_t *ctx)
             case STATE_RECORD:
                 if (flag != seq) {
                     error_msg(ctx, ERR_TRACE, "sequence number is incorrect, trace file may be damaged");
+                    if (ctx->opt_flag & PHPTRACE_FLAG_WRITE) {
+                        state = STATE_END;
+                        continue;
+                    }
                     die(ctx, -1);
                 }
 
                 mem_ptr = phptrace_mem_read_record(&(rcd), mem_ptr, flag);
                 if (!mem_ptr) {
                     error_msg(ctx, ERR_TRACE, "read record failed, maybe write too fast");
+                    if (ctx->opt_flag & PHPTRACE_FLAG_WRITE) {
+                        state = STATE_END;
+                        continue;
+                    }
                     die(ctx, -1);
                 }
 
@@ -634,6 +642,10 @@ void trace(phptrace_context_t *ctx)
             case STATE_TAILER:
                 if (flag != MAGIC_NUMBER_TAILER) {
                     error_msg(ctx, ERR_TRACE, "tailer's magic number is not correct, trace file may be damaged");
+                    if (ctx->opt_flag & PHPTRACE_FLAG_WRITE) {
+                        state = STATE_END;
+                        continue;
+                    }
                     die(ctx, -1);
                 }
 
