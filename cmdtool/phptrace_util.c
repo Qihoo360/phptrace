@@ -224,8 +224,10 @@ void usage()
     --cleanup   -- cleanup the trace switches of pid, or all the switches if no pid parameter\n\
     -p pid      -- access the php process i\n\
     -s          -- print status of the php process by the pid\n\
-    -c          -- count the cost time, cpu time, memory usage for each function calls of the php process\n\
-    -S sortby   -- sort the output of the count results. Legal values are costtime, cputime, avgtime, calls, name, mem and agvmem (default costtime)\n\
+    -c[top_n]   -- count the cost time, cpu time, memory usage for each function calls of the php process.\n\
+                   list top_n of the functions (default is 20).\n\
+    -S sortby   -- sort the output of the count results. Legal values are costtime, cputime, \n\
+                   avgtime, calls, name, mem and agvmem (default costtime)\n\
     -l size     -- specify the max string length to print\n\
     -v          -- print verbose information\n\
     -w outfile  -- write the trace data to file in phptrace format\n\
