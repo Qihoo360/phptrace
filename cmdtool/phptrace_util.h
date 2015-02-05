@@ -37,9 +37,11 @@
 
 #define PHPTRACE_FLAG_STATUS    0x0001                              /* flag of status */
 #define PHPTRACE_FLAG_TRACE     0x0002                              /* flag of trace */
-#define PHPTRACE_FLAG_CLEAN     0x0004                              /* flag of trace */
+#define PHPTRACE_FLAG_CLEANUP   0x0004                              /* flag of cleanup */
 #define PHPTRACE_FLAG_COUNT     0x0008                              /* flag of count */
-#define PHPTRACE_FLAG_DUMP      0x0010                              /* flag of count */
+#define PHPTRACE_FLAG_WRITE     0x0010                              /* flag of write */
+
+#define PHPTRACE_TRACE_MASK     0x000e                              /* flag of status|cleanup|count */
 
 #define OPEN_DATA_WAIT_INTERVAL 100                                 /* ms */
 #define MAX_OPEN_DATA_WAIT_INTERVAL (OPEN_DATA_WAIT_INTERVAL * 16)  /* ms */
@@ -95,6 +97,12 @@ typedef struct record_count_s {
     UT_hash_handle hh;
 }record_count_t;
 
+typedef struct count_dimension_s {
+    int (*cmp) (record_count_t *, record_count_t *);
+    const char* title;
+    const char* sortby;
+} count_dimension_t;
+
 
 /* stack address info */
 typedef struct address_info_s {
@@ -139,14 +147,13 @@ struct phptrace_context_s {
     int32_t top_n;                                      /* top number to count, default is DEFAULT_TOP_N */
     record_count_t *record_count;                       /* record count structure */
     int32_t record_num;
-
-    int (*sortfunc)();
+    int32_t sortby_idx;
 
     phptrace_file_t file;
     phptrace_segment_t seg;
     phptrace_ctrl_t ctrl;
 
-    phptrace_record_transform_t record_transformer;     /* transformer,  a function point32_ter */
+    phptrace_record_transform_t record_transform;     /* transform,  a function point32_ter */
 
     /* stack only */
     int32_t php_version;
@@ -182,10 +189,13 @@ void trace(phptrace_context_t *ctx);
 void trace_cleanup(phptrace_context_t *ctx);
 
 /* count utils */
-int cost_time_cmp(record_count_t *p, record_count_t *q);
-int cpu_time_cmp(record_count_t *p, record_count_t *q);
+int costtime_cmp(record_count_t *p, record_count_t *q);
+int avgtime_cmp(record_count_t *p, record_count_t *q);
+int cputime_cmp(record_count_t *p, record_count_t *q);
 int calls_cmp(record_count_t *p, record_count_t *q);
 int name_cmp(record_count_t *p, record_count_t *q);
+int mem_cmp(record_count_t *p, record_count_t *q);
+int avgmem_cmp(record_count_t *p, record_count_t *q);
 
 void count_record(phptrace_context_t *ctx, phptrace_file_record_t *r);
 void count_summary(phptrace_context_t *ctx);

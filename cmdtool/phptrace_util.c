@@ -13,6 +13,16 @@ static const char *ERR_MSG[] = {
     "COUNT ERROR"
 };
 
+static const count_dimension_t count_dimension[] = {
+    { costtime_cmp, "ct ", "costtime" },
+    { avgtime_cmp, "avg ct ", "avgtime" },
+    { cputime_cmp, "cput ", "cputime" },
+    { calls_cmp, "calls", "calls" },
+    { mem_cmp, "mem", "mem" },
+    { avgmem_cmp, "avg mem", "avgmem" },
+    { NULL, "nothing" }
+};
+
 long hexstring2long(const char*s, size_t len)
 {
     int i;
@@ -125,12 +135,10 @@ void phptrace_context_init(phptrace_context_t *ctx)
     ctx->out_fp = stdout;
     ctx->out_filename = NULL;
 
-    ctx->sortfunc = cost_time_cmp;
-
     ctx->max_print_len = MAX_PRINT_LENGTH;
     ctx->seg.shmaddr = MAP_FAILED;
 
-    ctx->record_transformer = standard_transform;
+    ctx->record_transform = standard_transform;
     log_level_set(LL_ERROR + 1);
 }
 
@@ -210,17 +218,18 @@ int update_mmap_filename(phptrace_context_t *ctx)
 
 void usage()
 {
-    printf ("usage: phptrace [ -chslvw ]  [-p pid] [ -r ]\n\
+    printf ("usage: phptrace [-chlsvvvvw]  [-p pid] [--cleanup]\n\
+   or: phptrace [-chlvvvvw]  [-r infile]\n\
     -h          -- show this help\n\
-    -e          -- erase the trace switches of pid, or all the switches if no pid parameter\n\
+    --cleanup   -- cleanup the trace switches of pid, or all the switches if no pid parameter\n\
     -p pid      -- access the php process i\n\
     -s          -- print status of the php process by the pid\n\
     -c          -- count the cost time, cpu time, memory usage for each function calls of the php process\n\
-    -S sortby   -- sort the output of the count results. Legal values are costtime, cputime, calls, name, mem, agvmem, peakmem and nothing(default costtime)\n\
+    -S sortby   -- sort the output of the count results. Legal values are costtime, cputime, avgtime, calls, name, mem and agvmem (default costtime)\n\
     -l size     -- specify the max string length to print\n\
     -v          -- print verbose information\n\
-    -w outfile  -- dump the trace log to file in original format\n\
-    -r infile   -- read the trace file of original format, instead of the process\n\
+    -w outfile  -- write the trace data to file in phptrace format\n\
+    -r infile   -- read the trace file of phptrace format, instead of the process\n\
     \n");
 }
 
@@ -353,12 +362,15 @@ void count_record(phptrace_context_t *ctx, phptrace_file_record_t *r)
     log_printf (LL_DEBUG, "         function_name(%s) calls=%d\n cost_time=(%llu)\n", tmp->function_name, tmp->calls, tmp->cost_time);
 }
 
-
-int cost_time_cmp(record_count_t *p, record_count_t *q)
+int costtime_cmp(record_count_t *p, record_count_t *q)
 {
     return (q->cost_time - p->cost_time);
 }
-int cpu_time_cmp(record_count_t *p, record_count_t *q)
+int avgtime_cmp(record_count_t *p, record_count_t *q)
+{
+    return (q->cost_time / q->calls - p->cost_time / p->calls);
+}
+int cputime_cmp(record_count_t *p, record_count_t *q)
 {
     return (q->cpu_time - p->cpu_time);
 }
@@ -378,33 +390,29 @@ int avgmem_cmp(record_count_t *p, record_count_t *q)
 {
     return (q->memory_usage / q->calls - p->memory_usage / p->calls);
 }
-int peakmem_cmp(record_count_t *p, record_count_t *q)
-{
-    return (q->memory_peak_usage - p->memory_peak_usage);
-}
 
 int set_sortby(phptrace_context_t *ctx, char *sortby)
 {
-    if (strcmp(sortby, "costtime") == 0) {
-        ctx->sortfunc = cost_time_cmp;
-    } else if (strcmp(sortby, "cputime") == 0) {
-        ctx->sortfunc = cpu_time_cmp;
-    } else if (strcmp(sortby, "call") == 0) {
-        ctx->sortfunc = calls_cmp;
-    } else if (strcmp(sortby, "name") == 0) {
-        ctx->sortfunc = name_cmp;
-    } else if (strcmp(sortby, "mem") == 0) {
-        ctx->sortfunc = mem_cmp;
-    } else if (strcmp(sortby, "avgmem") == 0) {
-        ctx->sortfunc = avgmem_cmp;
-    } else if (strcmp(sortby, "peakmem") == 0) {
-        ctx->sortfunc = peakmem_cmp;
-    } else if (strcmp(sortby, "nothing") == 0) {
-        ctx->sortfunc = NULL;
-    } else {
-        return 0;
+    int i;
+
+    for (i = 0; count_dimension[i].cmp; i++) {
+        if (strcmp(sortby, count_dimension[i].sortby) == 0) {
+            ctx->sortby_idx = i;
+            return 1;
+        }
     }
-    return 1;
+    return 0;
+}
+int64_t get_sortby_value(phptrace_context_t *ctx, record_count_t *rc)
+{
+    switch (ctx->sortby_idx) {
+        case 0: return rc->cost_time;
+        case 2: return rc->cpu_time;
+        case 3: return rc->calls;
+        case 5: return rc->memory_usage;
+        case 6: return (rc->memory_usage / rc->calls);
+        default: return 0;
+    }
 }
 
 void count_summary(phptrace_context_t *ctx)
@@ -416,7 +424,7 @@ void count_summary(phptrace_context_t *ctx)
     uint64_t cost_time_all = 0;
     uint64_t cpu_time_all = 0;
     int64_t memory_usage_all = 0;
-    int64_t memory_peak_usage_all = 0;
+    int64_t sortby_total = 0;
     double percent;
 
     record_count_t *rc;
@@ -424,9 +432,9 @@ void count_summary(phptrace_context_t *ctx)
 
     size = HASH_COUNT(ctx->record_count);
 
-    if (ctx->sortfunc) {
-        HASH_SORT(ctx->record_count, ctx->sortfunc);
-        log_printf (LL_DEBUG, " count sortby\n");
+    if (ctx->sortby_idx >= 0) {
+        HASH_SORT(ctx->record_count, count_dimension[ctx->sortby_idx].cmp);
+        log_printf (LL_DEBUG, " count sortby %s\n", count_dimension[ctx->sortby_idx].sortby);
     }
 
     for (rc = ctx->record_count; rc != NULL; rc = rc->hh.next) {
@@ -434,53 +442,48 @@ void count_summary(phptrace_context_t *ctx)
         cost_time_all += rc->cost_time;
         cpu_time_all += rc->cpu_time;
         memory_usage_all += rc->memory_usage;
-        memory_peak_usage_all = MAX(memory_peak_usage_all, rc->memory_peak_usage);
+        sortby_total += get_sortby_value(ctx, rc);
     }
 
-    fprintf(ctx->out_fp, "%11.11s %6.6s %8.8s %12.12s %9.9s %11.11s %8.8s %8.8s %s\n",
-            "cost time", "", "average ct", "cpu time", 
-            "total mem", "average mem", "peak mem",
-            "calls", "function name");
-    fprintf(ctx->out_fp, "%11.11s %6.6s %8.8s %12.12s %9.9s %11.11s %8.8s %8.8s %s\n",
-            "(seconds)", "%", "us/call",
-            "usecs",
-            "", "", "",
-            "",  "");
-  //  fprintf(ctx->out_fp, "%11.11s %6.6s %8.8s %12.12s %9.9s %11.11s %8.8s %8.8s %s\n",
-  //          "cost time(s)", "%", "us/call",
-  //          "cpu time(us)",
-  //          "total mem", "average mem", "peak mem",
-  //          "calls",  "function name");
-    fprintf(ctx->out_fp, "%11.11s %6.6s %8.8s %12.12s %9.9s %11.11s %8.8s %8.8s %s\n",
-            dashes, dashes, dashes, dashes, dashes, dashes, dashes, dashes, dashes);
-    //fprintf(ctx->out_fp, "%11.11s %11.11s %11.11s %9.9s %14.14s %s\n",
-            //dashes, dashes, dashes, dashes, dashes, dashes);
+    fprintf (ctx->out_fp, "Keys to Summary:\n    ct (cost time), avg (average), cput (cpu time)\n%s%s%s\n",
+            dashes, dashes, dashes);
 
-    log_printf (LL_DEBUG, " hash table size=%u ctx->record_num=%u\n", size, ctx->record_num);
+    fprintf(ctx->out_fp, "%6.6s %10.10s %10.10s %10.10s %10.10s %10.10s %10.10s %s\n",
+            count_dimension[ctx->sortby_idx].title,
+            "ct", "avg ct", "cput",
+            "mem", "avg mem",
+            "calls", "function name");
+    fprintf(ctx->out_fp, "%6.6s %10.10s %10.10s %10.10s %10.10s %10.10s %10.10s %s\n",
+            "%",
+            "(seconds)", "(us/call)", "(us)",
+            "(Bytes)", "(B/call)",
+            "", "");
+
+    fprintf(ctx->out_fp, "%6.6s %10.10s %10.10s %10.10s %10.10s %10.10s %10.10s %s\n",
+            dashes, dashes, dashes, dashes, dashes, dashes, dashes, dashes);
+    log_printf (LL_DEBUG, " after count, hash table size=%u ctx->record_num=%u\n", size, ctx->record_num);
     for (rc = ctx->record_count, cnt = 0; rc != NULL && cnt < ctx->top_n; rc = rc->hh.next, cnt++) {
         percent = 0;
-        if (cost_time_all > 0) {
-            percent = 100.0 * rc->cost_time / cost_time_all;
+        if (sortby_total > 0) {
+            percent = 100.0 * get_sortby_value(ctx, rc) / sortby_total;
+            fprintf (ctx->out_fp, "%6.2f ", percent);
+        } else {
+            fprintf (ctx->out_fp, "%6.6s ", "null");
         }
-        fprintf(ctx->out_fp, "%11.6f %6.2f %8" PRIu64 " %12" PRIu64 " %9"PRId64" %11"PRId64" %8"PRId64" %8u %s\n",
-            rc->cost_time / 1000000.0,
-            percent,
-            rc->cost_time / rc->calls,
-            rc->cpu_time,
-            rc->memory_usage, 
-            rc->memory_usage / rc->calls,
-            rc->memory_peak_usage,
-            rc->calls,
-            rc->function_name);
+        fprintf(ctx->out_fp, "%10.6f %10" PRIu64 " %10"PRId64" %10"PRId64" %10"PRId64" %10u %s\n",
+                rc->cost_time / 1000000.0,
+                rc->cost_time / rc->calls,
+                rc->cpu_time,
+                rc->memory_usage,
+                rc->memory_usage / rc->calls,
+                rc->calls,
+                rc->function_name);
     }
 
-    fprintf(ctx->out_fp, "%11.11s %6.6s %8.8s %12.12s %9.9s %11.11s %8.8s %8.8s %s\n",
-            dashes, dashes, dashes, dashes, dashes, dashes, dashes, dashes, dashes);
-    //fprintf(ctx->out_fp, "%11.11s %11.11s %11.11s %9.9s %14.14s %s\n",
-     //       dashes, dashes, dashes, dashes, dashes, dashes);
-    fprintf(ctx->out_fp, "%11.6f %6.6s %8.8s %12" PRIu64" %9.9s %11.11s %8" PRId64 " %8u %s\n",
-    //fprintf(ctx->out_fp, "%11.11s %11.6f %11.11s %9u %14" PRIu64 " %s\n",
-        cost_time_all / 1000000.0, "100.00", "", cpu_time_all, "", "", memory_peak_usage_all, calls_all, "total");
+    fprintf(ctx->out_fp, "%6.6s %10.10s %10.10s %10.10s %10.10s %10.10s %10.10s %s\n",
+            dashes, dashes, dashes, dashes, dashes, dashes, dashes, dashes);
+    fprintf(ctx->out_fp, "%6.6s %10.6f %10.10s %10" PRIu64 " %10.10s %10.10s %10u %s\n",
+            "100.00", cost_time_all / 1000000.0,  "", cpu_time_all, "", "", calls_all, "total");
 
     HASH_ITER(hh, ctx->record_count, rc, tmp) {
         sdsfree(rc->function_name);
@@ -593,7 +596,7 @@ void trace(phptrace_context_t *ctx)
                 state = STATE_RECORD;
                 log_printf (LL_DEBUG, " [ok load header]");
 
-                if (ctx->rotate_cnt == 1 && (ctx->opt_flag & PHPTRACE_FLAG_DUMP)) {                          /* dump header to out_fp */
+                if (ctx->rotate_cnt == 1 && (ctx->opt_flag & PHPTRACE_FLAG_WRITE)) {                          /* dump header to out_fp */
                     buf = sdsnewlen(NULL, raw_size);
                     phptrace_mem_write_header(&(ctx->file.header), buf);
                     fwrite(buf, sizeof(char), raw_size, ctx->out_fp);
@@ -619,7 +622,7 @@ void trace(phptrace_context_t *ctx)
                         count_record(ctx, &(rcd));
                     }
                 } else {
-                    buf = ctx->record_transformer(ctx, &(rcd));
+                    buf = ctx->record_transform(ctx, &(rcd));
                     fwrite(buf, sizeof(char), sdslen(buf), ctx->out_fp);
                     fflush(NULL);
                     sdsfree(buf);
@@ -652,7 +655,7 @@ void trace(phptrace_context_t *ctx)
         }
     }
 
-    if (ctx->opt_flag & PHPTRACE_FLAG_DUMP) {                                          /* dump empty tailer to out_fp */
+    if (ctx->opt_flag & PHPTRACE_FLAG_WRITE) {                                          /* dump empty tailer to out_fp */
         len = 0;
         magic_number = MAGIC_NUMBER_TAILER;
         fwrite(&magic_number, sizeof(uint64_t), 1, ctx->out_fp);

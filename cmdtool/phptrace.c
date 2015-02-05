@@ -93,7 +93,7 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
                 }
                 break;
             case 1:
-                ctx->opt_flag |= PHPTRACE_FLAG_CLEAN;
+                ctx->opt_flag |= PHPTRACE_FLAG_CLEANUP;
                 break;
             case 'h':
                 usage();
@@ -144,7 +144,7 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
                 break;
             case 'w':
                 ctx->out_filename = sdsnew(optarg);
-                ctx->opt_flag |= PHPTRACE_FLAG_DUMP;
+                ctx->opt_flag |= PHPTRACE_FLAG_WRITE;
                 break;
             case 'r':
                 ctx->in_filename = sdsnew(optarg);
@@ -155,25 +155,29 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
         }
     }
 
-    if (ctx->php_pid >= 0) {
-        if ((ctx->opt_flag & PHPTRACE_FLAG_STATUS)
-                && (ctx->opt_flag & PHPTRACE_FLAG_CLEAN)) {
-            error_msg(ctx, ERR_INVALID_PARAM, "status conflicts with cleanup");
+    if (ctx->opt_flag == PHPTRACE_FLAG_STATUS) {                                /* status */
+        if (ctx->php_pid < 0) {
+            error_msg(ctx, ERR_INVALID_PARAM, "status needs an pid, please add -p pid!");
             exit(-1);
         }
-        if ((ctx->opt_flag & PHPTRACE_FLAG_DUMP)
-                && (ctx->opt_flag & PHPTRACE_FLAG_COUNT)) {
-            error_msg(ctx, ERR_INVALID_PARAM, "status conflicts with cleanup");
+    } else if (ctx->opt_flag == PHPTRACE_FLAG_COUNT) {                          /* count */
+        if ((ctx->php_pid >= 0) + (ctx->in_filename != NULL) != 1) {
+            error_msg(ctx, ERR_INVALID_PARAM, "count needs either an pid(option -p) or input file(option -r), not both!");
             exit(-1);
         }
-    } else if (ctx->in_filename) {
-        if ((ctx->opt_flag & PHPTRACE_FLAG_DUMP)
-                && (ctx->opt_flag & PHPTRACE_FLAG_COUNT)) {
-            error_msg(ctx, ERR_INVALID_PARAM, "status conflicts with cleanup");
+    } else if (ctx->opt_flag == PHPTRACE_FLAG_CLEANUP) {                        /* cleanup */
+        if (ctx->php_pid < 0) {
+            error_msg(ctx, ERR_INVALID_PARAM, "cleanup needs an pid, please add -p pid!");
+            exit(-1);
+        }
+    } else if ((ctx->opt_flag & PHPTRACE_TRACE_MASK) == 0) {                      /* trace */
+        if ((ctx->php_pid >= 0) + (ctx->in_filename != NULL) != 1) {
+            error_msg(ctx, ERR_INVALID_PARAM, "trace needs either an pid(option -p) or input file(option -r), not both!");
             exit(-1);
         }
     } else {
-        error_msg(ctx, ERR_INVALID_PARAM, " need either option -p to trace or -r to read");
+        error_msg(ctx, ERR_INVALID_PARAM, "");
+        usage();
         exit(-1);
     }
 
@@ -214,7 +218,7 @@ int main(int argc, char *argv[])
     }
 
     /* clean */
-    if (context.opt_flag & PHPTRACE_FLAG_CLEAN) {
+    if (context.opt_flag & PHPTRACE_FLAG_CLEANUP) {
         process_opt_e(&context);
         exit(0);
     }
@@ -243,8 +247,8 @@ int main(int argc, char *argv[])
         }
 
         /* -w option, dump */
-        if (context.opt_flag & PHPTRACE_FLAG_DUMP) {
-            context.record_transformer = dump_transform;
+        if (context.opt_flag & PHPTRACE_FLAG_WRITE) {
+            context.record_transform = dump_transform;
         }
     }
     trace(&context);
