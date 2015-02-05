@@ -117,7 +117,8 @@ int main(int argc, char *argv[]){
                 repr_binary_data(out, strlen(out));
                 printf("=> %s", out);
 
-                sprintf(out, "%f", record.info.exit.cost_time/1000001.0);
+                sprintf(out, "%f %f %ld %ld", record.info.exit.cost_time/1000000.0, record.info.exit.cpu_time/1000000.0,
+                        record.info.exit.memory_usage, record.info.exit.memory_peak_usage);
                 printf(" %s\n", out);
                 sdsfree(record.info.exit.return_value);
             }

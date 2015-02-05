@@ -87,6 +87,9 @@ typedef struct phptrace_file_record_s {
         struct {
             sds return_value;           /* function return values */
             uint64_t cost_time;         /* inclusive cost time of function */
+            uint64_t cpu_time;          /* inclusive cpu time of function */
+            int64_t  memory_usage;
+            int64_t  memory_peak_usage;
         } exit;
     } info;
 } phptrace_file_record_t;

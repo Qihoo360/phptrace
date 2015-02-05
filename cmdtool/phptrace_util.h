@@ -10,6 +10,8 @@
 
 #include "sys_trace.h"
 
+#include "uthash.h"
+
 #include <stdio.h>
 #include <stdarg.h>
 #include <errno.h>
@@ -31,6 +33,16 @@
 
 #define RECORD_STRING_LENGTH  (4 * 1024)
 
+#define DEFAULT_TOP_N   20
+
+#define PHPTRACE_FLAG_STATUS    0x0001                              /* flag of status */
+#define PHPTRACE_FLAG_TRACE     0x0002                              /* flag of trace */
+#define PHPTRACE_FLAG_CLEANUP   0x0004                              /* flag of cleanup */
+#define PHPTRACE_FLAG_COUNT     0x0008                              /* flag of count */
+#define PHPTRACE_FLAG_WRITE     0x0010                              /* flag of write */
+
+#define PHPTRACE_TRACE_MASK     0x000e                              /* flag of status|cleanup|count */
+
 #define OPEN_DATA_WAIT_INTERVAL 100                                 /* ms */
 #define MAX_OPEN_DATA_WAIT_INTERVAL (OPEN_DATA_WAIT_INTERVAL * 16)  /* ms */
 #define DATA_WAIT_INTERVAL 10                                       /* ms */
@@ -43,6 +55,7 @@
 #define phptrace_mem_read_64b(num, mem)     \
      do { (num) = *((int64_t *)(mem)); } while(0);
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
+#define MAX(x, y) ((x) > (y) ? (x) : (y))
 
 /* stack */
 #define valid_ptr(p) ((p) && 0 == ((p) & (sizeof(long) - 1)))
@@ -61,6 +74,7 @@ enum {
     ERR_STACK,
     ERR_CTRL,
     ERR_TRACE,
+    ERR_COUNT,
 };
 
 enum {
@@ -70,6 +84,25 @@ enum {
     STATE_TAILER,
     STATE_END
 };
+
+typedef struct record_count_s {
+    sds function_name;
+
+    uint64_t cost_time;                 /* inclusive cost time of function */
+    uint64_t cpu_time;                  /* inclusive cpu time of function */
+    int64_t memory_usage;
+    int64_t memory_peak_usage;
+    int32_t calls;
+
+    UT_hash_handle hh;
+}record_count_t;
+
+typedef struct count_dimension_s {
+    int (*cmp) (record_count_t *, record_count_t *);
+    const char* title;
+    const char* sortby;
+} count_dimension_t;
+
 
 /* stack address info */
 typedef struct address_info_s {
@@ -90,39 +123,44 @@ typedef struct address_info_s {
     long opline_ln_offset;
 } address_info_t;
 
-typedef sds (*phptrace_record_transform_t)(void *ctx, phptrace_file_record_t *r);
+typedef struct phptrace_context_s phptrace_context_t;
 
-typedef struct phptrace_context_s {
-    int php_pid;                        /* pid of the -p option, default -1 */
-    uint64_t start_time;                /* start time of cmdtool */
+typedef sds (*phptrace_record_transform_t)(phptrace_context_t *ctx, phptrace_file_record_t *r);
 
-    FILE *log;                          /* log output stream */
+struct phptrace_context_s {
+    int32_t php_pid;                                    /* pid of the -p option, default -1 */
+    uint64_t start_time;                                /* start time of cmdtool */
+
+    FILE *log;                                          /* log output stream */
     sds mmap_filename;
-    int rotate_cnt;                     /* count of rotate file */
+    int32_t rotate_cnt;                                 /* count of rotate file */
 
-    sds in_filename;                    /* input filename */
-    FILE *out_fp;                       /* output stream */
-    sds out_filename;                   /* output filename */
-    int opt_w_flag;                     /* flag of cmdtool option -w(dump), default 0 */
+    sds in_filename;                                    /* input filename */
+    FILE *out_fp;                                       /* output stream */
+    sds out_filename;                                   /* output filename */
 
-    int trace_flag;                     /* flag of trace data, default 0 */
-    int opt_c_flag;                     /* flag of cmdtool option -c(clean), default 0 */
-    int opt_s_flag;                     /* flag of cmdtool option -s(stack), default 0 */
+    int32_t trace_flag;                                 /* flag of trace data, default 0 */
+    int32_t opt_flag;                                   /* flag of cmdtool option, -s -p -c */
 
-    int max_print_len;                  /* max length to print string, default is MAX_PRINT_LENGTH */
+    int32_t max_print_len;                              /* max length to print32_t string, default is MAX_PRINT_LENGTH */
+
+    int32_t top_n;                                      /* top number to count, default is DEFAULT_TOP_N */
+    record_count_t *record_count;                       /* record count structure */
+    int32_t record_num;
+    int32_t sortby_idx;
 
     phptrace_file_t file;
     phptrace_segment_t seg;
     phptrace_ctrl_t ctrl;
 
-    phptrace_record_transform_t record_transformer;  /* transformer,  a function pointer */
+    phptrace_record_transform_t record_transform;     /* transform,  a function point32_ter */
 
     /* stack only */
-    int php_version;
-    int stack_deep;
-    int retry;
+    int32_t php_version;
+    int32_t stack_deep;
+    int32_t retry;
     address_info_t addr_info;
-} phptrace_context_t;
+};
 
 long hexstring2long(const char*s, size_t len);
 unsigned int string2uint(const char *str);
@@ -134,7 +172,7 @@ void die(phptrace_context_t *ctx, int exit_code);
 void usage();
 void phptrace_context_init(phptrace_context_t *ctx);
 
-void process_opt_c(phptrace_context_t *ctx);
+void process_opt_e(phptrace_context_t *ctx);
 
 /* print utils */
 sds sdscatrepr_noquto(sds s, const char *p, size_t len);
@@ -149,6 +187,19 @@ int update_mmap_filename(phptrace_context_t *ctx);
 void trace_start(phptrace_context_t *ctx);
 void trace(phptrace_context_t *ctx);
 void trace_cleanup(phptrace_context_t *ctx);
+
+/* count utils */
+int costtime_cmp(record_count_t *p, record_count_t *q);
+int avgtime_cmp(record_count_t *p, record_count_t *q);
+int cputime_cmp(record_count_t *p, record_count_t *q);
+int calls_cmp(record_count_t *p, record_count_t *q);
+int name_cmp(record_count_t *p, record_count_t *q);
+int mem_cmp(record_count_t *p, record_count_t *q);
+int avgmem_cmp(record_count_t *p, record_count_t *q);
+
+void count_record(phptrace_context_t *ctx, phptrace_file_record_t *r);
+void count_summary(phptrace_context_t *ctx);
+int set_sortby(phptrace_context_t *ctx, char *sortby);
 
 /* stack related */
 int stack_dump_once(phptrace_context_t* ctx);

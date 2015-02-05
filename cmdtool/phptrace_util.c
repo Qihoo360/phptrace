@@ -10,6 +10,17 @@ static const char *ERR_MSG[] = {
     "STACK ERROR",
     "CONTROL ERROR",
     "TRACE ERROR",
+    "COUNT ERROR"
+};
+
+static const count_dimension_t count_dimension[] = {
+    { costtime_cmp, "ct ", "costtime" },
+    { avgtime_cmp, "avg ct ", "avgtime" },
+    { cputime_cmp, "cput ", "cputime" },
+    { calls_cmp, "calls", "calls" },
+    { mem_cmp, "mem", "mem" },
+    { avgmem_cmp, "avg mem", "avgmem" },
+    { NULL, "nothing" }
 };
 
 long hexstring2long(const char*s, size_t len)
@@ -127,7 +138,7 @@ void phptrace_context_init(phptrace_context_t *ctx)
     ctx->max_print_len = MAX_PRINT_LENGTH;
     ctx->seg.shmaddr = MAP_FAILED;
 
-    ctx->record_transformer = standard_transform;
+    ctx->record_transform = standard_transform;
     log_level_set(LL_ERROR + 1);
 }
 
@@ -164,7 +175,7 @@ void trace_start(phptrace_context_t *ctx)
     log_printf (LL_DEBUG, " [ok] set ctrl data: ctrl[pid=%d]=%u is opened!\n", ctx->php_pid, flag);
 }
 
-void process_opt_c(phptrace_context_t *ctx)
+void process_opt_e(phptrace_context_t *ctx)
 {
     if (!phptrace_ctrl_init(&(ctx->ctrl))) {
         error_msg(ctx, ERR_CTRL, "cannot open control mmap file %s (%s)",
@@ -207,15 +218,18 @@ int update_mmap_filename(phptrace_context_t *ctx)
 
 void usage()
 {
-    printf ("usage: phptrace [ -chslvw ]  [-p pid] [ -r ]\n\
+    printf ("usage: phptrace [-chlsvvvvw]  [-p pid] [--cleanup]\n\
+   or: phptrace [-chlvvvvw]  [-r infile]\n\
     -h          -- show this help\n\
-    -c          -- clear the trace switches of pid, or all the switches if no pid parameter\n\
+    --cleanup   -- cleanup the trace switches of pid, or all the switches if no pid parameter\n\
     -p pid      -- access the php process i\n\
-    -s          -- print call stack of php process by the pid\n\
+    -s          -- print status of the php process by the pid\n\
+    -c          -- count the cost time, cpu time, memory usage for each function calls of the php process\n\
+    -S sortby   -- sort the output of the count results. Legal values are costtime, cputime, avgtime, calls, name, mem and agvmem (default costtime)\n\
     -l size     -- specify the max string length to print\n\
     -v          -- print verbose information\n\
-    -w outfile  -- dump the trace log to file in original format\n\
-    -r infile   -- read the trace file of original format, instead of the process\n\
+    -w outfile  -- write the trace data to file in phptrace format\n\
+    -r infile   -- read the trace file of phptrace format, instead of the process\n\
     \n");
 }
 
@@ -229,7 +243,7 @@ sds print_indent_str(sds s, char* str, int32_t size)
 
 sds print_time(sds s, uint64_t t)
 {
-    return sdscatprintf (s, "%lld.%06d", (long long)(t / 1000000), (int)(t % 1000000));
+    return sdscatprintf (s, "%lld.%06d", (long long)(t / 1000000), (int)(t % 1000000LL));
 }
 
 sds sdscatrepr_noquto(sds s, const char *p, size_t len)
@@ -311,6 +325,170 @@ void phptrace_record_free(phptrace_file_record_t *r)
             sdsfree (RECORD_EXIT(r, return_value));
             RECORD_EXIT(r, return_value) = NULL;
         }
+    }
+}
+
+void count_record(phptrace_context_t *ctx, phptrace_file_record_t *r)
+{
+    record_count_t *find_rc;
+    record_count_t *tmp;
+
+    if (r->flag != RECORD_FLAG_EXIT) {
+        error_msg(ctx, ERR_COUNT, " record should be an exit type");
+        die(ctx, -1);
+    }
+
+    /* note:  HASH_FIND_STR(header, findstr, out)  is implemented by HASH_FIND
+     * 1. HASH_FIND will set out to null first!!
+     * 2. HASH_FIND will use strlen(findstr) as an argument!!
+     * */
+    HASH_FIND_STR(ctx->record_count, r->function_name, find_rc);
+    if (!find_rc) {                                         /* update */
+        tmp = (record_count_t *)calloc(1, sizeof(record_count_t));
+        tmp->function_name = sdsdup(r->function_name);
+        log_printf (LL_DEBUG, " hash miss, add new ");
+        ctx->record_num++;
+
+        HASH_ADD_KEYPTR(hh, ctx->record_count, tmp->function_name, sdslen(tmp->function_name), tmp);
+    } else {
+        tmp = find_rc;
+    }
+
+    tmp->cost_time += RECORD_EXIT(r, cost_time);
+    tmp->cpu_time += RECORD_EXIT(r, cpu_time);
+    tmp->memory_usage += RECORD_EXIT(r, memory_usage);
+    tmp->memory_peak_usage = MAX(tmp->memory_peak_usage, RECORD_EXIT(r, memory_peak_usage));
+    tmp->calls++;
+    log_printf (LL_DEBUG, "         function_name(%s) calls=%d\n cost_time=(%llu)\n", tmp->function_name, tmp->calls, tmp->cost_time);
+}
+
+int costtime_cmp(record_count_t *p, record_count_t *q)
+{
+    return (q->cost_time - p->cost_time);
+}
+int avgtime_cmp(record_count_t *p, record_count_t *q)
+{
+    return (q->cost_time / q->calls - p->cost_time / p->calls);
+}
+int cputime_cmp(record_count_t *p, record_count_t *q)
+{
+    return (q->cpu_time - p->cpu_time);
+}
+int calls_cmp(record_count_t *p, record_count_t *q)
+{
+    return (q->calls - p->calls);
+}
+int name_cmp(record_count_t *p, record_count_t *q)
+{
+    return strcmp(p->function_name, q->function_name);
+}
+int mem_cmp(record_count_t *p, record_count_t *q)
+{
+    return (q->memory_usage - p->memory_usage);
+}
+int avgmem_cmp(record_count_t *p, record_count_t *q)
+{
+    return (q->memory_usage / q->calls - p->memory_usage / p->calls);
+}
+
+int set_sortby(phptrace_context_t *ctx, char *sortby)
+{
+    int i;
+
+    for (i = 0; count_dimension[i].cmp; i++) {
+        if (strcmp(sortby, count_dimension[i].sortby) == 0) {
+            ctx->sortby_idx = i;
+            return 1;
+        }
+    }
+    return 0;
+}
+int64_t get_sortby_value(phptrace_context_t *ctx, record_count_t *rc)
+{
+    switch (ctx->sortby_idx) {
+        case 0: return rc->cost_time;
+        case 2: return rc->cpu_time;
+        case 3: return rc->calls;
+        case 5: return rc->memory_usage;
+        case 6: return (rc->memory_usage / rc->calls);
+        default: return 0;
+    }
+}
+
+void count_summary(phptrace_context_t *ctx)
+{
+    const char *dashes = "----------------";
+    uint32_t size;
+    uint32_t cnt;
+    uint32_t calls_all = 0;
+    uint64_t cost_time_all = 0;
+    uint64_t cpu_time_all = 0;
+    int64_t memory_usage_all = 0;
+    int64_t sortby_total = 0;
+    double percent;
+
+    record_count_t *rc;
+    record_count_t *tmp;
+
+    size = HASH_COUNT(ctx->record_count);
+
+    if (ctx->sortby_idx >= 0) {
+        HASH_SORT(ctx->record_count, count_dimension[ctx->sortby_idx].cmp);
+        log_printf (LL_DEBUG, " count sortby %s\n", count_dimension[ctx->sortby_idx].sortby);
+    }
+
+    for (rc = ctx->record_count; rc != NULL; rc = rc->hh.next) {
+        calls_all += rc->calls;
+        cost_time_all += rc->cost_time;
+        cpu_time_all += rc->cpu_time;
+        memory_usage_all += rc->memory_usage;
+        sortby_total += get_sortby_value(ctx, rc);
+    }
+
+    fprintf (ctx->out_fp, "Keys to Summary:\n    ct (cost time), avg (average), cput (cpu time)\n%s%s%s\n",
+            dashes, dashes, dashes);
+
+    fprintf(ctx->out_fp, "%6.6s %10.10s %10.10s %10.10s %10.10s %10.10s %10.10s %s\n",
+            count_dimension[ctx->sortby_idx].title,
+            "ct", "avg ct", "cput",
+            "mem", "avg mem",
+            "calls", "function name");
+    fprintf(ctx->out_fp, "%6.6s %10.10s %10.10s %10.10s %10.10s %10.10s %10.10s %s\n",
+            "%",
+            "(seconds)", "(us/call)", "(us)",
+            "(Bytes)", "(B/call)",
+            "", "");
+
+    fprintf(ctx->out_fp, "%6.6s %10.10s %10.10s %10.10s %10.10s %10.10s %10.10s %s\n",
+            dashes, dashes, dashes, dashes, dashes, dashes, dashes, dashes);
+    log_printf (LL_DEBUG, " after count, hash table size=%u ctx->record_num=%u\n", size, ctx->record_num);
+    for (rc = ctx->record_count, cnt = 0; rc != NULL && cnt < ctx->top_n; rc = rc->hh.next, cnt++) {
+        percent = 0;
+        if (sortby_total > 0) {
+            percent = 100.0 * get_sortby_value(ctx, rc) / sortby_total;
+            fprintf (ctx->out_fp, "%6.2f ", percent);
+        } else {
+            fprintf (ctx->out_fp, "%6.6s ", "null");
+        }
+        fprintf(ctx->out_fp, "%10.6f %10" PRIu64 " %10"PRId64" %10"PRId64" %10"PRId64" %10u %s\n",
+                rc->cost_time / 1000000.0,
+                rc->cost_time / rc->calls,
+                rc->cpu_time,
+                rc->memory_usage,
+                rc->memory_usage / rc->calls,
+                rc->calls,
+                rc->function_name);
+    }
+
+    fprintf(ctx->out_fp, "%6.6s %10.10s %10.10s %10.10s %10.10s %10.10s %10.10s %s\n",
+            dashes, dashes, dashes, dashes, dashes, dashes, dashes, dashes);
+    fprintf(ctx->out_fp, "%6.6s %10.6f %10.10s %10" PRIu64 " %10.10s %10.10s %10u %s\n",
+            "100.00", cost_time_all / 1000000.0,  "", cpu_time_all, "", "", calls_all, "total");
+
+    HASH_ITER(hh, ctx->record_count, rc, tmp) {
+        sdsfree(rc->function_name);
+        HASH_DEL(ctx->record_count, rc);
+        free(rc);
     }
 }
 
@@ -418,7 +596,7 @@ void trace(phptrace_context_t *ctx)
                 state = STATE_RECORD;
                 log_printf (LL_DEBUG, " [ok load header]");
 
-                if (ctx->rotate_cnt == 1 && ctx->opt_w_flag) {                          /* dump header to out_fp */
+                if (ctx->rotate_cnt == 1 && (ctx->opt_flag & PHPTRACE_FLAG_WRITE)) {                          /* dump header to out_fp */
                     buf = sdsnewlen(NULL, raw_size);
                     phptrace_mem_write_header(&(ctx->file.header), buf);
                     fwrite(buf, sizeof(char), raw_size, ctx->out_fp);
@@ -430,26 +608,44 @@ void trace(phptrace_context_t *ctx)
             case STATE_RECORD:
                 if (flag != seq) {
                     error_msg(ctx, ERR_TRACE, "sequence number is incorrect, trace file may be damaged");
+                    if (ctx->opt_flag & PHPTRACE_FLAG_WRITE) {
+                        state = STATE_END;
+                        continue;
+                    }
                     die(ctx, -1);
                 }
 
                 mem_ptr = phptrace_mem_read_record(&(rcd), mem_ptr, flag);
                 if (!mem_ptr) {
                     error_msg(ctx, ERR_TRACE, "read record failed, maybe write too fast");
+                    if (ctx->opt_flag & PHPTRACE_FLAG_WRITE) {
+                        state = STATE_END;
+                        continue;
+                    }
                     die(ctx, -1);
                 }
 
-                buf = ctx->record_transformer(ctx, &(rcd));
-                fwrite(buf, sizeof(char), sdslen(buf), ctx->out_fp);
-                fflush(NULL);
+                if (ctx->opt_flag & PHPTRACE_FLAG_COUNT) {
+                    if (rcd.flag == RECORD_FLAG_EXIT) {
+                        count_record(ctx, &(rcd));
+                    }
+                } else {
+                    buf = ctx->record_transform(ctx, &(rcd));
+                    fwrite(buf, sizeof(char), sdslen(buf), ctx->out_fp);
+                    fflush(NULL);
+                    sdsfree(buf);
+                }
 
                 phptrace_record_free(&(rcd));
-                sdsfree(buf);
                 seq++;
                 break;
             case STATE_TAILER:
                 if (flag != MAGIC_NUMBER_TAILER) {
                     error_msg(ctx, ERR_TRACE, "tailer's magic number is not correct, trace file may be damaged");
+                    if (ctx->opt_flag & PHPTRACE_FLAG_WRITE) {
+                        state = STATE_END;
+                        continue;
+                    }
                     die(ctx, -1);
                 }
 
@@ -471,7 +667,7 @@ void trace(phptrace_context_t *ctx)
         }
     }
 
-    if (ctx->opt_w_flag) {                                          /* dump empty tailer to out_fp */
+    if (ctx->opt_flag & PHPTRACE_FLAG_WRITE) {                                          /* dump empty tailer to out_fp */
         len = 0;
         magic_number = MAGIC_NUMBER_TAILER;
         fwrite(&magic_number, sizeof(uint64_t), 1, ctx->out_fp);
@@ -479,6 +675,8 @@ void trace(phptrace_context_t *ctx)
 
         fflush(NULL);
         log_printf(LL_DEBUG, "[dump] empty tailer");
+    } else if (ctx->opt_flag & PHPTRACE_FLAG_COUNT) {
+        count_summary(ctx);
     }
 
     die(ctx, 0);
