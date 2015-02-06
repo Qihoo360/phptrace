@@ -14,12 +14,12 @@ static const char *ERR_MSG[] = {
 };
 
 static const count_dimension_t count_dimension[] = {
-    { costtime_cmp, "ct ", "costtime" },
-    { avgtime_cmp, "avg ct ", "avgtime" },
-    { cputime_cmp, "cput ", "cputime" },
+    { costtime_cmp, "ct", "costtime" },
+    { avgtime_cmp, "avg ct", "avgtime" },
+    { cputime_cmp, "cput", "cputime" },
     { calls_cmp, "calls", "calls" },
-    { mem_cmp, "mem", "mem" },
-    { avgmem_cmp, "avg mem", "avgmem" },
+    { mem_cmp, "+mem", "mem" },
+    { avgmem_cmp, "+avg mem", "avgmem" },
     { NULL, "nothing" }
 };
 
@@ -409,10 +409,11 @@ int64_t get_sortby_value(phptrace_context_t *ctx, record_count_t *rc)
 {
     switch (ctx->sortby_idx) {
         case 0: return rc->cost_time;
+        case 1: return (rc->cost_time / rc->calls);
         case 2: return rc->cpu_time;
         case 3: return rc->calls;
-        case 5: return rc->memory_usage;
-        case 6: return (rc->memory_usage / rc->calls);
+        case 4: return rc->memory_usage;
+        case 5: return (rc->memory_usage / rc->calls);
         default: return 0;
     }
 }
@@ -426,7 +427,8 @@ void count_summary(phptrace_context_t *ctx)
     uint64_t cost_time_all = 0;
     uint64_t cpu_time_all = 0;
     int64_t memory_usage_all = 0;
-    int64_t sortby_total = 0;
+    int64_t sortby_all = 0;
+    int64_t tmp_v;
     double percent;
 
     record_count_t *rc;
@@ -444,33 +446,36 @@ void count_summary(phptrace_context_t *ctx)
         cost_time_all += rc->cost_time;
         cpu_time_all += rc->cpu_time;
         memory_usage_all += rc->memory_usage;
-        sortby_total += get_sortby_value(ctx, rc);
+        tmp_v = get_sortby_value(ctx, rc);
+        if (tmp_v > 0) {                          /* only count positive number */
+            sortby_all += tmp_v;
+        }
     }
 
     fprintf (ctx->out_fp, "Keys to Summary:\n    ct (cost time), avg (average), cput (cpu time)\n%s%s%s\n",
             dashes, dashes, dashes);
 
-    fprintf(ctx->out_fp, "%6.6s %10.10s %10.10s %10.10s %10.10s %10.10s %10.10s %s\n",
+    fprintf(ctx->out_fp, "%8.8s %10.10s %10.10s %10.10s %10.10s %10.10s %10.10s %s\n",
             count_dimension[ctx->sortby_idx].title,
             "ct", "avg ct", "cput",
             "mem", "avg mem",
             "calls", "function name");
-    fprintf(ctx->out_fp, "%6.6s %10.10s %10.10s %10.10s %10.10s %10.10s %10.10s %s\n",
+    fprintf(ctx->out_fp, "%8.8s %10.10s %10.10s %10.10s %10.10s %10.10s %10.10s %s\n",
             "%",
             "(seconds)", "(us/call)", "(us)",
             "(Bytes)", "(B/call)",
             "", "");
 
-    fprintf(ctx->out_fp, "%6.6s %10.10s %10.10s %10.10s %10.10s %10.10s %10.10s %s\n",
+    fprintf(ctx->out_fp, "%8.8s %10.10s %10.10s %10.10s %10.10s %10.10s %10.10s %s\n",
             dashes, dashes, dashes, dashes, dashes, dashes, dashes, dashes);
     log_printf (LL_DEBUG, " after count, hash table size=%u ctx->record_num=%u\n", size, ctx->record_num);
     for (rc = ctx->record_count, cnt = 0; rc != NULL && cnt < ctx->top_n; rc = rc->hh.next, cnt++) {
-        percent = 0;
-        if (sortby_total > 0) {
-            percent = 100.0 * get_sortby_value(ctx, rc) / sortby_total;
-            fprintf (ctx->out_fp, "%6.2f ", percent);
+        tmp_v = get_sortby_value(ctx, rc);
+        if (sortby_all > 0 && tmp_v >= 0) {
+            percent = 100.0 * tmp_v / sortby_all;
+            fprintf (ctx->out_fp, "%8.2f ", percent);
         } else {
-            fprintf (ctx->out_fp, "%6.6s ", "null");
+            fprintf (ctx->out_fp, "%8.8s ", "");
         }
         fprintf(ctx->out_fp, "%10.6f %10" PRIu64 " %10"PRId64" %10"PRId64" %10"PRId64" %10u %s\n",
                 rc->cost_time / 1000000.0,
@@ -482,9 +487,9 @@ void count_summary(phptrace_context_t *ctx)
                 rc->function_name);
     }
 
-    fprintf(ctx->out_fp, "%6.6s %10.10s %10.10s %10.10s %10.10s %10.10s %10.10s %s\n",
+    fprintf(ctx->out_fp, "%8.8s %10.10s %10.10s %10.10s %10.10s %10.10s %10.10s %s\n",
             dashes, dashes, dashes, dashes, dashes, dashes, dashes, dashes);
-    fprintf(ctx->out_fp, "%6.6s %10.6f %10.10s %10" PRIu64 " %10.10s %10.10s %10u %s\n",
+    fprintf(ctx->out_fp, "%8.8s %10.6f %10.10s %10" PRIu64 " %10.10s %10.10s %10u %s\n",
             "100.00", cost_time_all / 1000000.0,  "", cpu_time_all, "", "", calls_all, "total");
 
     HASH_ITER(hh, ctx->record_count, rc, tmp) {
