@@ -33,7 +33,8 @@
 
 #define RECORD_STRING_LENGTH  (4 * 1024)
 
-#define DEFAULT_TOP_N   20
+#define DEFAULT_TOP_N       20
+#define DEFAULT_MAX_LEVEL   2048
 
 #define PHPTRACE_FLAG_STATUS    0x0001                              /* flag of status */
 #define PHPTRACE_FLAG_TRACE     0x0002                              /* flag of trace */
@@ -41,7 +42,7 @@
 #define PHPTRACE_FLAG_COUNT     0x0008                              /* flag of count */
 #define PHPTRACE_FLAG_WRITE     0x0010                              /* flag of write */
 
-#define PHPTRACE_TRACE_MASK     0x000e                              /* flag of status|cleanup|count */
+#define PHPTRACE_TRACE_NOT_MASK 0x000c                              /* flag of status|cleanup|count */
 
 #define OPEN_DATA_WAIT_INTERVAL 100                                 /* ms */
 #define MAX_OPEN_DATA_WAIT_INTERVAL (OPEN_DATA_WAIT_INTERVAL * 16)  /* ms */
@@ -140,7 +141,7 @@ struct phptrace_context_s {
     sds out_filename;                                   /* output filename */
 
     int32_t trace_flag;                                 /* flag of trace data, default 0 */
-    int32_t opt_flag;                                   /* flag of cmdtool option, -s -p -c */
+    int32_t opt_flag;                                   /* flag of cmdtool option, -s -p -c --cleanup -w  */
 
     int32_t max_print_len;                              /* max length to print32_t string, default is MAX_PRINT_LENGTH */
 
@@ -148,6 +149,12 @@ struct phptrace_context_s {
     record_count_t *record_count;                       /* record count structure */
     int32_t record_num;
     int32_t sortby_idx;
+    int32_t exclusive_flag;                             /* flag of count exclusive time, default 0 */
+
+    int32_t max_level;
+    int64_t *sub_cost_time;                             /* count the time of sub calls' cost time when exclusive mode */
+    int64_t *sub_cpu_time;                              /* count the time of sub calls' cpu time when exclusive mode */
+    int64_t max_record;
 
     phptrace_file_t file;
     phptrace_segment_t seg;

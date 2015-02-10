@@ -63,11 +63,20 @@ unsigned int string2uint(const char *str)
 
 void trace_cleanup(phptrace_context_t *ctx)
 {
-    log_printf (LL_DEBUG, " [func:trace_cleanup]\n");
+    log_printf (LL_DEBUG, " [trace_cleanup]");
 
     if (ctx->trace_flag) {
         phptrace_ctrl_clean_one(&(ctx->ctrl), ctx->php_pid);
         log_printf (LL_DEBUG, " clean ctrl pid=%d~~~~~\n", ctx->php_pid);
+    }
+
+    if (ctx->exclusive_flag) {
+        if (ctx->sub_cost_time) {
+            free(ctx->sub_cost_time);
+        }
+        if (ctx->sub_cpu_time) {
+            free(ctx->sub_cpu_time);
+        }
     }
 
     if (!ctx->seg.shmaddr && ctx->seg.shmaddr != MAP_FAILED) {
@@ -135,6 +144,8 @@ void phptrace_context_init(phptrace_context_t *ctx)
     ctx->out_fp = stdout;
     ctx->out_filename = NULL;
 
+    ctx->max_level = DEFAULT_MAX_LEVEL;
+
     ctx->max_print_len = MAX_PRINT_LENGTH;
     ctx->seg.shmaddr = MAP_FAILED;
 
@@ -153,14 +164,14 @@ void trace_start(phptrace_context_t *ctx)
                   PHPTRACE_LOG_DIR "/" PHPTRACE_CTRL_FILENAME, (errno ? strerror(errno) : "null"));
         die(ctx, -1);
     }
-    log_printf (LL_DEBUG, " [ok] ctrl_init open (%s)", PHPTRACE_LOG_DIR "/" PHPTRACE_CTRL_FILENAME);
+    log_printf (LL_DEBUG, " [trace_start] ctrl_init open (%s) successful", PHPTRACE_LOG_DIR "/" PHPTRACE_CTRL_FILENAME);
 
     phptrace_ctrl_get(&(ctx->ctrl), &num, ctx->php_pid);
     if (num > 0) {
-        error_msg(ctx, ERR_CTRL, "process %d has been traced", ctx->php_pid);
+        error_msg(ctx, ERR_CTRL, "[trace_start] process %d has been traced", ctx->php_pid);
         die(ctx, -1);
     }
-    log_printf (LL_DEBUG, " [ok] read ctrl data: ctrl[pid=%d]=%d is closed!\n", ctx->php_pid, num);
+    log_printf (LL_DEBUG, "[trace_start] read ctrl data ok: ctrl[pid=%d]=%d!", ctx->php_pid, num);
 
     if (stat(ctx->mmap_filename, &st) == 0) {
         if (unlink(ctx->mmap_filename) < 0) {
@@ -172,7 +183,7 @@ void trace_start(phptrace_context_t *ctx)
     flag |= 1<<1 ;
     phptrace_ctrl_set(&(ctx->ctrl), flag, ctx->php_pid);
     ctx->trace_flag = flag;
-    log_printf (LL_DEBUG, " [ok] set ctrl data: ctrl[pid=%d]=%u is opened!\n", ctx->php_pid, flag);
+    log_printf (LL_DEBUG, "[trace_start] set ctrl data ok: ctrl[pid=%d]=%u is opened!", ctx->php_pid, flag);
 }
 
 void process_opt_e(phptrace_context_t *ctx)
@@ -220,18 +231,22 @@ void usage()
 {
     printf ("usage: phptrace [-chlsvvvvw]  [-p pid] [--cleanup]\n\
    or: phptrace [-chlvvvvw]  [-r infile]\n\
-    -h          -- show this help\n\
-    --cleanup   -- cleanup the trace switches of pid, or all the switches if no pid parameter\n\
-    -p pid      -- access the php process i\n\
-    -s          -- print status of the php process by the pid\n\
-    -c[top_n]   -- count the cost time, cpu time, memory usage for each function calls of the php process.\n\
-                   list top_n of the functions (default is 20).\n\
-    -S sortby   -- sort the output of the count results. Legal values are costtime, cputime, \n\
-                   avgtime, calls, mem and agvmem (default costtime)\n\
-    -l size     -- specify the max string length to print\n\
-    -v          -- print verbose information\n\
-    -w outfile  -- write the trace data to file in phptrace format\n\
-    -r infile   -- read the trace file of phptrace format, instead of the process\n\
+    -h                   -- show this help\n\
+    --cleanup            -- cleanup the trace switches of pid, or all the switches if no pid parameter\n\
+    -p pid               -- access the php process pid\n\
+    -s                   -- print status of the php process by the pid\n\
+    -c[top_n]            -- count the cost time, cpu time, memory usage for each function calls of the php process.\n\
+                            list top_n of the functions (default is 20).\n\
+    -S sortby            -- sort the output of the count results. Legal values are costtime, cputime, \n\
+                            avgtime, calls, mem and agvmem (default costtime)\n\
+    --exclusive          -- count the exclusive cost time and cpu time instead of inclusive time\n\
+    --max-level n        -- specify the max record level when count or trace. There is no limit by default\n\
+                            except counting the exclusive time.\n\
+    --max-record n       -- specify the max records to trace or count, there is no limit by default\n\
+    -l size              -- specify the max string length to print\n\
+    -v                   -- print verbose information\n\
+    -w outfile           -- write the trace data to file in phptrace format\n\
+    -r infile            -- read the trace file of phptrace format, instead of the process\n\
     \n");
 }
 
@@ -291,7 +306,7 @@ sds standard_transform(phptrace_context_t *ctx, phptrace_file_record_t *r)
         buf = print_time(buf, RECORD_EXIT(r, cost_time));
     }
     buf = sdscat(buf, "\n");
-    log_printf (LL_DEBUG, " record_sds[%s]\n", buf);
+    log_printf (LL_DEBUG, " record_sds[%s]", buf);
     return buf;
 }
 
@@ -335,11 +350,6 @@ void count_record(phptrace_context_t *ctx, phptrace_file_record_t *r)
     record_count_t *find_rc;
     record_count_t *tmp;
 
-    if (r->flag != RECORD_FLAG_EXIT) {
-        error_msg(ctx, ERR_COUNT, " record should be an exit type");
-        die(ctx, -1);
-    }
-
     /* note:  HASH_FIND_STR(header, findstr, out)  is implemented by HASH_FIND
      * 1. HASH_FIND will set out to null first!!
      * 2. HASH_FIND will use strlen(findstr) as an argument!!
@@ -356,8 +366,22 @@ void count_record(phptrace_context_t *ctx, phptrace_file_record_t *r)
         tmp = find_rc;
     }
 
-    tmp->cost_time += RECORD_EXIT(r, cost_time);
-    tmp->cpu_time += RECORD_EXIT(r, cpu_time);
+    if (ctx->exclusive_flag) {
+        if (ctx->max_level >= r->level) {
+            ctx->sub_cost_time[r->level] += RECORD_EXIT(r, cost_time);
+            tmp->cost_time += RECORD_EXIT(r, cost_time) - ctx->sub_cost_time[r->level + 1];
+            ctx->sub_cost_time[r->level + 1] = 0LL;
+
+            ctx->sub_cpu_time[r->level] += RECORD_EXIT(r, cpu_time);
+            tmp->cpu_time += RECORD_EXIT(r, cpu_time) - ctx->sub_cpu_time[r->level + 1];
+            ctx->sub_cpu_time[r->level + 1] = 0LL;
+        } else {
+            log_printf (LL_DEBUG, "[count] record level is larger than max_level(%d)\n", ctx->max_level);
+        }
+    } else {
+        tmp->cost_time += RECORD_EXIT(r, cost_time);
+        tmp->cpu_time += RECORD_EXIT(r, cpu_time);
+    }
     tmp->memory_usage += RECORD_EXIT(r, memory_usage);
     tmp->memory_peak_usage = MAX(tmp->memory_peak_usage, RECORD_EXIT(r, memory_peak_usage));
     tmp->calls++;
@@ -454,6 +478,8 @@ void count_summary(phptrace_context_t *ctx)
 
     fprintf (ctx->out_fp, "Keys to Summary:\n    ct (cost time), avg (average), cput (cpu time)\n%s%s%s\n",
             dashes, dashes, dashes);
+    fprintf (ctx->out_fp, "Note: time is %s.\n%s%s%s\n", (ctx->exclusive_flag ? "exclusive" : "inclusive"),
+            dashes, dashes, dashes);
 
     fprintf(ctx->out_fp, "%8.8s %10.10s %10.10s %10.10s %10.10s %10.10s %10.10s %s\n",
             count_dimension[ctx->sortby_idx].title,
@@ -517,6 +543,12 @@ void trace(phptrace_context_t *ctx)
     void *tmp_ptr = NULL;
     int opendata_wait_interval = OPEN_DATA_WAIT_INTERVAL;
     int data_wait_interval = DATA_WAIT_INTERVAL;
+
+    /* exclusive time mode */
+    if (ctx->exclusive_flag) {
+        ctx->sub_cost_time = calloc(ctx->max_level + 2, sizeof(int64_t));
+        ctx->sub_cpu_time = calloc(ctx->max_level + 2, sizeof(int64_t));
+    }
 
     while (1) {
         if (interrupted) {
@@ -620,6 +652,11 @@ void trace(phptrace_context_t *ctx)
                         continue;
                     }
                     die(ctx, -1);
+                }
+
+                if (ctx->max_record > 0 && ctx->max_record < flag) {                   /* max records limit */
+                    state = STATE_END;
+                    continue;
                 }
 
                 mem_ptr = phptrace_mem_read_record(&(rcd), mem_ptr, flag);

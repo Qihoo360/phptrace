@@ -10,11 +10,21 @@
 #include <ctype.h>
 #include <getopt.h>
 #include <string.h>
+#include <limits.h>
+
 #if HAVE_INTTYPES_H
 # include <inttypes.h>
 #else
 # include <stdint.h>
 #endif
+
+enum {
+    OPTION_FLAG_STATUS = CHAR_MAX + 1,
+    OPTION_FLAG_CLEANUP,
+    OPTION_FLAG_MAX_LEVEL,
+    OPTION_FLAG_MAX_RECORD,
+    OPTION_FLAG_EXCLUSIVE
+};
 
 static address_info_t address_templates[] = {
     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
@@ -43,19 +53,22 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
     long sapi_globals_addr = 0;
     long executor_globals_addr = 0;
     static struct option long_options[] = {
-        {"php-version", required_argument, 0, 0},
-        {"sapi-globals", required_argument, 0, 0},
-        {"executor-globals", required_argument, 0, 0},
-        {"cleanup",  no_argument, 0, 1},                    /* clean switches of pid | all */
-        {"help",   no_argument, 0, 'h'},                    /* help */
-        {"count",  optional_argument, 0, 'c'},              /* count time, calls  */
-        {"sortby",  required_argument, 0, 'S'},             /* sort the output of count results */
-        {"max-string-length",  required_argument, 0, 'l'},  /* max string length to print */
-        {"pid",  required_argument, 0, 'p'},                /* trace pid */
-        {"stack",  no_argument, 0, 's'},                    /* dump stack */
-        {"verbose",  no_argument, 0, 'v'},                  /* print verbose information */
-        {"dump",  required_argument, 0, 'w'},               /* dump trace log */
-        {"read",  required_argument, 0, 'r'},               /* dump trace log */
+        {"php-version", required_argument, 0, OPTION_FLAG_STATUS},
+        {"sapi-globals", required_argument, 0, OPTION_FLAG_STATUS},
+        {"executor-globals", required_argument, 0, OPTION_FLAG_STATUS},
+        {"cleanup",  no_argument, 0, OPTION_FLAG_CLEANUP},              /* clean switches of pid | all */
+        {"max-level",  required_argument, 0, OPTION_FLAG_MAX_LEVEL},    /* max level to trace or count */
+        {"max-record",  required_argument, 0, OPTION_FLAG_MAX_RECORD},  /* max record to trace or count */
+        {"exclusive",  no_argument, 0, OPTION_FLAG_EXCLUSIVE},          /* use exclusive time when count */
+        {"help",   no_argument, 0, 'h'},                                /* help */
+        {"count",  optional_argument, 0, 'c'},                          /* count time, calls  */
+        {"sortby",  required_argument, 0, 'S'},                         /* sort the output of count results */
+        {"max-string-length",  required_argument, 0, 'l'},              /* max string length to print */
+        {"pid",  required_argument, 0, 'p'},                            /* trace pid */
+        {"stack",  no_argument, 0, 's'},                                /* dump stack */
+        {"verbose",  no_argument, 0, 'v'},                              /* print verbose information */
+        {"dump",  required_argument, 0, 'w'},                           /* dump trace log */
+        {"read",  required_argument, 0, 'r'},                           /* dump trace log */
         {0, 0, 0, 0}
     };
 
@@ -67,7 +80,7 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
 
     while ((c = getopt_long(argc, argv, "hc::S:l:p:svw:r:", long_options, &opt_index)) != -1) {
         switch (c) {
-            case 0:             /* args for stack */
+            case OPTION_FLAG_STATUS:             /* args for stack */
                 if (opt_index == 0) {
                     if (!optarg) {
                         error_msg(ctx, ERR_INVALID_PARAM, "php-version: null");
@@ -92,8 +105,29 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
                     executor_globals_addr = addr;
                 }
                 break;
-            case 1:
+            case OPTION_FLAG_CLEANUP:
                 ctx->opt_flag |= PHPTRACE_FLAG_CLEANUP;
+                break;
+            case OPTION_FLAG_MAX_LEVEL:
+                len = string2uint(optarg);
+                if (len < 0) {
+                    error_msg(ctx, ERR_INVALID_PARAM, "max level should be larger than 0");
+                    exit(-1);
+                }
+                ctx->max_level = MAX(DEFAULT_MAX_LEVEL, len);
+                log_printf (LL_DEBUG, "[parse arg] parse option --max-level=%d", ctx->max_level);
+                break;
+            case OPTION_FLAG_MAX_RECORD:
+                ctx->max_record = string2uint(optarg);
+                if (ctx->max_record < 0) {
+                    error_msg(ctx, ERR_INVALID_PARAM, "max level should be larger than 0");
+                    exit(-1);
+                }
+                log_printf (LL_DEBUG, "[parse arg] parse option --max-record=%d", ctx->max_record);
+                break;
+            case OPTION_FLAG_EXCLUSIVE:
+                ctx->exclusive_flag = 1;
+                log_printf (LL_DEBUG, "[parse arg] parse option --exclusive");
                 break;
             case 'h':
                 usage();
@@ -170,7 +204,7 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
             error_msg(ctx, ERR_INVALID_PARAM, "cleanup needs an pid, please add -p pid!");
             exit(-1);
         }
-    } else if ((ctx->opt_flag & PHPTRACE_TRACE_MASK) == 0) {                      /* trace */
+    } else if ((ctx->opt_flag & PHPTRACE_TRACE_NOT_MASK) == 0) {                      /* trace */
         if ((ctx->php_pid >= 0) + (ctx->in_filename != NULL) != 1) {
             error_msg(ctx, ERR_INVALID_PARAM, "trace needs either an pid(option -p) or input file(option -r), not both!");
             exit(-1);
@@ -181,12 +215,8 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
         exit(-1);
     }
 
-    if (ctx->opt_flag & PHPTRACE_FLAG_STATUS) {
-        if (!sapi_globals_addr || !executor_globals_addr) {
-            error_msg(ctx, ERR_INVALID_PARAM, "address info not enough");
-            exit(-1);
-        }
-        if (ctx->php_version < PHP52 || ctx->php_version > PHP55) {
+    if (ctx->opt_flag == PHPTRACE_FLAG_STATUS) {
+        if (ctx->php_version && (ctx->php_version < PHP52 || ctx->php_version > PHP55)) {
             error_msg(ctx, ERR_INVALID_PARAM, "php version is not supported\n");
             exit(-1);
         }
@@ -251,6 +281,7 @@ int main(int argc, char *argv[])
             context.record_transform = dump_transform;
         }
     }
+
     trace(&context);
 
     return 0;
