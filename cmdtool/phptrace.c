@@ -22,7 +22,6 @@ enum {
     OPTION_FLAG_STATUS = CHAR_MAX + 1,
     OPTION_FLAG_CLEANUP,
     OPTION_FLAG_MAX_LEVEL,
-    OPTION_FLAG_MAX_RECORD,
     OPTION_FLAG_EXCLUSIVE
 };
 
@@ -58,11 +57,11 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
         {"executor-globals", required_argument, 0, OPTION_FLAG_STATUS},
         {"cleanup",  no_argument, 0, OPTION_FLAG_CLEANUP},              /* clean switches of pid | all */
         {"max-level",  required_argument, 0, OPTION_FLAG_MAX_LEVEL},    /* max level to trace or count */
-        {"max-record",  required_argument, 0, OPTION_FLAG_MAX_RECORD},  /* max record to trace or count */
         {"exclusive",  no_argument, 0, OPTION_FLAG_EXCLUSIVE},          /* use exclusive time when count */
         {"help",   no_argument, 0, 'h'},                                /* help */
         {"count",  optional_argument, 0, 'c'},                          /* count time, calls  */
         {"sortby",  required_argument, 0, 'S'},                         /* sort the output of count results */
+        {"max-function",  required_argument, 0, 'n'},                   /* max record to trace or count */
         {"max-string-length",  required_argument, 0, 'l'},              /* max string length to print */
         {"pid",  required_argument, 0, 'p'},                            /* trace pid */
         {"stack",  no_argument, 0, 's'},                                /* dump stack */
@@ -78,7 +77,7 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
         exit(-1);
     }
 
-    while ((c = getopt_long(argc, argv, "hc::S:l:p:svw:r:", long_options, &opt_index)) != -1) {
+    while ((c = getopt_long(argc, argv, "hc::S:n:l:p:svw:r:", long_options, &opt_index)) != -1) {
         switch (c) {
             case OPTION_FLAG_STATUS:             /* args for stack */
                 if (opt_index == 0) {
@@ -117,14 +116,6 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
                 ctx->max_level = MAX(DEFAULT_MAX_LEVEL, len);
                 log_printf (LL_DEBUG, "[parse arg] parse option --max-level=%d", ctx->max_level);
                 break;
-            case OPTION_FLAG_MAX_RECORD:
-                ctx->max_record = string2uint(optarg);
-                if (ctx->max_record < 0) {
-                    error_msg(ctx, ERR_INVALID_PARAM, "max level should be larger than 0");
-                    exit(-1);
-                }
-                log_printf (LL_DEBUG, "[parse arg] parse option --max-record=%d", ctx->max_record);
-                break;
             case OPTION_FLAG_EXCLUSIVE:
                 ctx->exclusive_flag = 1;
                 log_printf (LL_DEBUG, "[parse arg] parse option --exclusive");
@@ -150,6 +141,14 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
                     error_msg(ctx, ERR_COUNT, "invalid sortby: '%s'", optarg);
                     exit(-1);
                 }
+                break;
+            case 'n':
+                ctx->max_function = string2uint(optarg);
+                if (ctx->max_function < 0) {
+                    error_msg(ctx, ERR_INVALID_PARAM, "max function should be larger than 0");
+                    exit(-1);
+                }
+                log_printf (LL_DEBUG, "[parse arg] parse option -n=%d", ctx->max_function);
                 break;
             case 'l':
                 len = string2uint(optarg);

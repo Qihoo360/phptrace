@@ -14,9 +14,9 @@ static const char *ERR_MSG[] = {
 };
 
 static const count_dimension_t count_dimension[] = {
-    { costtime_cmp, "ct", "costtime" },
-    { avgtime_cmp, "avg ct", "avgtime" },
-    { cputime_cmp, "cput", "cputime" },
+    { wt_cmp, "wt", "wt" },
+    { avgwt_cmp, "avg wt", "avgwt" },
+    { ct_cmp, "ct", "ct" },
     { calls_cmp, "calls", "calls" },
     { mem_cmp, "+mem", "mem" },
     { avgmem_cmp, "+avg mem", "avgmem" },
@@ -235,14 +235,14 @@ void usage()
     --cleanup            -- cleanup the trace switches of pid, or all the switches if no pid parameter\n\
     -p pid               -- access the php process pid\n\
     -s                   -- print status of the php process by the pid\n\
-    -c[top_n]            -- count the cost time, cpu time, memory usage for each function calls of the php process.\n\
+    -c[top_n]            -- count the wall time, cpu time, memory usage for each function calls of the php process.\n\
                             list top_n of the functions (default is 20).\n\
-    -S sortby            -- sort the output of the count results. Legal values are costtime, cputime, \n\
-                            avgtime, calls, mem and agvmem (default costtime)\n\
-    --exclusive          -- count the exclusive cost time and cpu time instead of inclusive time\n\
-    --max-level n        -- specify the max record level when count or trace. There is no limit by default\n\
+    -S sortby            -- sort the output of the count results. Legal values are wt, ct, \n\
+                            avgct, calls, mem and avgmem (default wt)\n\
+    --exclusive          -- count the exclusive wall time and cpu time instead of inclusive time\n\
+    --max-level level    -- specify the max function level when count or trace. There is no limit by default\n\
                             except counting the exclusive time.\n\
-    --max-record n       -- specify the max records to trace or count, there is no limit by default\n\
+    -n function-count    -- specify the total function number to trace or count, there is no limit by default\n\
     -l size              -- specify the max string length to print\n\
     -v                   -- print verbose information\n\
     -w outfile           -- write the trace data to file in phptrace format\n\
@@ -388,15 +388,15 @@ void count_record(phptrace_context_t *ctx, phptrace_file_record_t *r)
     log_printf (LL_DEBUG, "         function_name(%s) calls=%d\n cost_time=(%llu)\n", tmp->function_name, tmp->calls, tmp->cost_time);
 }
 
-int costtime_cmp(record_count_t *p, record_count_t *q)
+int wt_cmp(record_count_t *p, record_count_t *q)
 {
     return (q->cost_time - p->cost_time);
 }
-int avgtime_cmp(record_count_t *p, record_count_t *q)
+int avgwt_cmp(record_count_t *p, record_count_t *q)
 {
     return (q->cost_time / q->calls - p->cost_time / p->calls);
 }
-int cputime_cmp(record_count_t *p, record_count_t *q)
+int ct_cmp(record_count_t *p, record_count_t *q)
 {
     return (q->cpu_time - p->cpu_time);
 }
@@ -476,14 +476,14 @@ void count_summary(phptrace_context_t *ctx)
         }
     }
 
-    fprintf (ctx->out_fp, "Keys to Summary:\n    ct (cost time), avg (average), cput (cpu time)\n%s%s%s\n",
+    fprintf (ctx->out_fp, "Keys to Summary:\n    wt (wall time), avg (average), ct (cpu time)\n%s%s%s\n",
             dashes, dashes, dashes);
     fprintf (ctx->out_fp, "Note: time is %s.\n%s%s%s\n", (ctx->exclusive_flag ? "exclusive" : "inclusive"),
             dashes, dashes, dashes);
 
     fprintf(ctx->out_fp, "%8.8s %10.10s %10.10s %10.10s %10.10s %10.10s %10.10s %s\n",
             count_dimension[ctx->sortby_idx].title,
-            "ct", "avg ct", "cput",
+            "wt", "avg wt", "ct",
             "mem", "avg mem",
             "calls", "function name");
     fprintf(ctx->out_fp, "%8.8s %10.10s %10.10s %10.10s %10.10s %10.10s %10.10s %s\n",
@@ -610,7 +610,6 @@ void trace(phptrace_context_t *ctx)
                             die(ctx, -1);
                         }
                     }
-
                 }
 
                 /* open tracelog success */
@@ -654,7 +653,7 @@ void trace(phptrace_context_t *ctx)
                     die(ctx, -1);
                 }
 
-                if (ctx->max_record > 0 && ctx->max_record < flag) {                   /* max records limit */
+                if (ctx->max_function > 0 && ctx->max_function * 2 < flag) {                   /* max records limit */
                     state = STATE_END;
                     continue;
                 }

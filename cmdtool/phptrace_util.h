@@ -154,7 +154,7 @@ struct phptrace_context_s {
     int32_t max_level;
     int64_t *sub_cost_time;                             /* count the time of sub calls' cost time when exclusive mode */
     int64_t *sub_cpu_time;                              /* count the time of sub calls' cpu time when exclusive mode */
-    int64_t max_record;
+    int64_t max_function;
 
     phptrace_file_t file;
     phptrace_segment_t seg;
@@ -196,9 +196,9 @@ void trace(phptrace_context_t *ctx);
 void trace_cleanup(phptrace_context_t *ctx);
 
 /* count utils */
-int costtime_cmp(record_count_t *p, record_count_t *q);
-int avgtime_cmp(record_count_t *p, record_count_t *q);
-int cputime_cmp(record_count_t *p, record_count_t *q);
+int wt_cmp(record_count_t *p, record_count_t *q);
+int avgwt_cmp(record_count_t *p, record_count_t *q);
+int ct_cmp(record_count_t *p, record_count_t *q);
 int calls_cmp(record_count_t *p, record_count_t *q);
 int name_cmp(record_count_t *p, record_count_t *q);
 int mem_cmp(record_count_t *p, record_count_t *q);
