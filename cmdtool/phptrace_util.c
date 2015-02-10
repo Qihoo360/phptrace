@@ -247,6 +247,7 @@ void usage()
     -v                   -- print verbose information\n\
     -w outfile           -- write the trace data to file in phptrace format\n\
     -r infile            -- read the trace file of phptrace format, instead of the process\n\
+    -o outfile           -- write the trace data to file in json format\n\
     \n");
 }
 
@@ -319,6 +320,38 @@ sds dump_transform(phptrace_context_t *ctx, phptrace_file_record_t *r)
     buf = sdsnewlen(NULL, raw_size);
     phptrace_mem_write_record(r, buf);
     log_printf(LL_DEBUG, "[dump] record(sequence=%lld) raw_size=%u", r->seq, raw_size);
+    return buf;
+}
+
+sds json_transform(phptrace_context_t *ctx, phptrace_file_record_t *r)
+{
+    sds buf = sdsempty();
+    if (r->seq == 0) {
+        buf = sdscatprintf(buf, "{ \"data\": [ ");
+    } else {
+        buf = sdscatprintf(buf, ", ");
+    }
+
+    buf = sdscatprintf (buf, "{\"seq\":%"PRId64", \"flag\":%u, \"level\":%u, \"name\":",
+            r->seq, r->flag, r->level);
+    buf = sdscatrepr(buf, r->function_name, sdslen(r->function_name));
+    buf = sdscatprintf (buf, ", \"st\":%"PRIu64", ", r->start_time);
+    if (r->flag == RECORD_FLAG_ENTRY) {
+        buf = sdscatprintf (buf, "\"params\":");
+        buf = sdscatrepr (buf, RECORD_ENTRY(r, params), sdslen(RECORD_ENTRY(r, params)));
+        buf = sdscatprintf (buf, ", \"file\":");
+        buf = sdscatrepr (buf, RECORD_ENTRY(r, filename), sdslen(RECORD_ENTRY(r, filename))),
+        buf = sdscatprintf (buf, ", \"lineno\":%u }", RECORD_ENTRY(r, lineno));
+    } else {
+        buf = sdscatprintf (buf, "\"return\":");
+        buf = sdscatrepr (buf, RECORD_EXIT(r, return_value), sdslen(RECORD_EXIT(r, return_value)));
+
+        buf = sdscatprintf (buf, ", \"wt\":%" PRIu64 ", \"ct\":%" PRIu64 ", \"mem\":%" PRId64 ", \"pmem\":%" PRId64 " }",
+                RECORD_EXIT(r, cost_time),
+                RECORD_EXIT(r, cpu_time),
+                RECORD_EXIT(r, memory_usage),
+                RECORD_EXIT(r, memory_peak_usage));
+    }
     return buf;
 }
 
@@ -710,7 +743,7 @@ void trace(phptrace_context_t *ctx)
         }
     }
 
-    if (ctx->opt_flag & PHPTRACE_FLAG_WRITE) {                                          /* dump empty tailer to out_fp */
+    if (ctx->opt_flag & PHPTRACE_FLAG_WRITE) {                      /* dump empty tailer to out_fp */
         len = 0;
         magic_number = MAGIC_NUMBER_TAILER;
         fwrite(&magic_number, sizeof(uint64_t), 1, ctx->out_fp);
@@ -718,6 +751,8 @@ void trace(phptrace_context_t *ctx)
 
         fflush(NULL);
         log_printf(LL_DEBUG, "[dump] empty tailer");
+    } else if (ctx->opt_flag & PHPTRACE_FLAG_JSON) {
+        fprintf (ctx->out_fp, "] }");
     } else if (ctx->opt_flag & PHPTRACE_FLAG_COUNT) {
         count_summary(ctx);
     }

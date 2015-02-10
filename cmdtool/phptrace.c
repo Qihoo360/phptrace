@@ -66,8 +66,9 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
         {"pid",  required_argument, 0, 'p'},                            /* trace pid */
         {"stack",  no_argument, 0, 's'},                                /* dump stack */
         {"verbose",  no_argument, 0, 'v'},                              /* print verbose information */
-        {"dump",  required_argument, 0, 'w'},                           /* dump trace log */
-        {"read",  required_argument, 0, 'r'},                           /* dump trace log */
+        {"dump",  required_argument, 0, 'w'},                           /* dump trace format data to file */
+        {"read",  required_argument, 0, 'r'},                           /* read trace format data from file */
+        {"json", required_argument, 0, 'o'},                            /* write trace json format data to file */
         {0, 0, 0, 0}
     };
 
@@ -77,7 +78,7 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
         exit(-1);
     }
 
-    while ((c = getopt_long(argc, argv, "hc::S:n:l:p:svw:r:", long_options, &opt_index)) != -1) {
+    while ((c = getopt_long(argc, argv, "hc::S:n:l:p:o:svw:r:", long_options, &opt_index)) != -1) {
         switch (c) {
             case OPTION_FLAG_STATUS:             /* args for stack */
                 if (opt_index == 0) {
@@ -168,6 +169,11 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
                     error_msg(ctx, ERR_INVALID_PARAM, "cannot trace the current process '%d'", ctx->php_pid);
                     exit(-1);
                 }
+                break;
+            case 'o':
+                ctx->out_filename = sdsnew(optarg);
+                ctx->opt_flag |= PHPTRACE_FLAG_JSON;
+                log_printf (LL_DEBUG, "[parse arg] parse option -o out_filename=(%s)", ctx->out_filename);
                 break;
             case 's':
                 ctx->opt_flag |= PHPTRACE_FLAG_STATUS;
@@ -275,9 +281,10 @@ int main(int argc, char *argv[])
             die(&context, -1);
         }
 
-        /* -w option, dump */
-        if (context.opt_flag & PHPTRACE_FLAG_WRITE) {
+        if (context.opt_flag & PHPTRACE_FLAG_WRITE) {           /* -w option, dump */
             context.record_transform = dump_transform;
+        } else if (context.opt_flag & PHPTRACE_FLAG_JSON) {     /* -o option, json */
+            context.record_transform = json_transform;
         }
     }
 

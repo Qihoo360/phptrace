@@ -41,6 +41,7 @@
 #define PHPTRACE_FLAG_CLEANUP   0x0004                              /* flag of cleanup */
 #define PHPTRACE_FLAG_COUNT     0x0008                              /* flag of count */
 #define PHPTRACE_FLAG_WRITE     0x0010                              /* flag of write */
+#define PHPTRACE_FLAG_JSON      0x0020                              /* flag of json */
 
 #define PHPTRACE_TRACE_NOT_MASK 0x000c                              /* flag of status|cleanup|count */
 
@@ -188,6 +189,7 @@ sds print_time(sds s, uint64_t t);
 
 sds standard_transform(phptrace_context_t *ctx, phptrace_file_record_t *r);
 sds dump_transform(phptrace_context_t *ctx, phptrace_file_record_t *r);
+sds json_transform(phptrace_context_t *ctx, phptrace_file_record_t *r);
 
 void phptrace_record_free(phptrace_file_record_t *r);
 int update_mmap_filename(phptrace_context_t *ctx);
