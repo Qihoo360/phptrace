@@ -229,8 +229,8 @@ int update_mmap_filename(phptrace_context_t *ctx)
 
 void usage()
 {
-    printf ("usage: phptrace [-chlsvvvvw]  [-p pid] [--cleanup]\n\
-   or: phptrace [-chlvvvvw]  [-r infile]\n\
+    printf ("usage: phptrace [-chlsnvvvvw]  [-p pid] [--cleanup]\n\
+   or: phptrace [-chlnvvvvw]  [-r infile]\n\
     -h                   -- show this help\n\
     --cleanup            -- cleanup the trace switches of pid, or all the switches if no pid parameter\n\
     -p pid               -- access the php process pid\n\
