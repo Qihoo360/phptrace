@@ -247,7 +247,8 @@ void usage()
     -v                   -- print verbose information\n\
     -w outfile           -- write the trace data to file in phptrace format\n\
     -r infile            -- read the trace file of phptrace format, instead of the process\n\
-    -o outfile           -- write the trace data to file in json format\n\
+    -o outfile           -- write the trace data to file in specified format\n\
+    --format format      -- specify the format when -o option is set. Legal values is json for now\n\
     \n");
 }
 
@@ -326,13 +327,8 @@ sds dump_transform(phptrace_context_t *ctx, phptrace_file_record_t *r)
 sds json_transform(phptrace_context_t *ctx, phptrace_file_record_t *r)
 {
     sds buf = sdsempty();
-    if (r->seq == 0) {
-        buf = sdscatprintf(buf, "{ \"data\": [ ");
-    } else {
-        buf = sdscatprintf(buf, ", ");
-    }
 
-    buf = sdscatprintf (buf, "{\"seq\":%"PRId64", \"flag\":%u, \"level\":%u, \"name\":",
+    buf = sdscatprintf (buf, "{\"seq\":%"PRId64", \"flag\":%u, \"level\":%u, \"func\":",
             r->seq, r->flag, r->level);
     buf = sdscatrepr(buf, r->function_name, sdslen(r->function_name));
     buf = sdscatprintf (buf, ", \"st\":%"PRIu64", ", r->start_time);
@@ -341,12 +337,12 @@ sds json_transform(phptrace_context_t *ctx, phptrace_file_record_t *r)
         buf = sdscatrepr (buf, RECORD_ENTRY(r, params), sdslen(RECORD_ENTRY(r, params)));
         buf = sdscatprintf (buf, ", \"file\":");
         buf = sdscatrepr (buf, RECORD_ENTRY(r, filename), sdslen(RECORD_ENTRY(r, filename))),
-        buf = sdscatprintf (buf, ", \"lineno\":%u }", RECORD_ENTRY(r, lineno));
+        buf = sdscatprintf (buf, ", \"lineno\":%u }\n", RECORD_ENTRY(r, lineno));
     } else {
         buf = sdscatprintf (buf, "\"return\":");
         buf = sdscatrepr (buf, RECORD_EXIT(r, return_value), sdslen(RECORD_EXIT(r, return_value)));
 
-        buf = sdscatprintf (buf, ", \"wt\":%" PRIu64 ", \"ct\":%" PRIu64 ", \"mem\":%" PRId64 ", \"pmem\":%" PRId64 " }",
+        buf = sdscatprintf (buf, ", \"wt\":%" PRIu64 ", \"ct\":%" PRIu64 ", \"mem\":%" PRId64 ", \"pmem\":%" PRId64 " }\n",
                 RECORD_EXIT(r, cost_time),
                 RECORD_EXIT(r, cpu_time),
                 RECORD_EXIT(r, memory_usage),
@@ -667,7 +663,7 @@ void trace(phptrace_context_t *ctx)
                 state = STATE_RECORD;
                 log_printf (LL_DEBUG, " [ok load header]");
 
-                if (ctx->rotate_cnt == 1 && (ctx->opt_flag & PHPTRACE_FLAG_WRITE)) {                          /* dump header to out_fp */
+                if (ctx->rotate_cnt == 1 && (ctx->output_flag & OUTPUT_FLAG_WRITE)) {                          /* dump header to out_fp */
                     buf = sdsnewlen(NULL, raw_size);
                     phptrace_mem_write_header(&(ctx->file.header), buf);
                     fwrite(buf, sizeof(char), raw_size, ctx->out_fp);
@@ -679,7 +675,7 @@ void trace(phptrace_context_t *ctx)
             case STATE_RECORD:
                 if (flag != seq) {
                     error_msg(ctx, ERR_TRACE, "sequence number is incorrect, trace file may be damaged");
-                    if (ctx->opt_flag & PHPTRACE_FLAG_WRITE) {
+                    if (ctx->output_flag & OUTPUT_FLAG_WRITE) {
                         state = STATE_END;
                         continue;
                     }
@@ -694,14 +690,14 @@ void trace(phptrace_context_t *ctx)
                 mem_ptr = phptrace_mem_read_record(&(rcd), mem_ptr, flag);
                 if (!mem_ptr) {
                     error_msg(ctx, ERR_TRACE, "read record failed, maybe write too fast");
-                    if (ctx->opt_flag & PHPTRACE_FLAG_WRITE) {
+                    if (ctx->output_flag & OUTPUT_FLAG_WRITE) {
                         state = STATE_END;
                         continue;
                     }
                     die(ctx, -1);
                 }
 
-                if (ctx->opt_flag & PHPTRACE_FLAG_COUNT) {
+                if (ctx->opt_flag & OPT_FLAG_COUNT) {
                     if (rcd.flag == RECORD_FLAG_EXIT) {
                         count_record(ctx, &(rcd));
                     }
@@ -718,7 +714,7 @@ void trace(phptrace_context_t *ctx)
             case STATE_TAILER:
                 if (flag != MAGIC_NUMBER_TAILER) {
                     error_msg(ctx, ERR_TRACE, "tailer's magic number is not correct, trace file may be damaged");
-                    if (ctx->opt_flag & PHPTRACE_FLAG_WRITE) {
+                    if (ctx->output_flag & OUTPUT_FLAG_WRITE) {
                         state = STATE_END;
                         continue;
                     }
@@ -743,7 +739,7 @@ void trace(phptrace_context_t *ctx)
         }
     }
 
-    if (ctx->opt_flag & PHPTRACE_FLAG_WRITE) {                      /* dump empty tailer to out_fp */
+    if (ctx->output_flag & OUTPUT_FLAG_WRITE) {                      /* dump empty tailer to out_fp */
         len = 0;
         magic_number = MAGIC_NUMBER_TAILER;
         fwrite(&magic_number, sizeof(uint64_t), 1, ctx->out_fp);
@@ -751,9 +747,7 @@ void trace(phptrace_context_t *ctx)
 
         fflush(NULL);
         log_printf(LL_DEBUG, "[dump] empty tailer");
-    } else if (ctx->opt_flag & PHPTRACE_FLAG_JSON) {
-        fprintf (ctx->out_fp, "] }");
-    } else if (ctx->opt_flag & PHPTRACE_FLAG_COUNT) {
+    } else if (ctx->opt_flag & OPT_FLAG_COUNT) {
         count_summary(ctx);
     }
 

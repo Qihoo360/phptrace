@@ -19,10 +19,11 @@
 #endif
 
 enum {
-    OPTION_FLAG_STATUS = CHAR_MAX + 1,
-    OPTION_FLAG_CLEANUP,
-    OPTION_FLAG_MAX_LEVEL,
-    OPTION_FLAG_EXCLUSIVE
+    OPTION_STATUS = CHAR_MAX + 1,
+    OPTION_CLEANUP,
+    OPTION_MAX_LEVEL,
+    OPTION_EXCLUSIVE,
+    OPTION_FORMAT
 };
 
 static address_info_t address_templates[] = {
@@ -52,23 +53,24 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
     long sapi_globals_addr = 0;
     long executor_globals_addr = 0;
     static struct option long_options[] = {
-        {"php-version", required_argument, 0, OPTION_FLAG_STATUS},
-        {"sapi-globals", required_argument, 0, OPTION_FLAG_STATUS},
-        {"executor-globals", required_argument, 0, OPTION_FLAG_STATUS},
-        {"cleanup",  no_argument, 0, OPTION_FLAG_CLEANUP},              /* clean switches of pid | all */
-        {"max-level",  required_argument, 0, OPTION_FLAG_MAX_LEVEL},    /* max level to trace or count */
-        {"exclusive",  no_argument, 0, OPTION_FLAG_EXCLUSIVE},          /* use exclusive time when count */
+        {"php-version", required_argument, 0, OPTION_STATUS},
+        {"sapi-globals", required_argument, 0, OPTION_STATUS},
+        {"executor-globals", required_argument, 0, OPTION_STATUS},
+        {"cleanup",  no_argument, 0, OPTION_CLEANUP},              /* clean switches of pid | all */
+        {"max-level",  required_argument, 0, OPTION_MAX_LEVEL},    /* max level to trace or count */
+        {"exclusive",  no_argument, 0, OPTION_EXCLUSIVE},          /* use exclusive time when count */
         {"help",   no_argument, 0, 'h'},                                /* help */
         {"count",  optional_argument, 0, 'c'},                          /* count time, calls  */
         {"sortby",  required_argument, 0, 'S'},                         /* sort the output of count results */
         {"max-function",  required_argument, 0, 'n'},                   /* max record to trace or count */
         {"max-string-length",  required_argument, 0, 'l'},              /* max string length to print */
         {"pid",  required_argument, 0, 'p'},                            /* trace pid */
-        {"stack",  no_argument, 0, 's'},                                /* dump stack */
+        {"status",  no_argument, 0, 's'},                                /* dump status */
         {"verbose",  no_argument, 0, 'v'},                              /* print verbose information */
         {"dump",  required_argument, 0, 'w'},                           /* dump trace format data to file */
         {"read",  required_argument, 0, 'r'},                           /* read trace format data from file */
-        {"json", required_argument, 0, 'o'},                            /* write trace json format data to file */
+        {"output", required_argument, 0, 'o'},                          /* write trace data to file */
+        {"format", required_argument, 0, OPTION_FORMAT},           /* specify the format to write */
         {0, 0, 0, 0}
     };
 
@@ -80,7 +82,7 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
 
     while ((c = getopt_long(argc, argv, "hc::S:n:l:p:o:svw:r:", long_options, &opt_index)) != -1) {
         switch (c) {
-            case OPTION_FLAG_STATUS:             /* args for stack */
+            case OPTION_STATUS:             /* args for stack */
                 if (opt_index == 0) {
                     if (!optarg) {
                         error_msg(ctx, ERR_INVALID_PARAM, "php-version: null");
@@ -105,10 +107,10 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
                     executor_globals_addr = addr;
                 }
                 break;
-            case OPTION_FLAG_CLEANUP:
-                ctx->opt_flag |= PHPTRACE_FLAG_CLEANUP;
+            case OPTION_CLEANUP:
+                ctx->opt_flag |= OPT_FLAG_CLEANUP;
                 break;
-            case OPTION_FLAG_MAX_LEVEL:
+            case OPTION_MAX_LEVEL:
                 len = string2uint(optarg);
                 if (len < 0) {
                     error_msg(ctx, ERR_INVALID_PARAM, "max level should be larger than 0");
@@ -117,7 +119,7 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
                 ctx->max_level = MAX(DEFAULT_MAX_LEVEL, len);
                 log_printf (LL_DEBUG, "[parse arg] parse option --max-level=%d", ctx->max_level);
                 break;
-            case OPTION_FLAG_EXCLUSIVE:
+            case OPTION_EXCLUSIVE:
                 ctx->exclusive_flag = 1;
                 log_printf (LL_DEBUG, "[parse arg] parse option --exclusive");
                 break;
@@ -134,7 +136,7 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
                     }
                 }
                 ctx->top_n = len;
-                ctx->opt_flag |= PHPTRACE_FLAG_COUNT;
+                ctx->opt_flag |= OPT_FLAG_COUNT;
                 log_printf (LL_DEBUG, "[top_n] len=%d\n", len);
                 break;
             case 'S':
@@ -166,24 +168,31 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
                     exit(-1);
                 }
                 if (ctx->php_pid == getpid()) {
-                    error_msg(ctx, ERR_INVALID_PARAM, "cannot trace the current process '%d'", ctx->php_pid);
+                    error_msg(ctx, ERR_INVALID_PARAM, "cannot trace the self process '%d'", ctx->php_pid);
                     exit(-1);
                 }
                 break;
             case 'o':
                 ctx->out_filename = sdsnew(optarg);
-                ctx->opt_flag |= PHPTRACE_FLAG_JSON;
                 log_printf (LL_DEBUG, "[parse arg] parse option -o out_filename=(%s)", ctx->out_filename);
                 break;
+            case OPTION_FORMAT:
+                if (strcmp("json", optarg) == 0 || strcmp("JSON", optarg) == 0) {
+                    ctx->output_flag |= OUTPUT_FLAG_JSON;
+                } else {
+                    error_msg(ctx, ERR_INVALID_PARAM, "invalid format '%d'", optarg);
+                    exit(-1);
+                }
+                break;
             case 's':
-                ctx->opt_flag |= PHPTRACE_FLAG_STATUS;
+                ctx->opt_flag |= OPT_FLAG_STATUS;
                 break;
             case 'v':
                 log_level_set(log_level_get() - 1);
                 break;
             case 'w':
                 ctx->out_filename = sdsnew(optarg);
-                ctx->opt_flag |= PHPTRACE_FLAG_WRITE;
+                ctx->output_flag |= OUTPUT_FLAG_WRITE;
                 break;
             case 'r':
                 ctx->in_filename = sdsnew(optarg);
@@ -194,22 +203,22 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
         }
     }
 
-    if (ctx->opt_flag == PHPTRACE_FLAG_STATUS) {                                /* status */
+    if (ctx->opt_flag == OPT_FLAG_STATUS) {                                /* status */
         if (ctx->php_pid < 0) {
             error_msg(ctx, ERR_INVALID_PARAM, "status needs an pid, please add -p pid!");
             exit(-1);
         }
-    } else if (ctx->opt_flag == PHPTRACE_FLAG_COUNT) {                          /* count */
+    } else if (ctx->opt_flag == OPT_FLAG_COUNT) {                          /* count */
         if ((ctx->php_pid >= 0) + (ctx->in_filename != NULL) != 1) {
             error_msg(ctx, ERR_INVALID_PARAM, "count needs either an pid(option -p) or input file(option -r), not both!");
             exit(-1);
         }
-    } else if (ctx->opt_flag == PHPTRACE_FLAG_CLEANUP) {                        /* cleanup */
+    } else if (ctx->opt_flag == OPT_FLAG_CLEANUP) {                        /* cleanup */
         if (ctx->php_pid < 0) {
             error_msg(ctx, ERR_INVALID_PARAM, "cleanup needs an pid, please add -p pid!");
             exit(-1);
         }
-    } else if ((ctx->opt_flag & PHPTRACE_TRACE_NOT_MASK) == 0) {                      /* trace */
+    } else if (ctx->opt_flag == 0) {                                       /* trace */
         if ((ctx->php_pid >= 0) + (ctx->in_filename != NULL) != 1) {
             error_msg(ctx, ERR_INVALID_PARAM, "trace needs either an pid(option -p) or input file(option -r), not both!");
             exit(-1);
@@ -220,7 +229,7 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
         exit(-1);
     }
 
-    if (ctx->opt_flag == PHPTRACE_FLAG_STATUS) {
+    if (ctx->opt_flag == OPT_FLAG_STATUS) {
         if (ctx->php_version && (ctx->php_version < PHP52 || ctx->php_version > PHP55)) {
             error_msg(ctx, ERR_INVALID_PARAM, "php version is not supported\n");
             exit(-1);
@@ -247,13 +256,13 @@ int main(int argc, char *argv[])
     parse_args(&context, argc, argv);
 
     /* status */
-    if (context.opt_flag & PHPTRACE_FLAG_STATUS) {
+    if (context.opt_flag & OPT_FLAG_STATUS) {
         process_opt_s(&context);
         exit(0);
     }
 
     /* clean */
-    if (context.opt_flag & PHPTRACE_FLAG_CLEANUP) {
+    if (context.opt_flag & OPT_FLAG_CLEANUP) {
         process_opt_e(&context);
         exit(0);
     }
@@ -281,9 +290,9 @@ int main(int argc, char *argv[])
             die(&context, -1);
         }
 
-        if (context.opt_flag & PHPTRACE_FLAG_WRITE) {           /* -w option, dump */
+        if (context.output_flag & OUTPUT_FLAG_WRITE) {           /* -w option, dump */
             context.record_transform = dump_transform;
-        } else if (context.opt_flag & PHPTRACE_FLAG_JSON) {     /* -o option, json */
+        } else if (context.output_flag & OUTPUT_FLAG_JSON) {     /* -o option, --format json */
             context.record_transform = json_transform;
         }
     }

@@ -36,14 +36,13 @@
 #define DEFAULT_TOP_N       20
 #define DEFAULT_MAX_LEVEL   2048
 
-#define PHPTRACE_FLAG_STATUS    0x0001                              /* flag of status */
-#define PHPTRACE_FLAG_TRACE     0x0002                              /* flag of trace */
-#define PHPTRACE_FLAG_CLEANUP   0x0004                              /* flag of cleanup */
-#define PHPTRACE_FLAG_COUNT     0x0008                              /* flag of count */
-#define PHPTRACE_FLAG_WRITE     0x0010                              /* flag of write */
-#define PHPTRACE_FLAG_JSON      0x0020                              /* flag of json */
+#define OPT_FLAG_STATUS         0x0001                              /* flag of status */
+#define OPT_FLAG_CLEANUP        0x0002                              /* flag of cleanup */
+#define OPT_FLAG_COUNT          0x0004                              /* flag of count */
+//#define OPT_FLAG_TRACE          0x0008                              /* flag of trace */
 
-#define PHPTRACE_TRACE_NOT_MASK 0x000c                              /* flag of status|cleanup|count */
+#define OUTPUT_FLAG_WRITE       0x0001                              /* flag of write */
+#define OUTPUT_FLAG_JSON        0x0002                              /* flag of json */
 
 #define OPEN_DATA_WAIT_INTERVAL 100                                 /* ms */
 #define MAX_OPEN_DATA_WAIT_INTERVAL (OPEN_DATA_WAIT_INTERVAL * 16)  /* ms */
@@ -142,7 +141,8 @@ struct phptrace_context_s {
     sds out_filename;                                   /* output filename */
 
     int32_t trace_flag;                                 /* flag of trace data, default 0 */
-    int32_t opt_flag;                                   /* flag of cmdtool option, -s -p -c --cleanup -w  */
+    int32_t opt_flag;                                   /* flag of cmdtool option, -s -p -c --cleanup */
+    int32_t output_flag;                                /* flag of cmdtool output option, may be -w or -o */
 
     int32_t max_print_len;                              /* max length to print32_t string, default is MAX_PRINT_LENGTH */
 
