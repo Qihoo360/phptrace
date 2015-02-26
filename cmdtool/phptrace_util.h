@@ -39,7 +39,6 @@
 #define OPT_FLAG_STATUS         0x0001                              /* flag of status */
 #define OPT_FLAG_CLEANUP        0x0002                              /* flag of cleanup */
 #define OPT_FLAG_COUNT          0x0004                              /* flag of count */
-//#define OPT_FLAG_TRACE          0x0008                              /* flag of trace */
 
 #define OUTPUT_FLAG_WRITE       0x0001                              /* flag of write */
 #define OUTPUT_FLAG_JSON        0x0002                              /* flag of json */

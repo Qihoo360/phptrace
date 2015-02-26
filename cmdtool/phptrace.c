@@ -56,21 +56,21 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
         {"php-version", required_argument, 0, OPTION_STATUS},
         {"sapi-globals", required_argument, 0, OPTION_STATUS},
         {"executor-globals", required_argument, 0, OPTION_STATUS},
-        {"cleanup",  no_argument, 0, OPTION_CLEANUP},              /* clean switches of pid | all */
-        {"max-level",  required_argument, 0, OPTION_MAX_LEVEL},    /* max level to trace or count */
-        {"exclusive",  no_argument, 0, OPTION_EXCLUSIVE},          /* use exclusive time when count */
+        {"cleanup",  no_argument, 0, OPTION_CLEANUP},                   /* clean switches of pid | all */
+        {"max-level",  required_argument, 0, OPTION_MAX_LEVEL},         /* max level to trace or count */
+        {"exclusive",  no_argument, 0, OPTION_EXCLUSIVE},               /* use exclusive time when count */
         {"help",   no_argument, 0, 'h'},                                /* help */
         {"count",  optional_argument, 0, 'c'},                          /* count time, calls  */
         {"sortby",  required_argument, 0, 'S'},                         /* sort the output of count results */
         {"max-function",  required_argument, 0, 'n'},                   /* max record to trace or count */
         {"max-string-length",  required_argument, 0, 'l'},              /* max string length to print */
         {"pid",  required_argument, 0, 'p'},                            /* trace pid */
-        {"status",  no_argument, 0, 's'},                                /* dump status */
+        {"status",  no_argument, 0, 's'},                               /* dump status */
         {"verbose",  no_argument, 0, 'v'},                              /* print verbose information */
         {"dump",  required_argument, 0, 'w'},                           /* dump trace format data to file */
         {"read",  required_argument, 0, 'r'},                           /* read trace format data from file */
         {"output", required_argument, 0, 'o'},                          /* write trace data to file */
-        {"format", required_argument, 0, OPTION_FORMAT},           /* specify the format to write */
+        {"format", required_argument, 0, OPTION_FORMAT},                /* specify the format to write */
         {0, 0, 0, 0}
     };
 
