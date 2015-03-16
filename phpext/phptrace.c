@@ -42,6 +42,7 @@
 #define HEARTBEAT_TIMEDOUT 30 /*30 seconds*/
 #define HEARTBEAT_FLAG (1<<7)
 #define REOPEN_FLAG (1<<1)
+#define STATUS_FLAG (1<<2)
 
 #if PHP_VERSION_ID < 50500
 void (*phptrace_old_execute)(zend_op_array *op_array TSRMLS_DC);
@@ -506,14 +507,136 @@ void phptrace_print_call_result(phptrace_file_record_t *record)
     printf("%f\n", RECORD_EXIT(record, cost_time)/1000000.0);
 }
 
+void phptrace_get_php_status(phptrace_status_t *status TSRMLS_DC)
+{
+    int  last_error_type;
+    char *last_error_message;
+    char *last_error_file;
+    int  last_error_lineno;
+    double request_time;
+
+    zend_execute_data *ex;
+
+    size_t memory_usage;
+    size_t memory_peak_usage;
+    size_t real_memory_usage;
+    size_t real_memory_peak_usage;
+
+    sapi_request_info request_info;
+
+    last_error_type = PG(last_error_type);
+    last_error_message = PG(last_error_message);
+    last_error_file = PG(last_error_file);
+    last_error_lineno = PG(last_error_lineno);
+
+#if PHP_VERSION_ID < 50500
+    ex = EG(current_execute_data);
+#else
+    ex = EG(current_execute_data)->prev_execute_data;
+#endif
+
+    memory_usage = zend_memory_usage(0 TSRMLS_CC);
+    memory_peak_usage = zend_memory_peak_usage(0 TSRMLS_CC);
+    real_memory_usage = zend_memory_usage(1 TSRMLS_CC);
+    real_memory_peak_usage = zend_memory_peak_usage(1 TSRMLS_CC);
+
+    request_info = SG(request_info);
+    request_time = SG(global_request_time);
+
+    if (last_error_message) {
+        status->core_last_error = sdscatprintf(sdsempty(), "[%d] %s %s:%d",
+                last_error_type, last_error_message, last_error_file, last_error_lineno);
+    }
+
+    if (request_info.request_method) {
+        status->request_line = sdscatprintf(sdsempty(), "%s %s%s%s HTTP/%d.%d", request_info.request_method,
+                request_info.request_uri,
+                request_info.query_string && *request_info.query_string ? "?":"",
+                request_info.query_string ? request_info.query_string:"",
+                request_info.proto_num/1000,
+                request_info.proto_num - 1000);
+    }
+
+    status->request_time = request_time;
+
+    status->stack = sdsempty();
+    while(ex) {
+        status->stack = sdscatprintf(status->stack, "[%p] %s(%s) %s:%d\n", ex,
+               phptrace_get_funcname(ex TSRMLS_CC),
+               phptrace_get_parameters(ex TSRMLS_CC),
+               zend_get_executed_filename(TSRMLS_C),
+               zend_get_executed_lineno(TSRMLS_C));
+        ex = ex->prev_execute_data;
+    }
+
+    status->memory_usage = memory_usage;
+    status->memory_peak_usage = memory_peak_usage;
+    status->real_memory_usage = real_memory_usage;
+    status->real_memory_peak_usage = real_memory_peak_usage;
+}
+void phptrace_init_php_status(phptrace_status_t *status)
+{
+    memset(status, 0, sizeof(phptrace_status_t));
+}
+void phptrace_destroy_php_status(phptrace_status_t *status)
+{
+    if (status->core_last_error) {
+        sdsfree(status->core_last_error);
+    }
+    if (status->request_line) {
+        sdsfree(status->request_line);
+    }
+    if (status->stack) {
+        sdsfree(status->stack);
+    }
+}
+void phptrace_dump_php_status(phptrace_status_t *status)
+{
+    FILE *fp;
+    char filename[256], tmp[256];
+    phptrace_context_t *ctx;
+    ctx = &PHPTRACE_G(ctx);
+
+    sprintf(filename, "%s/%s.%d", PHPTRACE_LOG_DIR, PHPTRACE_STATUS_FILENAME, ctx->pid);
+    sprintf(tmp, "%s/%s.%d.tmp", PHPTRACE_LOG_DIR, PHPTRACE_STATUS_FILENAME, ctx->pid);
+    fp = fopen(tmp, "w");
+    if (fp == NULL) {
+        return;
+    }
+    if (status->core_last_error) {
+        fprintf(fp, "Last error\n");
+        fprintf(fp, "%s\n\n", status->core_last_error);
+    }
+    if (status->memory_usage) {
+        fprintf(fp, "Memory\n");
+        fprintf(fp, "usage: %d\npeak_usage:%d\n", status->memory_usage, status->memory_peak_usage);
+        fprintf(fp, "real_usage: %d\nreal_peak_usage:%d\n\n", status->real_memory_usage,
+                status->real_memory_peak_usage);
+    }
+    if (status->request_line) {
+        fprintf(fp, "Request\n");
+        fprintf(fp, "%s\n", status->request_line);
+    }
+    if (status->request_time) {
+        fprintf(fp, "request_time:%f\n\n", status->request_time);
+    }
+    if (status->stack) {
+        fprintf(fp, "Stack\n");
+        fprintf(fp, "%s\n", status->stack);
+    }
+    fclose(fp);
+    rename(tmp, filename);
+}
 void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px TSRMLS_DC)
 {
-    uint64_t now;
+    uint64_t now, cpu_time;
+    int64_t memory_usage, memory_peak_usage;
     uint8_t *ctrl;
     char filename[256];
     const char *p;
     zval *return_value;
     phptrace_context_t *ctx;
+    phptrace_status_t status;
 
     phptrace_file_record_t record;
     phptrace_file_tailer_t tailer = {MAGIC_NUMBER_TAILER, 0};
@@ -523,11 +646,20 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px TSRM
         goto exec;
     }
 
+
     ctx = &PHPTRACE_G(ctx);
     ++ctx->level;
     ctrl = ctx->ctrl.shmaddr;
     if (ctx->pid == 0) {
         ctx->pid = getpid();
+    }
+
+    if (ctrl[ctx->pid] & STATUS_FLAG) {
+        phptrace_init_php_status(&status);
+        phptrace_get_php_status(&status TSRMLS_CC);
+        phptrace_dump_php_status(&status);
+        phptrace_destroy_php_status(&status);
+        ctrl[ctx->pid] &= ~STATUS_FLAG & 0x00FF;
     }
 
     if ((ctrl[ctx->pid] & 0x01) == 0 && !PHPTRACE_G(dotrace)) {
@@ -591,6 +723,7 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px TSRM
 
         ctx->shmoffset = ctx->tracelog.shmaddr;
         ctx->shmoffset = phptrace_mem_write_header(&header, ctx->shmoffset);
+        phptrace_mem_write_waitflag(ctx->shmoffset);
     }
 
     RECORD_ENTRY(&record, params) = NULL;
@@ -609,6 +742,9 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px TSRM
         phptrace_register_return_value(&return_value TSRMLS_CC);
     }
 
+    memory_usage = zend_memory_usage(0 TSRMLS_CC);
+    memory_peak_usage = zend_memory_peak_usage(0 TSRMLS_CC);
+
     record.seq = ctx->seq ++;
     record.level = ctx->level;
     record.start_time = phptrace_time_usec();
@@ -619,6 +755,7 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px TSRM
 
     record.flag = RECORD_FLAG_ENTRY;
     ctx->shmoffset = phptrace_mem_write_record(&record, ctx->shmoffset);
+    phptrace_mem_write_waitflag(ctx->shmoffset);
 
     /* params and filename MUST be freed before we
      * assign cost_time and return_value.
@@ -634,6 +771,7 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px TSRM
     RECORD_EXIT(&record, cost_time) = 0;
     RECORD_EXIT(&record, return_value) = NULL;
 
+    cpu_time = phptrace_cputime_usec();
     zend_try {
         if (!px->internal) {
 #if PHP_VERSION_ID < 50500
@@ -670,6 +808,7 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px TSRM
         zend_bailout();
     }zend_end_try();
 
+    RECORD_EXIT(&record, cpu_time) = phptrace_cputime_usec() - cpu_time;
     -- ctx->level;
     now = phptrace_time_usec();
 
@@ -698,6 +837,8 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px TSRM
     if (RECORD_EXIT(&record, return_value) == NULL) {
         RECORD_EXIT(&record, return_value) = sdsempty();
     }
+    RECORD_EXIT(&record, memory_usage) = zend_memory_usage(0 TSRMLS_CC) - memory_usage;
+    RECORD_EXIT(&record, memory_peak_usage) = zend_memory_peak_usage(0 TSRMLS_CC) - memory_peak_usage;
     
     /*ctx->shmoffset may have been reset in the inner level 
      * of the phptrace_execute_core, so all the return info
@@ -707,6 +848,7 @@ void phptrace_execute_core(zend_execute_data *ex, phptrace_execute_data *px TSRM
         record.seq = ctx->seq ++;
         record.flag = RECORD_FLAG_EXIT;
         ctx->shmoffset = phptrace_mem_write_record(&record, ctx->shmoffset);
+        phptrace_mem_write_waitflag(ctx->shmoffset);
     }
 
     if (ctx->cli && PHPTRACE_G(dotrace)) {

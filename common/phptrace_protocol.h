@@ -39,6 +39,7 @@
 #define PHPTRACE_LOG_DIR "/tmp"
 #define PHPTRACE_TRACE_FILENAME "phptrace.trace"
 #define PHPTRACE_CTRL_FILENAME "phptrace.ctrl"
+#define PHPTRACE_STATUS_FILENAME "phptrace.status"
 
 /*We use PID_MAX+1 as the size of file phptrace.ctrl
  *4 million is the hard limit of linux kernel so far,
@@ -86,6 +87,9 @@ typedef struct phptrace_file_record_s {
         struct {
             sds return_value;           /* function return values */
             uint64_t cost_time;         /* inclusive cost time of function */
+            uint64_t cpu_time;          /* inclusive cpu time of function */
+            int64_t  memory_usage;
+            int64_t  memory_peak_usage;
         } exit;
     } info;
 } phptrace_file_record_t;
@@ -102,6 +106,8 @@ void *phptrace_mem_write_header(phptrace_file_header_t *header, void *mem);
 
 void *phptrace_mem_read_record(phptrace_file_record_t *record, void *mem, uint64_t seq);
 void *phptrace_mem_write_record(phptrace_file_record_t *record, void *mem);
+
+size_t phptrace_record_rawsize(phptrace_file_record_t *record);
 
 void *phptrace_mem_write_waitflag(void *mem);
 void *phptrace_mem_read_waitflag(uint64_t *waitflag, void *mem);
