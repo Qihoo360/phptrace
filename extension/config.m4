@@ -13,9 +13,9 @@ dnl [  --with-phptrace             Include phptrace support])
 
 dnl Otherwise use enable:
 
-dnl PHP_ARG_ENABLE(phptrace, whether to enable phptrace support,
+PHP_ARG_ENABLE(phptrace, whether to enable phptrace support,
 dnl Make sure that the comment is aligned:
-dnl [  --enable-phptrace           Enable phptrace support])
+[  --enable-phptrace           Enable phptrace support])
 
 if test "$PHP_PHPTRACE" != "no"; then
   dnl Write more examples of tests here...

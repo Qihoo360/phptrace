@@ -27,9 +27,8 @@
 #include "ext/standard/info.h"
 #include "php_phptrace.h"
 
-/* If you declare any globals in php_phptrace.h uncomment this:
+/* If you declare any globals in php_phptrace.h uncomment this: */
 ZEND_DECLARE_MODULE_GLOBALS(phptrace)
-*/
 
 /* True global resources - no need for thread safety here */
 static int le_phptrace;
@@ -39,8 +38,7 @@ static int le_phptrace;
  * Every user visible function must have an entry in phptrace_functions[].
  */
 const zend_function_entry phptrace_functions[] = {
-	PHP_FE(confirm_phptrace_compiled,	NULL)		/* For testing, remove later. */
-	PHP_FE_END	/* Must be the last line in phptrace_functions[] */
+    PHP_FE_END  /* Must be the last line in phptrace_functions[] */
 };
 /* }}} */
 
@@ -48,19 +46,19 @@ const zend_function_entry phptrace_functions[] = {
  */
 zend_module_entry phptrace_module_entry = {
 #if ZEND_MODULE_API_NO >= 20010901
-	STANDARD_MODULE_HEADER,
+    STANDARD_MODULE_HEADER,
 #endif
-	"phptrace",
-	phptrace_functions,
-	PHP_MINIT(phptrace),
-	PHP_MSHUTDOWN(phptrace),
-	PHP_RINIT(phptrace),		/* Replace with NULL if there's nothing to do at request start */
-	PHP_RSHUTDOWN(phptrace),	/* Replace with NULL if there's nothing to do at request end */
-	PHP_MINFO(phptrace),
+    "phptrace",
+    phptrace_functions,
+    PHP_MINIT(phptrace),
+    PHP_MSHUTDOWN(phptrace),
+    PHP_RINIT(phptrace),        /* Replace with NULL if there's nothing to do at request start */
+    PHP_RSHUTDOWN(phptrace),    /* Replace with NULL if there's nothing to do at request end */
+    PHP_MINFO(phptrace),
 #if ZEND_MODULE_API_NO >= 20010901
-	PHP_PHPTRACE_VERSION,
+    PHP_PHPTRACE_VERSION,
 #endif
-	STANDARD_MODULE_PROPERTIES
+    STANDARD_MODULE_PROPERTIES
 };
 /* }}} */
 
@@ -70,33 +68,28 @@ ZEND_GET_MODULE(phptrace)
 
 /* {{{ PHP_INI
  */
-/* Remove comments and fill if you need to have entries in php.ini
+/* Remove comments and fill if you need to have entries in php.ini */
 PHP_INI_BEGIN()
-    STD_PHP_INI_ENTRY("phptrace.global_value",      "42", PHP_INI_ALL, OnUpdateLong, global_value, zend_phptrace_globals, phptrace_globals)
-    STD_PHP_INI_ENTRY("phptrace.global_string", "foobar", PHP_INI_ALL, OnUpdateString, global_string, zend_phptrace_globals, phptrace_globals)
+    STD_PHP_INI_ENTRY("phptrace.enabled",      "0", PHP_INI_ALL, OnUpdateLong, enabled, zend_phptrace_globals, phptrace_globals)
 PHP_INI_END()
-*/
 /* }}} */
 
 /* {{{ php_phptrace_init_globals
  */
-/* Uncomment this function if you have INI entries
+/* Uncomment this function if you have INI entries */
 static void php_phptrace_init_globals(zend_phptrace_globals *phptrace_globals)
 {
-	phptrace_globals->global_value = 0;
-	phptrace_globals->global_string = NULL;
+    phptrace_globals->enabled = 0;
 }
-*/
 /* }}} */
 
 /* {{{ PHP_MINIT_FUNCTION
  */
 PHP_MINIT_FUNCTION(phptrace)
 {
-	/* If you have INI entries, uncomment these lines 
-	REGISTER_INI_ENTRIES();
-	*/
-	return SUCCESS;
+    /* If you have INI entries, uncomment these lines */
+    REGISTER_INI_ENTRIES();
+    return SUCCESS;
 }
 /* }}} */
 
@@ -104,10 +97,9 @@ PHP_MINIT_FUNCTION(phptrace)
  */
 PHP_MSHUTDOWN_FUNCTION(phptrace)
 {
-	/* uncomment this line if you have INI entries
-	UNREGISTER_INI_ENTRIES();
-	*/
-	return SUCCESS;
+    /* uncomment this line if you have INI entries */
+    UNREGISTER_INI_ENTRIES();
+    return SUCCESS;
 }
 /* }}} */
 
@@ -116,7 +108,7 @@ PHP_MSHUTDOWN_FUNCTION(phptrace)
  */
 PHP_RINIT_FUNCTION(phptrace)
 {
-	return SUCCESS;
+    return SUCCESS;
 }
 /* }}} */
 
@@ -125,7 +117,7 @@ PHP_RINIT_FUNCTION(phptrace)
  */
 PHP_RSHUTDOWN_FUNCTION(phptrace)
 {
-	return SUCCESS;
+    return SUCCESS;
 }
 /* }}} */
 
@@ -133,50 +125,11 @@ PHP_RSHUTDOWN_FUNCTION(phptrace)
  */
 PHP_MINFO_FUNCTION(phptrace)
 {
-	php_info_print_table_start();
-	php_info_print_table_header(2, "phptrace support", "enabled");
-	php_info_print_table_end();
+    php_info_print_table_start();
+    php_info_print_table_header(2, "phptrace support", "enabled");
+    php_info_print_table_end();
 
-	/* Remove comments if you have entries in php.ini
-	DISPLAY_INI_ENTRIES();
-	*/
+    /* Remove comments if you have entries in php.ini */
+    DISPLAY_INI_ENTRIES();
 }
 /* }}} */
-
-
-/* Remove the following function when you have successfully modified config.m4
-   so that your module can be compiled into PHP, it exists only for testing
-   purposes. */
-
-/* Every user-visible function in PHP should document itself in the source */
-/* {{{ proto string confirm_phptrace_compiled(string arg)
-   Return a string to confirm that the module is compiled in */
-PHP_FUNCTION(confirm_phptrace_compiled)
-{
-	char *arg = NULL;
-	int arg_len, len;
-	char *strg;
-
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &arg, &arg_len) == FAILURE) {
-		return;
-	}
-
-	len = spprintf(&strg, 0, "Congratulations! You have successfully modified ext/%.78s/config.m4. Module %.78s is now compiled into PHP.", "phptrace", arg);
-	RETURN_STRINGL(strg, len, 0);
-}
-/* }}} */
-/* The previous line is meant for vim and emacs, so it can correctly fold and 
-   unfold functions in source code. See the corresponding marks just before 
-   function definition, where the functions purpose is also documented. Please 
-   follow this convention for the convenience of others editing your code.
-*/
-
-
-/*
- * Local variables:
- * tab-width: 4
- * c-basic-offset: 4
- * End:
- * vim600: noet sw=4 ts=4 fdm=marker
- * vim<600: noet sw=4 ts=4
- */
