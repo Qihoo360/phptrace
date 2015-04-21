@@ -7,8 +7,6 @@
 #include "ext/standard/info.h"
 #include "php_phptrace.h"
 
-#include <sys/resource.h>
-
 
 /**
  * PHP-Trace Global
@@ -17,24 +15,20 @@
 #define get_us_delta(begin, end) (((end.tv_sec - begin.tv_sec) * 1000000) + \
      (end.tv_usec - begin.tv_usec))
 
-#define PROFILING_DECLARE() \
-    long pb_mem, pb_mempeak; struct rusage pb_ru; struct timeval pb_tv; \
-    struct rusage pe_ru; struct timeval pe_tv; \
-    long mem, mempeak, wall_time, cpu_time;
 #define PROFILING_BEGIN() do { \
-    gettimeofday(&pb_tv, 0); \
-    getrusage(RUSAGE_SELF, &pb_ru); \
-    pb_mem = zend_memory_usage(0 TSRMLS_CC); \
-    pb_mempeak = zend_memory_peak_usage(0 TSRMLS_CC); \
+    gettimeofday(&PTG(pb_tv), 0); \
+    getrusage(RUSAGE_SELF, &PTG(pb_ru)); \
+    PTG(pb_mem) = zend_memory_usage(0 TSRMLS_CC); \
+    PTG(pb_mempeak) = zend_memory_peak_usage(0 TSRMLS_CC); \
 } while (0);
 #define PROFILING_END() do { \
-    gettimeofday(&pe_tv, 0); \
-    wall_time = get_us_delta(pb_tv, pe_tv); \
-    getrusage(RUSAGE_SELF, &pe_ru); \
-    cpu_time = get_us_delta(pb_ru.ru_utime, pe_ru.ru_utime) + \
-        get_us_delta(pb_ru.ru_stime, pe_ru.ru_stime); \
-    mem = zend_memory_usage(0 TSRMLS_CC) - pb_mem; \
-    mempeak = zend_memory_peak_usage(0 TSRMLS_CC) - pb_mempeak; \
+    gettimeofday(&PTG(pe_tv), 0); \
+    PTG(wall_time) = get_us_delta(PTG(pb_tv), PTG(pe_tv)); \
+    getrusage(RUSAGE_SELF, &PTG(pe_ru)); \
+    PTG(cpu_time) = get_us_delta(PTG(pb_ru).ru_utime, PTG(pe_ru).ru_utime) + \
+        get_us_delta(PTG(pb_ru).ru_stime, PTG(pe_ru).ru_stime); \
+    PTG(mem) = zend_memory_usage(0 TSRMLS_CC) - PTG(pb_mem); \
+    PTG(mempeak) = zend_memory_peak_usage(0 TSRMLS_CC) - PTG(pb_mempeak); \
 } while (0);
 
 #define PT_FUNC_UNKNOWN         0x00
@@ -79,6 +73,9 @@ static int le_phptrace;
  * Every user visible function must have an entry in phptrace_functions[].
  */
 const zend_function_entry phptrace_functions[] = {
+    PHP_FE(phptrace_stack,  NULL)
+    PHP_FE(phptrace_begin,  NULL)
+    PHP_FE(phptrace_end,    NULL)
     PHP_FE_END  /* Must be the last line in phptrace_functions[] */
 };
 
@@ -112,6 +109,9 @@ PHP_INI_END()
 static void php_phptrace_init_globals(zend_phptrace_globals *ptg)
 {
     ptg->enable = 0;
+
+    ptg->do_trace = 0;
+    ptg->do_stack = 0;
 
     ptg->level = 0;
 }
@@ -173,6 +173,26 @@ PHP_MINFO_FUNCTION(phptrace)
 
     /* Remove comments if you have entries in php.ini */
     DISPLAY_INI_ENTRIES();
+}
+
+
+/**
+ * PHP-Trace Interface
+ * --------------------
+ */
+PHP_FUNCTION(phptrace_stack)
+{
+    PTG(do_stack) = 1;
+}
+
+PHP_FUNCTION(phptrace_begin)
+{
+    PTG(do_trace) = 1;
+}
+
+PHP_FUNCTION(phptrace_end)
+{
+    PTG(do_trace) = 0;
 }
 
 
@@ -365,56 +385,66 @@ static void pt_display_backtrace(zend_execute_data *ex, zend_bool internal TSRML
  */
 ZEND_API void phptrace_execute_ex(zend_execute_data *execute_data TSRMLS_DC)
 {
-    PROFILING_DECLARE();
+    zend_bool do_trace = PTG(do_trace);
     phptrace_frame frame;
 
     PTG(level)++;
-    phptrace_build_frame(&frame, execute_data, 0 TSRMLS_CC);
-    if (strcmp(frame.function, "pt_backtrace") == 0) {
+
+    if (PTG(do_stack)) {
         pt_display_backtrace(execute_data, 0 TSRMLS_CC);
+        PTG(do_stack) = 0;
     }
 
-    pt_display_frame(&frame, 1, "> ");
+    if (do_trace) {
+        phptrace_build_frame(&frame, execute_data, 0 TSRMLS_CC);
+        pt_display_frame(&frame, 1, "> ");
+        PROFILING_BEGIN();
+    }
 
-    PROFILING_BEGIN();
     /* call original */
     phptrace_ori_execute_ex(execute_data TSRMLS_CC);
-    PROFILING_END();
 
-    fprintf(stderr, "wt: %.4f ct: %.4f mem: %ld mempeak: %ld\n", wall_time / 1000000.0, cpu_time / 1000000.0, mem, mempeak);
+    if (do_trace) {
+        PROFILING_END();
+        fprintf(stderr, "wt: %.4f ct: %.4f mem: %ld mempeak: %ld\n", PTG(wall_time) / 1000000.0, PTG(cpu_time) / 1000000.0, PTG(mem), PTG(mempeak));
+        pt_display_frame(&frame, 1, "< ");
+        phptrace_destroy_frame(&frame TSRMLS_CC);
+    }
 
-    pt_display_frame(&frame, 1, "< ");
-
-    phptrace_destroy_frame(&frame TSRMLS_CC);
     PTG(level)--;
 }
 
 ZEND_API void phptrace_execute_internal(zend_execute_data *execute_data, zend_fcall_info *fci, int return_value_used TSRMLS_DC)
 {
-    PROFILING_DECLARE();
+    zend_bool do_trace = PTG(do_trace);
     phptrace_frame frame;
 
     PTG(level)++;
-    phptrace_build_frame(&frame, execute_data, 1 TSRMLS_CC);
-    if (strcmp(frame.function, "pt_backtrace") == 0) {
+
+    if (PTG(do_stack)) {
         pt_display_backtrace(execute_data, 1 TSRMLS_CC);
+        PTG(do_stack) = 0;
     }
 
-    pt_display_frame(&frame, 1, "> ");
+    if (do_trace) {
+        phptrace_build_frame(&frame, execute_data, 1 TSRMLS_CC);
+        pt_display_frame(&frame, 1, "> ");
+        PROFILING_BEGIN();
+    }
 
-    PROFILING_BEGIN();
     /* call original */
     if (phptrace_ori_execute_internal) {
         phptrace_ori_execute_internal(execute_data, fci, return_value_used TSRMLS_CC);
     } else {
         execute_internal(execute_data, fci, return_value_used TSRMLS_CC);
     }
-    PROFILING_END();
 
-    fprintf(stderr, "wt: %.4f ct: %.4f mem: %ld mempeak: %ld\n", wall_time / 1000000.0, cpu_time / 1000000.0, mem, mempeak);
+    if (do_trace) {
+        PROFILING_END();
+        fprintf(stderr, "wt: %.4f ct: %.4f mem: %ld mempeak: %ld\n", PTG(wall_time) / 1000000.0, PTG(cpu_time) / 1000000.0, PTG(mem), PTG(mempeak));
+        pt_display_frame(&frame, 1, "< ");
+        phptrace_destroy_frame(&frame TSRMLS_CC);
+    }
 
-    pt_display_frame(&frame, 1, "< ");
-
-    phptrace_destroy_frame(&frame TSRMLS_CC);
     PTG(level)--;
 }

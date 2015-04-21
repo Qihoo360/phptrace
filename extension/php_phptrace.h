@@ -18,21 +18,40 @@ extern zend_module_entry phptrace_module_entry;
 #include "TSRM.h"
 #endif
 
+#include <sys/resource.h>
+
 PHP_MINIT_FUNCTION(phptrace);
 PHP_MSHUTDOWN_FUNCTION(phptrace);
 PHP_RINIT_FUNCTION(phptrace);
 PHP_RSHUTDOWN_FUNCTION(phptrace);
 PHP_MINFO_FUNCTION(phptrace);
 
+PHP_FUNCTION(phptrace_stack);
+PHP_FUNCTION(phptrace_begin);
+PHP_FUNCTION(phptrace_end);
 
 /**
  * Declare any global variables you may need between the BEGIN and END macros
  * here:
  */
 ZEND_BEGIN_MODULE_GLOBALS(phptrace)
-    long    enable;
+    zend_bool       enable;
 
-    long    level;  /* nesting level */
+    zend_bool       do_trace;
+    zend_bool       do_stack;
+
+    long            level;          /* nesting level */
+
+    long            pb_mem;         /* begin memory usage */
+    long            pb_mempeak;     /* begin memory peak usage */
+    struct rusage   pb_ru;          /* begin rusage */
+    struct timeval  pb_tv;          /* begin gettimeofday */
+    struct rusage   pe_ru;          /* end rusage */
+    struct timeval  pe_tv;          /* end gettimeofday */
+    long            mem;            /* delta memory usage */
+    long            mempeak;        /* delta memory peak */
+    long            wall_time;      /* wall time cost */
+    long            cpu_time;       /* cpu time cost */
 ZEND_END_MODULE_GLOBALS(phptrace)
 
 
