@@ -30,7 +30,9 @@ PHP_MINFO_FUNCTION(phptrace);
  * here:
  */
 ZEND_BEGIN_MODULE_GLOBALS(phptrace)
-    long  enable;
+    long    enable;
+
+    long    level;  /* nesting level */
 ZEND_END_MODULE_GLOBALS(phptrace)
 
 
@@ -45,9 +47,9 @@ ZEND_END_MODULE_GLOBALS(phptrace)
  */
 
 #ifdef ZTS
-#define PHPTRACE_G(v) TSRMG(phptrace_globals_id, zend_phptrace_globals *, v)
+#define PTG(v) TSRMG(phptrace_globals_id, zend_phptrace_globals *, v)
 #else
-#define PHPTRACE_G(v) (phptrace_globals.v)
+#define PTG(v) (phptrace_globals.v)
 #endif
 
 #endif  /* PHP_PHPTRACE_H */

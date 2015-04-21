@@ -25,12 +25,13 @@
 #define PT_FUNC_EVAL            0x14
 
 typedef struct _phptrace_frame {
-    unsigned char internal;
+    zend_bool internal;
     int type;
+    uint lineno;
+    char *filename;
     char *class;
     char *function;
-    char *filename;
-    uint lineno;
+    long level;
 } phptrace_frame;
 
 static void (*phptrace_ori_execute_ex)(zend_execute_data *execute_data TSRMLS_DC);
@@ -83,9 +84,11 @@ PHP_INI_BEGIN()
 PHP_INI_END()
 
 /* php_phptrace_init_globals */
-static void php_phptrace_init_globals(zend_phptrace_globals *phptrace_globals)
+static void php_phptrace_init_globals(zend_phptrace_globals *ptg)
 {
-    phptrace_globals->enable = 0;
+    ptg->enable = 0;
+
+    ptg->level = 0;
 }
 
 
@@ -102,7 +105,7 @@ PHP_MINIT_FUNCTION(phptrace)
     phptrace_ori_execute_ex = zend_execute_ex;
     phptrace_ori_execute_internal = zend_execute_internal;
 
-    if (PHPTRACE_G(enable)) {
+    if (PTG(enable)) {
         /* Replace executor */
         zend_execute_ex = phptrace_execute_ex;
         zend_execute_internal = phptrace_execute_internal;
@@ -115,7 +118,7 @@ PHP_MSHUTDOWN_FUNCTION(phptrace)
 {
     UNREGISTER_INI_ENTRIES();
 
-    if (PHPTRACE_G(enable)) {
+    if (PTG(enable)) {
         /* TODO ini_set during runtime ? */
         /* Restore original executor */
         zend_execute_ex = phptrace_ori_execute_ex;
@@ -127,6 +130,8 @@ PHP_MSHUTDOWN_FUNCTION(phptrace)
 
 PHP_RINIT_FUNCTION(phptrace)
 {
+    PTG(level) = 0;
+
     return SUCCESS;
 }
 
@@ -150,7 +155,7 @@ PHP_MINFO_FUNCTION(phptrace)
  * PHP-Trace Function
  * --------------------
  */
-int phptrace_build_frame(phptrace_frame *frame, zend_execute_data *execute_data, unsigned char internal TSRMLS_DC)
+int phptrace_build_frame(phptrace_frame *frame, zend_execute_data *execute_data, zend_bool internal TSRMLS_DC)
 {
     zend_execute_data *ex = execute_data;
     zend_function *zf;
@@ -160,6 +165,7 @@ int phptrace_build_frame(phptrace_frame *frame, zend_execute_data *execute_data,
 
     /* internal */
     frame->internal = internal;
+    frame->level = PTG(level);
 
     /**
      * Current execute_data is the data going to be executed not the entry
@@ -279,9 +285,14 @@ void phptrace_destroy_frame(phptrace_frame *frame TSRMLS_DC)
         free(frame->filename);
 }
 
-static void pt_display_frame(phptrace_frame *frame, const char *format, ...)
+static void pt_display_frame(phptrace_frame *frame, zend_bool indent, const char *format, ...)
 {
     va_list ap;
+
+    /* indent */
+    if (indent) {
+        fprintf(stderr, "%*s", (frame->level - 1) * 4, "");
+    }
 
     /* format */
     va_start(ap, format);
@@ -303,7 +314,7 @@ static void pt_display_frame(phptrace_frame *frame, const char *format, ...)
     fprintf(stderr, " called at [%s:%d]\n", frame->filename, frame->lineno);
 }
 
-static void pt_display_backtrace(zend_execute_data *ex, unsigned char internal TSRMLS_DC)
+static void pt_display_backtrace(zend_execute_data *ex, zend_bool internal TSRMLS_DC)
 {
     int num = 0;
     phptrace_frame frame;
@@ -314,7 +325,8 @@ static void pt_display_backtrace(zend_execute_data *ex, unsigned char internal T
         }
 
         phptrace_build_frame(&frame, ex, internal TSRMLS_CC);
-        pt_display_frame(&frame, "#%-3d", num++);
+        frame.level = 1;
+        pt_display_frame(&frame, 0, "#%-3d", num++);
         phptrace_destroy_frame(&frame TSRMLS_CC);
 
         ex = ex->prev_execute_data;
@@ -330,31 +342,34 @@ ZEND_API void phptrace_execute_ex(zend_execute_data *execute_data TSRMLS_DC)
 {
     phptrace_frame frame;
 
+    PTG(level)++;
     phptrace_build_frame(&frame, execute_data, 0 TSRMLS_CC);
     if (strcmp(frame.function, "pt_backtrace") == 0) {
         pt_display_backtrace(execute_data, 0 TSRMLS_CC);
     }
 
-    /* pt_display_frame(&frame, "ent "); */
+    pt_display_frame(&frame, 1, "> ");
 
     /* call original */
     phptrace_ori_execute_ex(execute_data TSRMLS_CC);
 
-    /* pt_display_frame(&frame, "ret "); */
+    pt_display_frame(&frame, 1, "< ");
 
     phptrace_destroy_frame(&frame TSRMLS_CC);
+    PTG(level)--;
 }
 
 ZEND_API void phptrace_execute_internal(zend_execute_data *execute_data, zend_fcall_info *fci, int return_value_used TSRMLS_DC)
 {
     phptrace_frame frame;
 
+    PTG(level)++;
     phptrace_build_frame(&frame, execute_data, 1 TSRMLS_CC);
     if (strcmp(frame.function, "pt_backtrace") == 0) {
         pt_display_backtrace(execute_data, 1 TSRMLS_CC);
     }
 
-    /* pt_display_frame(&frame, "ent "); */
+    pt_display_frame(&frame, 1, "> ");
 
     /* call original */
     if (phptrace_ori_execute_internal) {
@@ -363,7 +378,8 @@ ZEND_API void phptrace_execute_internal(zend_execute_data *execute_data, zend_fc
         execute_internal(execute_data, fci, return_value_used TSRMLS_CC);
     }
 
-    /* pt_display_frame(&frame, "ret "); */
+    pt_display_frame(&frame, 1, "< ");
 
     phptrace_destroy_frame(&frame TSRMLS_CC);
+    PTG(level)--;
 }
