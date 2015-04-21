@@ -279,9 +279,16 @@ void phptrace_destroy_frame(phptrace_frame *frame TSRMLS_DC)
         free(frame->filename);
 }
 
-static void pt_display_frame(phptrace_frame *frame, char *type)
+static void pt_display_frame(phptrace_frame *frame, const char *format, ...)
 {
-    fprintf(stderr, "%s ", type);
+    va_list ap;
+
+    /* format */
+    va_start(ap, format);
+    vfprintf(stderr, format, ap);
+    va_end(ap);
+
+    /* frame */
     if (frame->type == PT_FUNC_NORMAL) {
         fprintf(stderr, "%s()", frame->function);
     } else if (frame->type == PT_FUNC_MEMBER) {
@@ -298,14 +305,16 @@ static void pt_display_frame(phptrace_frame *frame, char *type)
 
 static void pt_display_backtrace(zend_execute_data *ex, unsigned char internal TSRMLS_DC)
 {
+    int num = 0;
     phptrace_frame frame;
+
     while (ex) {
         if (!internal && !ex->prev_execute_data) {
             break;
         }
 
         phptrace_build_frame(&frame, ex, internal TSRMLS_CC);
-        pt_display_frame(&frame, "#bt");
+        pt_display_frame(&frame, "#%-3d", num++);
         phptrace_destroy_frame(&frame TSRMLS_CC);
 
         ex = ex->prev_execute_data;
@@ -320,18 +329,18 @@ static void pt_display_backtrace(zend_execute_data *ex, unsigned char internal T
 ZEND_API void phptrace_execute_ex(zend_execute_data *execute_data TSRMLS_DC)
 {
     phptrace_frame frame;
+
     phptrace_build_frame(&frame, execute_data, 0 TSRMLS_CC);
-
-    /* pt_display_frame(&frame, "frame"); */
-
     if (strcmp(frame.function, "pt_backtrace") == 0) {
         pt_display_backtrace(execute_data, 0 TSRMLS_CC);
     }
 
+    /* pt_display_frame(&frame, "ent "); */
+
     /* call original */
     phptrace_ori_execute_ex(execute_data TSRMLS_CC);
 
-    /* pt_display_frame(&frame, "return"); */
+    /* pt_display_frame(&frame, "ret "); */
 
     phptrace_destroy_frame(&frame TSRMLS_CC);
 }
@@ -339,13 +348,13 @@ ZEND_API void phptrace_execute_ex(zend_execute_data *execute_data TSRMLS_DC)
 ZEND_API void phptrace_execute_internal(zend_execute_data *execute_data, zend_fcall_info *fci, int return_value_used TSRMLS_DC)
 {
     phptrace_frame frame;
+
     phptrace_build_frame(&frame, execute_data, 1 TSRMLS_CC);
-
-    /* pt_display_frame(&frame, "frame"); */
-
     if (strcmp(frame.function, "pt_backtrace") == 0) {
         pt_display_backtrace(execute_data, 1 TSRMLS_CC);
     }
+
+    /* pt_display_frame(&frame, "ent "); */
 
     /* call original */
     if (phptrace_ori_execute_internal) {
@@ -354,7 +363,7 @@ ZEND_API void phptrace_execute_internal(zend_execute_data *execute_data, zend_fc
         execute_internal(execute_data, fci, return_value_used TSRMLS_CC);
     }
 
-    /* pt_display_frame(&frame, "return"); */
+    /* pt_display_frame(&frame, "ret "); */
 
     phptrace_destroy_frame(&frame TSRMLS_CC);
 }
