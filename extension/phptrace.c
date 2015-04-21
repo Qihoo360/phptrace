@@ -7,11 +7,36 @@
 #include "ext/standard/info.h"
 #include "php_phptrace.h"
 
+#include <sys/resource.h>
+
 
 /**
  * PHP-Trace Global
  * --------------------
  */
+#define get_us_delta(begin, end) (((end.tv_sec - begin.tv_sec) * 1000000) + \
+     (end.tv_usec - begin.tv_usec))
+
+#define PROFILING_DECLARE() \
+    long pb_mem, pb_mempeak; struct rusage pb_ru; struct timeval pb_tv; \
+    struct rusage pe_ru; struct timeval pe_tv; \
+    long mem, mempeak, wall_time, cpu_time;
+#define PROFILING_BEGIN() do { \
+    gettimeofday(&pb_tv, 0); \
+    getrusage(RUSAGE_SELF, &pb_ru); \
+    pb_mem = zend_memory_usage(0 TSRMLS_CC); \
+    pb_mempeak = zend_memory_peak_usage(0 TSRMLS_CC); \
+} while (0);
+#define PROFILING_END() do { \
+    gettimeofday(&pe_tv, 0); \
+    wall_time = get_us_delta(pb_tv, pe_tv); \
+    getrusage(RUSAGE_SELF, &pe_ru); \
+    cpu_time = get_us_delta(pb_ru.ru_utime, pe_ru.ru_utime) + \
+        get_us_delta(pb_ru.ru_stime, pe_ru.ru_stime); \
+    mem = zend_memory_usage(0 TSRMLS_CC) - pb_mem; \
+    mempeak = zend_memory_peak_usage(0 TSRMLS_CC) - pb_mempeak; \
+} while (0);
+
 #define PT_FUNC_UNKNOWN         0x00
 #define PT_FUNC_NORMAL          0x01
 #define PT_FUNC_MEMBER          0x02
@@ -25,13 +50,13 @@
 #define PT_FUNC_EVAL            0x14
 
 typedef struct _phptrace_frame {
-    zend_bool internal;
-    int type;
-    uint lineno;
-    char *filename;
-    char *class;
-    char *function;
-    long level;
+    zend_bool internal;     /* is ZEND_INTERNAL_FUNCTION */
+    int type;               /* flags of PT_FUNC_xxx */
+    uint lineno;            /* entry lineno */
+    char *filename;         /* entry filename */
+    char *class;            /* class name */
+    char *function;         /* function name */
+    long level;             /* nesting level during executing */
 } phptrace_frame;
 
 static void (*phptrace_ori_execute_ex)(zend_execute_data *execute_data TSRMLS_DC);
@@ -340,6 +365,7 @@ static void pt_display_backtrace(zend_execute_data *ex, zend_bool internal TSRML
  */
 ZEND_API void phptrace_execute_ex(zend_execute_data *execute_data TSRMLS_DC)
 {
+    PROFILING_DECLARE();
     phptrace_frame frame;
 
     PTG(level)++;
@@ -350,8 +376,12 @@ ZEND_API void phptrace_execute_ex(zend_execute_data *execute_data TSRMLS_DC)
 
     pt_display_frame(&frame, 1, "> ");
 
+    PROFILING_BEGIN();
     /* call original */
     phptrace_ori_execute_ex(execute_data TSRMLS_CC);
+    PROFILING_END();
+
+    fprintf(stderr, "wt: %.4f ct: %.4f mem: %ld mempeak: %ld\n", wall_time / 1000000.0, cpu_time / 1000000.0, mem, mempeak);
 
     pt_display_frame(&frame, 1, "< ");
 
@@ -361,6 +391,7 @@ ZEND_API void phptrace_execute_ex(zend_execute_data *execute_data TSRMLS_DC)
 
 ZEND_API void phptrace_execute_internal(zend_execute_data *execute_data, zend_fcall_info *fci, int return_value_used TSRMLS_DC)
 {
+    PROFILING_DECLARE();
     phptrace_frame frame;
 
     PTG(level)++;
@@ -371,12 +402,16 @@ ZEND_API void phptrace_execute_internal(zend_execute_data *execute_data, zend_fc
 
     pt_display_frame(&frame, 1, "> ");
 
+    PROFILING_BEGIN();
     /* call original */
     if (phptrace_ori_execute_internal) {
         phptrace_ori_execute_internal(execute_data, fci, return_value_used TSRMLS_CC);
     } else {
         execute_internal(execute_data, fci, return_value_used TSRMLS_CC);
     }
+    PROFILING_END();
+
+    fprintf(stderr, "wt: %.4f ct: %.4f mem: %ld mempeak: %ld\n", wall_time / 1000000.0, cpu_time / 1000000.0, mem, mempeak);
 
     pt_display_frame(&frame, 1, "< ");
 
