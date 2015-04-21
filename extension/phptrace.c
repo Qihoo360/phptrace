@@ -156,9 +156,6 @@ int phptrace_build_entry(phptrace_entry *entry, zend_execute_data *execute_data,
     zend_function *zf;
 
     /* init */
-    if (entry == NULL) {
-        entry = malloc(sizeof(phptrace_entry));
-    }
     memset(entry, 0, sizeof(phptrace_entry));
 
     /* internal */
@@ -169,20 +166,28 @@ int phptrace_build_entry(phptrace_entry *entry, zend_execute_data *execute_data,
      * point, so we switch to previous data. The internal function is a
      * exception because it's no need to execute by op_array.
      */
-    if (!entry->internal && ex->prev_execute_data) {
+    if (!internal && ex->prev_execute_data) {
         ex = ex->prev_execute_data;
     }
     zf = ex->function_state.function;
 
     /* names */
     if (zf->common.function_name) {
-        /* class name */
-        if (zf->common.scope) {
-            if (ex->object) {
-                entry->type = PT_FUNC_MEMBER;
+        /* type, class name */
+        if (ex->object) {
+            entry->type = PT_FUNC_MEMBER;
+            /**
+             * User care about which method is called exactly, so use
+             * zf->common.scope->name instead of ex->object->name.
+             */
+            if (zf->common.scope) {
+                entry->class = strdup(zf->common.scope->name);
             } else {
-                entry->type = PT_FUNC_STATIC;
+                /* FIXME zend use zend_get_object_classname() */
+                fprintf(stderr, "why here %d\n", __LINE__);
             }
+        } else if (zf->common.scope) {
+            entry->type = PT_FUNC_STATIC;
             entry->class = strdup(zf->common.scope->name);
         } else {
             entry->type = PT_FUNC_NORMAL;
@@ -194,57 +199,57 @@ int phptrace_build_entry(phptrace_entry *entry, zend_execute_data *execute_data,
         } else if (strcmp(zf->common.function_name, "__lambda_func") == 0) {
             asprintf(&entry->function, "{lambda:%s}", zf->op_array.filename);
         } else {
+            /**
+             * TODO deal trait alias better, zend has a function below:
+             * zend_resolve_method_name(ex->object ?  Z_OBJCE_P(ex->object) : zf->common.scope, zf)
+             */
             entry->function = strdup(zf->common.function_name);
         }
     } else {
-        int add_filename = 0;
+        int add_filename = 1;
 
         /* special user function */
         switch (ex->opline->extended_value) {
             case ZEND_INCLUDE_ONCE:
                 entry->type = PT_FUNC_INCLUDE_ONCE;
                 entry->function = "include_once";
-                add_filename = 1;
                 break;
             case ZEND_REQUIRE_ONCE:
                 entry->type = PT_FUNC_REQUIRE_ONCE;
                 entry->function = "require_once";
-                add_filename = 1;
                 break;
             case ZEND_INCLUDE:
                 entry->type = PT_FUNC_INCLUDE;
                 entry->function = "include";
-                add_filename = 1;
                 break;
             case ZEND_REQUIRE:
                 entry->type = PT_FUNC_REQUIRE;
                 entry->function = "require";
-                add_filename = 1;
                 break;
             case ZEND_EVAL:
                 entry->type = PT_FUNC_EVAL;
                 entry->function = strdup("{eval}");
+                add_filename = 0;
                 break;
             default:
                 /* should be function main */
                 entry->type = PT_FUNC_NORMAL;
                 entry->function = strdup("{main}");
+                add_filename = 0;
                 break;
         }
         if (add_filename) {
-            asprintf(
-                &entry->function,
-                "{%s:%s}",
-                entry->function,
-                execute_data->function_state.function->op_array.filename /* using current data */
-            );
+            asprintf(&entry->function, "{%s:%s}", entry->function, zf->op_array.filename);
         }
     }
 
     /* lineno */
     if (ex->opline) {
         entry->lineno = ex->opline->lineno;
-    } else if (execute_data->opline) {
+    } else if (ex->prev_execute_data && ex->prev_execute_data->opline) {
+        /* FIXME try it in loop ? */
+        entry->lineno = ex->prev_execute_data->opline->lineno; /* try using prev */
+    } else if (ex != execute_data && execute_data->opline) {
         entry->lineno = execute_data->opline->lineno; /* try using current */
     } else {
         entry->lineno = 0;
@@ -252,31 +257,59 @@ int phptrace_build_entry(phptrace_entry *entry, zend_execute_data *execute_data,
 
     /* filename */
     if (ex->op_array) {
-        entry->filename = ex->op_array->filename;
-    } else if (execute_data->op_array) {
-        entry->filename = execute_data->op_array->filename; /* try using current */
+        entry->filename = strdup(ex->op_array->filename);
+    } else if (ex->prev_execute_data && ex->prev_execute_data->op_array) {
+        entry->filename = strdup(ex->prev_execute_data->op_array->filename); /* try using prev */
+    } else if (ex != execute_data && execute_data->op_array) {
+        entry->filename = strdup(execute_data->op_array->filename); /* try using current */
     } else {
         entry->filename = NULL;
     }
 
-    /* debug output */
-    {
-        fprintf(stderr, "[%s:%d] ", entry->filename, entry->lineno);
-        if (entry->type == PT_FUNC_NORMAL) {
-            fprintf(stderr, "%s()", entry->function);
-        } else if (entry->type == PT_FUNC_MEMBER) {
-            fprintf(stderr, "%s->%s()", entry->class, entry->function);
-        } else if (entry->type == PT_FUNC_STATIC) {
-            fprintf(stderr, "%s::%s()", entry->class, entry->function);
-        } else if (entry->type & PT_FUNC_INCLUDES) {
-            fprintf(stderr, "%s", entry->function);
-        } else {
-            fprintf(stderr, "unknown ev: %x", ex->opline->extended_value);
-        }
-        fprintf(stderr, "\n");
-    }
-
     return 0;
+}
+
+void phptrace_destroy_entry(phptrace_entry *entry TSRMLS_DC)
+{
+    if (entry->class)
+        free(entry->class);
+    if (entry->function)
+        free(entry->function);
+    if (entry->filename)
+        free(entry->filename);
+}
+
+static void pt_display_entry(phptrace_entry *entry, char *type)
+{
+    fprintf(stderr, "%s ", type);
+    if (entry->type == PT_FUNC_NORMAL) {
+        fprintf(stderr, "%s()", entry->function);
+    } else if (entry->type == PT_FUNC_MEMBER) {
+        fprintf(stderr, "%s->%s()", entry->class, entry->function);
+    } else if (entry->type == PT_FUNC_STATIC) {
+        fprintf(stderr, "%s::%s()", entry->class, entry->function);
+    } else if (entry->type & PT_FUNC_INCLUDES) {
+        fprintf(stderr, "%s", entry->function);
+    } else {
+        fprintf(stderr, "unknown");
+    }
+    fprintf(stderr, " called at [%s:%d]\n", entry->filename, entry->lineno);
+}
+
+static void pt_display_backtrace(zend_execute_data *ex, unsigned char internal TSRMLS_DC)
+{
+    phptrace_entry frame;
+    while (ex) {
+        if (!internal && !ex->prev_execute_data) {
+            break;
+        }
+
+        phptrace_build_entry(&frame, ex, internal TSRMLS_CC);
+        pt_display_entry(&frame, "#bt");
+        phptrace_destroy_entry(&frame TSRMLS_CC);
+
+        ex = ex->prev_execute_data;
+    }
 }
 
 
@@ -286,17 +319,33 @@ int phptrace_build_entry(phptrace_entry *entry, zend_execute_data *execute_data,
  */
 ZEND_API void phptrace_execute_ex(zend_execute_data *execute_data TSRMLS_DC)
 {
-    phptrace_entry *entry = NULL;
-    phptrace_build_entry(entry, execute_data, 0 TSRMLS_CC);
+    phptrace_entry entry;
+    phptrace_build_entry(&entry, execute_data, 0 TSRMLS_CC);
+
+    /* pt_display_entry(&entry, "entry"); */
+
+    if (strcmp(entry.function, "pt_backtrace") == 0) {
+        pt_display_backtrace(execute_data, 0 TSRMLS_CC);
+    }
 
     /* call original */
     phptrace_ori_execute_ex(execute_data TSRMLS_CC);
+
+    /* pt_display_entry(&entry, "return"); */
+
+    phptrace_destroy_entry(&entry TSRMLS_CC);
 }
 
 ZEND_API void phptrace_execute_internal(zend_execute_data *execute_data, zend_fcall_info *fci, int return_value_used TSRMLS_DC)
 {
-    phptrace_entry *entry = NULL;
-    phptrace_build_entry(entry, execute_data, 1 TSRMLS_CC);
+    phptrace_entry entry;
+    phptrace_build_entry(&entry, execute_data, 1 TSRMLS_CC);
+
+    /* pt_display_entry(&entry, "entry"); */
+
+    if (strcmp(entry.function, "pt_backtrace") == 0) {
+        pt_display_backtrace(execute_data, 1 TSRMLS_CC);
+    }
 
     /* call original */
     if (phptrace_ori_execute_internal) {
@@ -304,4 +353,8 @@ ZEND_API void phptrace_execute_internal(zend_execute_data *execute_data, zend_fc
     } else {
         execute_internal(execute_data, fci, return_value_used TSRMLS_CC);
     }
+
+    /* pt_display_entry(&entry, "return"); */
+
+    phptrace_destroy_entry(&entry TSRMLS_CC);
 }
