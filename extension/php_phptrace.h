@@ -18,6 +18,7 @@ extern zend_module_entry phptrace_module_entry;
 #include "TSRM.h"
 #endif
 
+#include <stdint.h>
 #include <sys/resource.h>
 
 PHP_MINIT_FUNCTION(phptrace);
@@ -40,18 +41,14 @@ ZEND_BEGIN_MODULE_GLOBALS(phptrace)
     zend_bool       do_trace;
     zend_bool       do_stack;
 
-    long            level;          /* nesting level */
+    uint32_t        level;          /* nesting level */
 
-    long            pb_mem;         /* begin memory usage */
-    long            pb_mempeak;     /* begin memory peak usage */
+    int64_t         pb_mem;         /* begin memory usage */
+    int64_t         pb_mempeak;     /* begin memory peak usage */
     struct rusage   pb_ru;          /* begin rusage */
     struct timeval  pb_tv;          /* begin gettimeofday */
     struct rusage   pe_ru;          /* end rusage */
     struct timeval  pe_tv;          /* end gettimeofday */
-    long            mem;            /* delta memory usage */
-    long            mempeak;        /* delta memory peak */
-    long            wall_time;      /* wall time cost */
-    long            cpu_time;       /* cpu time cost */
 ZEND_END_MODULE_GLOBALS(phptrace)
 
 
