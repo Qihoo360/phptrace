@@ -212,7 +212,7 @@ PHP_FUNCTION(phptrace_end)
  * PHP-Trace Function
  * --------------------
  */
-int phptrace_build_frame(phptrace_frame *frame, zend_execute_data *execute_data, zend_bool internal TSRMLS_DC)
+void phptrace_build_frame(phptrace_frame *frame, zend_execute_data *execute_data, zend_bool internal TSRMLS_DC)
 {
     int i;
     zval **args;
@@ -343,8 +343,6 @@ int phptrace_build_frame(phptrace_frame *frame, zend_execute_data *execute_data,
     } else {
         frame->filename = NULL;
     }
-
-    return 0;
 }
 
 void phptrace_destroy_frame(phptrace_frame *frame TSRMLS_DC)
@@ -361,6 +359,27 @@ void phptrace_destroy_frame(phptrace_frame *frame TSRMLS_DC)
         for (i = 0; i < frame->arg_count; i++) {
             free(frame->args[i]);
         }
+    }
+    if (frame->retval)
+        free(frame->retval);
+}
+
+void phptrace_frame_set_retval(phptrace_frame *frame, zend_bool internal, zend_execute_data *ex, zend_fcall_info *fci TSRMLS_DC)
+{
+    zval *retval;
+
+    if (internal) {
+        if (fci != NULL) {
+            retval = *fci->retval_ptr_ptr;
+        } else {
+            retval = EX_TMP_VAR(ex, ex->opline->result.var)->var.ptr;
+        }
+    } else if (*EG(return_value_ptr_ptr)) {
+        retval = *EG(return_value_ptr_ptr);
+    }
+
+    if (retval) {
+        phptrace_repr_zval(&frame->retval, retval TSRMLS_CC);
     }
 }
 
@@ -455,6 +474,7 @@ static void pt_display_frame(phptrace_frame *frame, zend_bool indent, const char
         goto done;
     }
 
+    /* arguments */
     if (frame->arg_count) {
         for (i = 0; i < frame->arg_count; i++) {
             fprintf(stderr, "%s", frame->args[i]);
@@ -464,6 +484,11 @@ static void pt_display_frame(phptrace_frame *frame, zend_bool indent, const char
         }
     }
     fprintf(stderr, ")");
+
+    /* return value */
+    if (frame->retval) {
+        fprintf(stderr, " = %s", frame->retval);
+    }
 
 done:
     fprintf(stderr, " called at [%s:%d]\n", frame->filename, frame->lineno);
@@ -497,6 +522,7 @@ ZEND_API void phptrace_execute_ex(zend_execute_data *execute_data TSRMLS_DC)
 {
     zend_bool do_trace = PTG(do_trace);
     phptrace_frame frame;
+    zval *retval = NULL;
 
     PTG(level)++;
 
@@ -507,6 +533,12 @@ ZEND_API void phptrace_execute_ex(zend_execute_data *execute_data TSRMLS_DC)
 
     if (do_trace) {
         phptrace_build_frame(&frame, execute_data, 0 TSRMLS_CC);
+
+        /* Register reture value ptr */
+        if (EG(return_value_ptr_ptr) == NULL) {
+            EG(return_value_ptr_ptr) = &retval;
+        }
+
         /* send entry */
         pt_display_frame(&frame, 1, "> ");
         PROFILING_BEGIN();
@@ -517,6 +549,14 @@ ZEND_API void phptrace_execute_ex(zend_execute_data *execute_data TSRMLS_DC)
 
     if (do_trace) {
         PROFILING_END(FP(wall_time), FP(cpu_time), FP(mem), FP(mempeak));
+
+        phptrace_frame_set_retval(&frame, 0, NULL, NULL);
+
+        /* Free reture value */
+        if (retval != NULL) {
+            zval_ptr_dtor(&retval);
+        }
+
         /* send return */
         /* fprintf(stderr, "wt: %.4f ct: %.4f mem: %ld mempeak: %ld\n", FP(wall_time) / 1000000.0, FP(cpu_time) / 1000000.0, FP(mem), FP(mempeak)); */
         pt_display_frame(&frame, 1, "< ");
@@ -554,6 +594,7 @@ ZEND_API void phptrace_execute_internal(zend_execute_data *execute_data, zend_fc
 
     if (do_trace) {
         PROFILING_END(FP(wall_time), FP(cpu_time), FP(mem), FP(mempeak));
+        phptrace_frame_set_retval(&frame, 1, execute_data, fci);
         /* send return */
         /* fprintf(stderr, "wt: %.4f ct: %.4f mem: %ld mempeak: %ld\n", FP(wall_time) / 1000000.0, FP(cpu_time) / 1000000.0, FP(mem), FP(mempeak)); */
         pt_display_frame(&frame, 1, "< ");
