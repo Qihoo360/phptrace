@@ -20,6 +20,7 @@ extern zend_module_entry phptrace_module_entry;
 
 #include <stdint.h>
 #include <sys/resource.h>
+#include <unistd.h>
 
 PHP_MINIT_FUNCTION(phptrace);
 PHP_MSHUTDOWN_FUNCTION(phptrace);
@@ -40,6 +41,8 @@ ZEND_BEGIN_MODULE_GLOBALS(phptrace)
 
     zend_bool       do_trace;
     zend_bool       do_stack;
+
+    pid_t           pid;            /* process id */
 
     uint32_t        level;          /* nesting level */
 

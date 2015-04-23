@@ -114,7 +114,7 @@ ZEND_GET_MODULE(phptrace)
 
 /* PHP_INI */
 PHP_INI_BEGIN()
-    STD_PHP_INI_ENTRY("phptrace.enable",    "0", PHP_INI_ALL, OnUpdateLong, enable, zend_phptrace_globals, phptrace_globals)
+    STD_PHP_INI_ENTRY("phptrace.enable",    "1", PHP_INI_SYSTEM, OnUpdateLong, enable, zend_phptrace_globals, phptrace_globals)
 PHP_INI_END()
 
 /* php_phptrace_init_globals */
@@ -126,6 +126,7 @@ static void php_phptrace_init_globals(zend_phptrace_globals *ptg)
     ptg->do_stack = 0;
 
     ptg->level = 0;
+    /* TODO init all globals */
 }
 
 
@@ -136,6 +137,7 @@ static void php_phptrace_init_globals(zend_phptrace_globals *ptg)
 
 PHP_MINIT_FUNCTION(phptrace)
 {
+    ZEND_INIT_MODULE_GLOBALS(phptrace, php_phptrace_init_globals, NULL);
     REGISTER_INI_ENTRIES();
 
     /* Save original executor */
@@ -156,7 +158,6 @@ PHP_MSHUTDOWN_FUNCTION(phptrace)
     UNREGISTER_INI_ENTRIES();
 
     if (PTG(enable)) {
-        /* TODO ini_set during runtime ? */
         /* Restore original executor */
         zend_execute_ex = phptrace_ori_execute_ex;
         zend_execute_internal = phptrace_ori_execute_internal;
@@ -168,6 +169,7 @@ PHP_MSHUTDOWN_FUNCTION(phptrace)
 PHP_RINIT_FUNCTION(phptrace)
 {
     PTG(level) = 0;
+    PTG(pid) = getpid();
 
     return SUCCESS;
 }
