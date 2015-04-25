@@ -9,6 +9,7 @@
 #include <stdint.h>
 #include <inttypes.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 
 #include "phptrace_protocol.h"
 #include "phptrace_mmap.h"
@@ -16,6 +17,8 @@
 typedef struct phptrace_ctrl_s {
     phptrace_segment_t ctrl_seg;
 } phptrace_ctrl_t;
+
+#define PT_CTRL_ACTIVE 0x01
 
 int phptrace_ctrl_init(phptrace_ctrl_t *c);
 void phptrace_ctrl_clean_all(phptrace_ctrl_t *c);
