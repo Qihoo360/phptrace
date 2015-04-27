@@ -40,8 +40,7 @@
 #define PHPTRACE_TRACE_FILENAME "phptrace.trace"
 #define PHPTRACE_CTRL_FILENAME "phptrace.ctrl"
 #define PHPTRACE_STATUS_FILENAME "phptrace.status"
-#define PHPTRACE_RECV_FILENAME "phptrace.recv"
-#define PHPTRACE_SEND_FILENAME "phptrace.send"
+#define PHPTRACE_COMM_FILENAME "phptrace.comm"
 
 
 /*We use PID_MAX+1 as the size of file phptrace.ctrl
