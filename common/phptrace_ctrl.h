@@ -20,6 +20,11 @@ typedef struct phptrace_ctrl_s {
 
 #define PT_CTRL_ACTIVE 0x01
 
+int phptrace_ctrl_needcreate(const char *filename, int pid_max);
+int phptrace_ctrl_create(phptrace_ctrl_t *c, const char *filename, int pid_max);
+int phptrace_ctrl_open(phptrace_ctrl_t *c, const char *filename);
+void phptrace_ctrl_close(phptrace_ctrl_t *c);
+
 int phptrace_ctrl_init(phptrace_ctrl_t *c);
 void phptrace_ctrl_clean_all(phptrace_ctrl_t *c);
 void phptrace_ctrl_clean_one(phptrace_ctrl_t *c, int pid);
