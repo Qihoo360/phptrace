@@ -1,79 +1,87 @@
-#include "phptrace_comm.h"
-
-
 /**
  * These functions doing a general propose communication between process
- * through a fixed-size memory (mmap).
- *
- * write example:
- * {
- *     phptrace_comm_handler ch;
- *     phptrace_comm_message *msg;
- * 
- *     phptrace_comm_create(&ch, filename, filesize);
- *
- *     msg = phptrace_comm_write_begin(&ch, your_source_len);
- *     memcpy(msg->data, your_source, msg->len);
- *     phptrace_comm_write_end(&ch, msg, PT_MSG_NORMAL);
- *
- *     phptrace_comm_close(&ch);
- * }
- *
- * read example:
- * {
- *     phptrace_comm_handler ch;
- *     phptrace_comm_message *msg;
- * 
- *     phptrace_comm_open(&ch, filename);
- *
- *     msg = phptrace_comm_read(&ch);
- *     if (msg->type != PT_MSG_EMPTY) {
- *         handle_message();
- *         phptrace_comm_next(&ch);
- *     }
- *
- *     phptrace_comm_close(&ch);
- * }
+ * through a fixed-size memory (mmap). And provide some socket like interface.
  */
 
 
-int phptrace_comm_create(phptrace_comm_handler *handler, const char *filename, size_t size)
+#include "phptrace_comm.h"
+
+
+int phptrace_comm_screate(phptrace_comm_socket *sock, const char *filename, int crossover, size_t send_size, size_t recv_size)
 {
-    handler->seg = phptrace_mmap_create(filename, size);
-    if (handler->seg.shmaddr == MAP_FAILED) {
+    void *p;
+    phptrace_comm_socket_meta *meta;
+
+    sock->seg = phptrace_mmap_create(filename, sizeof(phptrace_comm_socket_meta) + send_size + recv_size);
+    if (sock->seg.shmaddr == MAP_FAILED) {
         return -1;
     }
-    phptrace_comm_init(handler);
+
+    /* Init meta info */
+    meta = (phptrace_comm_socket_meta *) sock->seg.shmaddr;
+    meta->send_size = send_size;
+    meta->recv_size = recv_size;
+    p = sock->seg.shmaddr + sizeof(phptrace_comm_socket_meta);
+
+    /* Attach handler */
+    if (crossover) {
+        phptrace_comm_init(&sock->recv_handler, p, meta->send_size);
+        phptrace_comm_init(&sock->send_handler, p + meta->send_size, meta->recv_size);
+    } else {
+        phptrace_comm_init(&sock->send_handler, p, meta->send_size);
+        phptrace_comm_init(&sock->recv_handler, p + meta->send_size, meta->recv_size);
+    }
+
     return 0;
 }
 
-int phptrace_comm_open(phptrace_comm_handler *handler, const char *filename)
+int phptrace_comm_sopen(phptrace_comm_socket *sock, const char *filename, int crossover)
 {
-    handler->seg = phptrace_mmap_write(filename);
-    if (handler->seg.shmaddr == MAP_FAILED) {
+    void *p;
+    phptrace_comm_socket_meta *meta;
+
+    sock->seg = phptrace_mmap_write(filename);
+    if (sock->seg.shmaddr == MAP_FAILED) {
         return -1;
     }
-    phptrace_comm_init(handler);
+
+    /* Init meta info */
+    meta = (phptrace_comm_socket_meta *) sock->seg.shmaddr;
+    p = sock->seg.shmaddr + sizeof(phptrace_comm_socket_meta);
+
+    /* Attach handler */
+    if (crossover) {
+        phptrace_comm_init(&sock->recv_handler, p, meta->send_size);
+        phptrace_comm_init(&sock->send_handler, p + meta->send_size, meta->recv_size);
+    } else {
+        phptrace_comm_init(&sock->send_handler, p, meta->send_size);
+        phptrace_comm_init(&sock->recv_handler, p + meta->send_size, meta->recv_size);
+    }
+
     return 0;
 }
 
-void phptrace_comm_init(phptrace_comm_handler *handler)
+void phptrace_comm_sclose(phptrace_comm_socket *sock)
+{
+    phptrace_comm_uninit(&sock->send_handler);
+    phptrace_comm_uninit(&sock->recv_handler);
+
+    phptrace_unmap(&sock->seg);
+}
+
+void phptrace_comm_init(phptrace_comm_handler *handler, void *head, size_t size)
 {
     /* init handler element */
-    handler->size = handler->seg.size;
-    handler->head = handler->seg.shmaddr;
-    handler->tail = handler->seg.shmaddr + handler->seg.size;
+    handler->size = size;
+    handler->head = head;
     handler->current = handler->head;
     handler->sequence = 0;
 }
 
-void phptrace_comm_close(phptrace_comm_handler *handler)
+void phptrace_comm_uninit(phptrace_comm_handler *handler)
 {
-    /* clear handler element */
     handler->size = handler->sequence = 0;
-    handler->head = handler->tail = handler->current = NULL;
-
-    phptrace_unmap(&handler->seg);
+    handler->head = handler->current = NULL;
 }
 
 void phptrace_comm_clear(phptrace_comm_handler *handler)
@@ -104,7 +112,7 @@ phptrace_comm_message *phptrace_comm_next(phptrace_comm_handler *handler)
  */
 phptrace_comm_message *phptrace_comm_write_begin(phptrace_comm_handler *handler, size_t size)
 {
-    phptrace_comm_message *msg;
+    phptrace_comm_message *msg = (phptrace_comm_message *) handler->current;
 
     if (size > handler->size) {
         return NULL;
@@ -112,15 +120,13 @@ phptrace_comm_message *phptrace_comm_write_begin(phptrace_comm_handler *handler,
 
     /* rotate, because no space to hold message */
     if (phptrace_comm_freesize(handler) < size) {
-        msg = (phptrace_comm_message *) handler->current;
         msg->seq = handler->sequence;
         msg->type = PT_MSG_ROTATE;
         msg->len = 0;
 
-        handler->current = handler->head;
+        msg = (phptrace_comm_message *) (handler->current = handler->head);
     }
 
-    msg = (phptrace_comm_message *) handler->current;
     msg->seq = handler->sequence;
     msg->type = PT_MSG_EMPTY;
     msg->len = size;
@@ -128,8 +134,9 @@ phptrace_comm_message *phptrace_comm_write_begin(phptrace_comm_handler *handler,
     return msg;
 }
 
-void phptrace_comm_write_end(phptrace_comm_handler *handler, phptrace_comm_message *msg, unsigned int type)
+void phptrace_comm_write_end(phptrace_comm_handler *handler, unsigned int type, phptrace_comm_message *msg)
 {
+    /* set message type, make it readable */
     msg->type = type;
 
     phptrace_comm_next(handler);
@@ -137,14 +144,14 @@ void phptrace_comm_write_end(phptrace_comm_handler *handler, phptrace_comm_messa
     /* reset sequence */
     if (handler->sequence > SEQ_MAX) {
         handler->sequence = 0;
-        phptrace_comm_write_end(handler, phptrace_comm_write_begin(handler, 0), PT_MSG_RESEQ);
+        phptrace_comm_write_end(handler, PT_MSG_RESEQ, phptrace_comm_write_begin(handler, 0));
     }
 
     phptrace_comm_write_begin(handler, 0); /* make next block empty */
 }
 
 /**
- * Quick-way to write from a alloced buffer
+ * Quick way to write from a alloced buffer
  */
 phptrace_comm_message *phptrace_comm_write(phptrace_comm_handler *handler, unsigned int type, void *buf, size_t size)
 {
@@ -155,7 +162,7 @@ phptrace_comm_message *phptrace_comm_write(phptrace_comm_handler *handler, unsig
         return NULL;
     }
     memcpy(msg->data, buf, size);
-    phptrace_comm_write_end(handler, msg, type);
+    phptrace_comm_write_end(handler, type, msg);
 
     return msg;
 }
@@ -165,23 +172,35 @@ phptrace_comm_message *phptrace_comm_write(phptrace_comm_handler *handler, unsig
  * Reading propose
  * --------------------
  */
-phptrace_comm_message *phptrace_comm_read(phptrace_comm_handler *handler)
+phptrace_comm_message *phptrace_comm_read(phptrace_comm_handler *handler, int movenext)
 {
     phptrace_comm_message *msg = (phptrace_comm_message *) handler->current;
 
-    /* handle sequence reset */
-    if (msg->type == PT_MSG_RESEQ && msg->seq == 0) {
+    /* Handle special type */
+    if (msg->type == PT_MSG_RESEQ) {
+        /* Sequence reset */
         handler->sequence = 0;
+        phptrace_comm_next(handler);
+
+        return phptrace_comm_read(handler, movenext);
+    } else if (msg->type == PT_MSG_ROTATE) {
+        /* Rotate */
+        handler->current = handler->head;
+        msg = (phptrace_comm_message *) handler->current;
     }
 
-    if (msg->seq != handler->sequence && msg->type != PT_MSG_EMPTY) {
+    /* Invalid type */
+    if (msg->type == PT_MSG_EMPTY) {
+        /* Empty */
+        return msg;
+    } else if (msg->seq != handler->sequence) {
+        /* Sequence error */
         return NULL;
     }
 
-    /* handle rotate */
-    if (msg->type == PT_MSG_ROTATE) {
-        handler->current = handler->head;
+    if (movenext) {
+        phptrace_comm_next(handler);
     }
 
-    return (phptrace_comm_message *) handler->current;
+    return msg;
 }
