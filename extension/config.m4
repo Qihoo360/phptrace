@@ -41,7 +41,7 @@ if test "$PHP_PHPTRACE" != "no"; then
   dnl fi
 
   dnl # --with-phptrace -> add include path
-  dnl PHP_ADD_INCLUDE($PHPTRACE_DIR/include)
+  PHP_ADD_INCLUDE(../common)
 
   dnl # --with-phptrace -> check for lib and symbol presence
   dnl LIBNAME=phptrace # you may want to change this
@@ -59,5 +59,11 @@ if test "$PHP_PHPTRACE" != "no"; then
   dnl
   dnl PHP_SUBST(PHPTRACE_SHARED_LIBADD)
 
-  PHP_NEW_EXTENSION(phptrace, phptrace.c, $ext_shared)
+  dnl FIXME try using ../common
+  PHP_NEW_EXTENSION(phptrace, phptrace.c \
+      common/phptrace_comm.c \
+      common/phptrace_ctrl.c \
+      common/phptrace_mmap.c \
+      common/phptrace_type.c \
+      common/sds/sds.c, $ext_shared)
 fi
