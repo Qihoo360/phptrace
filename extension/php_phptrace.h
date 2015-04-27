@@ -18,9 +18,11 @@ extern zend_module_entry phptrace_module_entry;
 #include "TSRM.h"
 #endif
 
-#include <stdint.h>
-#include <sys/resource.h>
-#include <unistd.h>
+#include "phptrace_comm.h"
+#include "phptrace_ctrl.h"
+#include "phptrace_protocol.h"
+#include "phptrace_time.h"
+#include "phptrace_type.h"
 
 PHP_MINIT_FUNCTION(phptrace);
 PHP_MSHUTDOWN_FUNCTION(phptrace);
@@ -28,30 +30,30 @@ PHP_RINIT_FUNCTION(phptrace);
 PHP_RSHUTDOWN_FUNCTION(phptrace);
 PHP_MINFO_FUNCTION(phptrace);
 
-PHP_FUNCTION(phptrace_stack);
-PHP_FUNCTION(phptrace_begin);
-PHP_FUNCTION(phptrace_end);
-
 /**
  * Declare any global variables you may need between the BEGIN and END macros
  * here:
  */
 ZEND_BEGIN_MODULE_GLOBALS(phptrace)
-    zend_bool       enable;
+    zend_bool               enable;
+    zend_bool               do_trace;       /* toggle of trace */
 
-    zend_bool       do_trace;
-    zend_bool       do_stack;
+    char                    *data_dir;      /* data path, should be writable */
 
-    pid_t           pid;            /* process id */
+    phptrace_ctrl_t         ctrl;           /* ctrl module */
+    char                    ctrl_file[256]; /* ctrl filename */
 
-    uint32_t        level;          /* nesting level */
+    phptrace_comm_socket    comm;           /* comm module */
+    char                    comm_file[256]; /* comm filename */
+    long                    send_size;      /* send handler size */
+    long                    recv_size;      /* recv handler size */
 
-    int64_t         pb_mem;         /* begin memory usage */
-    int64_t         pb_mempeak;     /* begin memory peak usage */
-    struct rusage   pb_ru;          /* begin rusage */
-    struct timeval  pb_tv;          /* begin gettimeofday */
-    struct rusage   pe_ru;          /* end rusage */
-    struct timeval  pe_tv;          /* end gettimeofday */
+    pid_t                   pid;            /* process id */
+    uint32_t                level;          /* nesting level */
+
+    uint32_t                ping;           /* last ping time (second) */
+    /* TODO move timeout to ini setting */
+    uint32_t                idle_timeout;   /* idle timeout, for current - last ping */
 ZEND_END_MODULE_GLOBALS(phptrace)
 
 
