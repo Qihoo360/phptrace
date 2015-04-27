@@ -5,6 +5,13 @@
 #include <sys/resource.h>
 #include <sys/time.h>
 
+static inline uint32_t phptrace_time_sec()
+{
+    struct timeval tv;
+    gettimeofday(&tv, 0);
+    return (uint32_t)tv.tv_sec;
+}
+
 static inline uint64_t phptrace_time_usec()
 {
     struct timeval tv;
