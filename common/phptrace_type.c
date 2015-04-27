@@ -46,6 +46,11 @@ size_t phptrace_type_len_frame(phptrace_frame *frame)
     size += sizeof(int64_t);                                  /* mem */
     size += sizeof(int64_t);                                  /* mempeak */
 
+    size += sizeof(uint64_t);                                 /* wall_time */
+    size += sizeof(uint64_t);                                 /* cpu_time */
+    size += sizeof(int64_t);                                  /* mem */
+    size += sizeof(int64_t);                                  /* mempeak */
+
     return size;
 }
 
@@ -70,10 +75,15 @@ size_t phptrace_type_pack_frame(phptrace_frame *frame, char *buf)
     }
     PACK_SDS(buf, frame->retval);
 
-    PACK(buf, uint64_t, frame->profile.wall_time);
-    PACK(buf, uint64_t, frame->profile.cpu_time);
-    PACK(buf, uint64_t, frame->profile.mem);
-    PACK(buf, uint64_t, frame->profile.mempeak);
+    PACK(buf, uint64_t, frame->entry.wall_time);
+    PACK(buf, uint64_t, frame->entry.cpu_time);
+    PACK(buf, int64_t,  frame->entry.mem);
+    PACK(buf, int64_t,  frame->entry.mempeak);
+
+    PACK(buf, uint64_t, frame->exit.wall_time);
+    PACK(buf, uint64_t, frame->exit.cpu_time);
+    PACK(buf, int64_t,  frame->exit.mem);
+    PACK(buf, int64_t,  frame->exit.mempeak);
 
     return buf - ori;
 }
@@ -99,10 +109,15 @@ phptrace_frame *phptrace_type_unpack_frame(phptrace_frame *frame, char *buf)
     }
     UNPACK_SDS(buf, frame->retval);
 
-    UNPACK(buf, uint64_t, frame->profile.wall_time);
-    UNPACK(buf, uint64_t, frame->profile.cpu_time);
-    UNPACK(buf, uint64_t, frame->profile.mem);
-    UNPACK(buf, uint64_t, frame->profile.mempeak);
+    UNPACK(buf, uint64_t, frame->entry.wall_time);
+    UNPACK(buf, uint64_t, frame->entry.cpu_time);
+    UNPACK(buf, int64_t,  frame->entry.mem);
+    UNPACK(buf, int64_t,  frame->entry.mempeak);
+
+    UNPACK(buf, uint64_t, frame->exit.wall_time);
+    UNPACK(buf, uint64_t, frame->exit.cpu_time);
+    UNPACK(buf, int64_t,  frame->exit.mem);
+    UNPACK(buf, int64_t,  frame->exit.mempeak);
 
     return frame;
 }
@@ -126,7 +141,8 @@ int main(void)
     frame.args[1] = sdsnew("world");
     frame.args[2] = sdsnew("true");
     /* frame.retval = sdsnew("false"); */
-    frame.profile.mem = 654321;
+    frame.entry.mem = 654321;
+    frame.exit.wall_time = 654321;
     printf("frame->arg_count: %d\n", frame.arg_count);
 
     /* len */
@@ -146,5 +162,7 @@ int main(void)
     printf("frame->args[0]: %s\n", frame.args[0]);
     printf("frame->args[1]: %s\n", frame.args[1]);
     printf("frame->args[2]: %s\n", frame.args[2]);
+    printf("frame->entry.mem: %ld\n", frame.entry.mem);
+    printf("frame->exit.wall_time: %ld\n", frame.exit.wall_time);
 }
 #endif
