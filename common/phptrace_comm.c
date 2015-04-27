@@ -67,6 +67,8 @@ void phptrace_comm_sclose(phptrace_comm_socket *sock)
     phptrace_comm_uninit(&sock->recv_handler);
 
     phptrace_unmap(&sock->seg);
+    sock->seg.shmaddr = MAP_FAILED;
+    sock->seg.size = 0;
 }
 
 void phptrace_comm_init(phptrace_comm_handler *handler, void *head, size_t size)
@@ -161,7 +163,9 @@ phptrace_comm_message *phptrace_comm_write(phptrace_comm_handler *handler, unsig
     if (msg == NULL) {
         return NULL;
     }
-    memcpy(msg->data, buf, size);
+    if (buf != NULL && size > 0) {
+        memcpy(msg->data, buf, size);
+    }
     phptrace_comm_write_end(handler, type, msg);
 
     return msg;
