@@ -59,11 +59,14 @@ if test "$PHP_PHPTRACE" != "no"; then
   dnl
   dnl PHP_SUBST(PHPTRACE_SHARED_LIBADD)
 
-  dnl FIXME try using ../common
-  PHP_NEW_EXTENSION(phptrace, phptrace.c \
-      common/phptrace_comm.c \
-      common/phptrace_ctrl.c \
-      common/phptrace_mmap.c \
-      common/phptrace_type.c \
-      common/sds/sds.c, $ext_shared)
+  dnl configure can't use ".." as a source filename, so we make a link here
+  ln -sf ../common ./
+
+  PHPTRACE_SOURCES="common/phptrace_comm.c \
+                    common/phptrace_ctrl.c \
+                    common/phptrace_mmap.c \
+                    common/phptrace_type.c \
+                    common/sds/sds.c"
+
+  PHP_NEW_EXTENSION(phptrace, phptrace.c $PHPTRACE_SOURCES, $ext_shared)
 fi
