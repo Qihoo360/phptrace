@@ -29,18 +29,17 @@
     p.mempeak = zend_memory_peak_usage(0 TSRMLS_CC); \
 } while (0);
 
-static void pt_frame_build(phptrace_frame *frame, zend_execute_data *execute_data, zend_bool internal TSRMLS_DC);
+static void pt_frame_build(phptrace_frame *frame, zend_execute_data *execute_data, zend_op_array *op_array, zend_bool internal TSRMLS_DC);
 static void pt_frame_destroy(phptrace_frame *frame TSRMLS_DC);
 static void pt_frame_set_retval(phptrace_frame *frame, zend_bool internal, zend_execute_data *ex, zend_fcall_info *fci TSRMLS_DC);
 static void pt_fname_display(phptrace_frame *frame, zend_bool indent, const char *format, ...);
 static sds pt_repr_zval(zval *zv, int limit TSRMLS_DC);
 static void pt_display_backtrace(zend_execute_data *ex, zend_bool internal TSRMLS_DC);
 
-static void (*pt_ori_execute_ex)(zend_execute_data *execute_data TSRMLS_DC);
-static void (*pt_ori_execute_internal)(zend_execute_data *execute_data_ptr, zend_fcall_info *fci, int return_value_used TSRMLS_DC);
-ZEND_API void phptrace_execute_ex(zend_execute_data *execute_data TSRMLS_DC);
-ZEND_API void phptrace_execute_internal(zend_execute_data *execute_data, zend_fcall_info *fci, int return_value_used TSRMLS_DC);
-ZEND_API void phptrace_execute_core(int internal, zend_execute_data *execute_data, zend_fcall_info *fci, int rvu TSRMLS_DC);
+static void (*pt_ori_execute)(zend_op_array *op_array TSRMLS_DC);
+static void (*pt_ori_execute_internal)(zend_execute_data *execute_data_ptr, int return_value_used TSRMLS_DC);
+ZEND_API void phptrace_execute(zend_op_array *op_array TSRMLS_DC);
+ZEND_API void phptrace_execute_internal(zend_execute_data *execute_data, int return_value_used TSRMLS_DC);
 
 
 /**
@@ -124,9 +123,9 @@ PHP_MINIT_FUNCTION(phptrace)
 
     /* Replace executor */
     PTD("Replace executor");
-    pt_ori_execute_ex = zend_execute_ex;
+    pt_ori_execute = zend_execute;
     pt_ori_execute_internal = zend_execute_internal;
-    zend_execute_ex = phptrace_execute_ex;
+    zend_execute = phptrace_execute;
     zend_execute_internal = phptrace_execute_internal;
 
     /* Open ctrl module */
@@ -156,7 +155,7 @@ PHP_MSHUTDOWN_FUNCTION(phptrace)
 
     /* Restore original executor */
     PTD("Restore executor");
-    zend_execute_ex = pt_ori_execute_ex;
+    zend_execute = pt_ori_execute;
     zend_execute_internal = pt_ori_execute_internal;
 
     /* Close ctrl module */
@@ -199,7 +198,7 @@ PHP_MINFO_FUNCTION(phptrace)
  * PHP-Trace Function
  * --------------------
  */
-void pt_frame_build(phptrace_frame *frame, zend_execute_data *execute_data, zend_bool internal TSRMLS_DC)
+void pt_frame_build(phptrace_frame *frame, zend_execute_data *execute_data, zend_op_array *op_array, zend_bool internal TSRMLS_DC)
 {
     int i;
     zval **args;
@@ -218,10 +217,14 @@ void pt_frame_build(phptrace_frame *frame, zend_execute_data *execute_data, zend
      * point, so we switch to previous data. The internal function is a
      * exception because it's no need to execute by op_array.
      */
-    if (!internal && ex->prev_execute_data) {
-        ex = ex->prev_execute_data;
+    if (!execute_data) {
+        return;
     }
-    zf = ex->function_state.function;
+    if (!internal) {
+        zf = (zend_function *) op_array;
+    } else {
+        zf = ex->function_state.function;
+    }
 
     /* names */
     if (zf->common.function_name) {
@@ -356,7 +359,7 @@ void pt_frame_set_retval(phptrace_frame *frame, zend_bool internal, zend_execute
         if (fci != NULL) {
             retval = *fci->retval_ptr_ptr;
         } else {
-            retval = EX_TMP_VAR(ex, ex->opline->result.var)->var.ptr;
+            retval = ((temp_variable *)((char *) ex->Ts + ex->opline->result.var))->var.ptr;
         }
     } else if (*EG(return_value_ptr_ptr)) {
         retval = *EG(return_value_ptr_ptr);
@@ -471,6 +474,7 @@ done:
 
 static void pt_display_backtrace(zend_execute_data *ex, zend_bool internal TSRMLS_DC)
 {
+#if 0
     int num = 0;
     phptrace_frame frame;
 
@@ -486,6 +490,7 @@ static void pt_display_backtrace(zend_execute_data *ex, zend_bool internal TSRML
 
         ex = ex->prev_execute_data;
     }
+#endif
 }
 
 
@@ -493,17 +498,7 @@ static void pt_display_backtrace(zend_execute_data *ex, zend_bool internal TSRML
  * PHP-Trace Executor Replacement
  * --------------------
  */
-ZEND_API void phptrace_execute_ex(zend_execute_data *execute_data TSRMLS_DC)
-{
-    phptrace_execute_core(0, execute_data, NULL, 0 TSRMLS_CC);
-}
-
-ZEND_API void phptrace_execute_internal(zend_execute_data *execute_data, zend_fcall_info *fci, int return_value_used TSRMLS_DC)
-{
-    phptrace_execute_core(1, execute_data, fci, return_value_used TSRMLS_CC);
-}
-
-ZEND_API void phptrace_execute_core(int internal, zend_execute_data *execute_data, zend_fcall_info *fci, int rvu TSRMLS_DC)
+ZEND_API void phptrace_execute_core(int internal, zend_execute_data *execute_data, zend_op_array *op_array, int rvu TSRMLS_DC)
 {
     zend_bool do_trace;
     zval *retval = NULL;
@@ -571,7 +566,7 @@ exec:
     PTG(level)++;
 
     if (do_trace) {
-        pt_frame_build(&frame, execute_data, internal TSRMLS_CC);
+        pt_frame_build(&frame, execute_data, op_array, internal TSRMLS_CC);
 
         /* Send frame message */
         if (0) {
@@ -592,18 +587,18 @@ exec:
     /* call original */
     if (internal) {
         if (pt_ori_execute_internal) {
-            pt_ori_execute_internal(execute_data, fci, rvu TSRMLS_CC);
+            pt_ori_execute_internal(execute_data, rvu TSRMLS_CC);
         } else {
-            execute_internal(execute_data, fci, rvu TSRMLS_CC);
+            execute_internal(execute_data, rvu TSRMLS_CC);
         }
     } else {
-        pt_ori_execute_ex(execute_data TSRMLS_CC);
+        pt_ori_execute(op_array TSRMLS_CC);
     }
 
     if (do_trace) {
         PROFILING_SET(frame.exit);
 
-        pt_frame_set_retval(&frame, internal, execute_data, fci TSRMLS_CC);
+        pt_frame_set_retval(&frame, internal, execute_data, NULL TSRMLS_CC);
 
         /* Send frame message */
         if (0) {
@@ -622,4 +617,14 @@ exec:
     }
 
     PTG(level)--;
+}
+
+ZEND_API void phptrace_execute(zend_op_array *op_array TSRMLS_DC)
+{
+    phptrace_execute_core(0, NULL, op_array, 0 TSRMLS_CC);
+}
+
+ZEND_API void phptrace_execute_internal(zend_execute_data *execute_data, int return_value_used TSRMLS_DC)
+{
+    phptrace_execute_core(1, execute_data, NULL, return_value_used TSRMLS_CC);
 }
