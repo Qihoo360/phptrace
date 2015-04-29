@@ -6,6 +6,7 @@
 #include "php_ini.h"
 #include "ext/standard/info.h"
 #include "php_phptrace.h"
+#include "zend_extensions.h"
 
 
 /**
@@ -284,11 +285,19 @@ void pt_frame_build(phptrace_frame *frame, zend_execute_data *ex, zend_op_array 
         int add_filename = 1;
         long ev = 0;
 
+#if ZEND_EXTENSION_API_NO < 220100525
+        if (ex) {
+            ev = ex->opline->op2.u.constant.value.lval;
+        } else if (op_array && op_array->opcodes) {
+            ev = op_array->opcodes->op2.u.constant.value.lval;
+        }
+#else
         if (ex) {
             ev = ex->opline->extended_value;
         } else if (op_array && op_array->opcodes) {
             ev = op_array->opcodes->extended_value;
         }
+#endif
 
         /* special user function */
         switch (ev) {
@@ -392,7 +401,9 @@ void pt_frame_set_retval(phptrace_frame *frame, zend_bool internal, zend_execute
     zval *retval;
 
     if (internal) {
-#if PHP_VERSION_ID < 50500
+#if PHP_VERSION_ID < 50400
+        retval = ((temp_variable *)((char *) ex->Ts + ex->opline->result.u.var))->var.ptr;
+#elif PHP_VERSION_ID < 50500
         retval = ((temp_variable *)((char *) ex->Ts + ex->opline->result.var))->var.ptr;
 #else
         if (fci != NULL) {
