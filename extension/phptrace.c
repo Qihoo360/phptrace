@@ -64,7 +64,11 @@ static int le_phptrace;
  * Every user visible function must have an entry in phptrace_functions[].
  */
 const zend_function_entry phptrace_functions[] = {
+#ifdef PHP_FE_END
     PHP_FE_END  /* Must be the last line in phptrace_functions[] */
+#else
+    { NULL, NULL, NULL, 0, 0 }
+#endif
 };
 
 zend_module_entry phptrace_module_entry = {
@@ -335,16 +339,24 @@ void pt_frame_build(phptrace_frame *frame, zend_execute_data *ex, zend_op_array 
     }
 
     /* args */
+    frame->arg_count = 0;
+    frame->args = NULL;
+#if PHP_VERSION_ID < 50300
+    if (EG(argument_stack).top >= 2) {
+        frame->arg_count = (int)(zend_uintptr_t) *(EG(argument_stack).top_element - 2);
+        args = (zval **)(EG(argument_stack).top_element - 2 - frame->arg_count);
+    }
+#else
     if (ex && ex->function_state.arguments) {
         frame->arg_count = (int)(zend_uintptr_t) *(ex->function_state.arguments);
         args = (zval **)(ex->function_state.arguments - frame->arg_count);
+    }
+#endif
+    if (frame->arg_count > 0) {
         frame->args = calloc(frame->arg_count, sizeof(sds));
         for (i = 0; i < frame->arg_count; i++) {
             frame->args[i] = pt_repr_zval(args[i], 0 TSRMLS_CC);
         }
-    } else {
-        frame->arg_count = 0;
-        frame->args = NULL;
     }
 
     /* lineno */
