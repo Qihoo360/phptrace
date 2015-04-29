@@ -36,10 +36,17 @@ static void pt_fname_display(phptrace_frame *frame, zend_bool indent, const char
 static sds pt_repr_zval(zval *zv, int limit TSRMLS_DC);
 static void pt_display_backtrace(zend_execute_data *ex, zend_bool internal TSRMLS_DC);
 
+#if PHP_VERSION_ID < 50500
 static void (*pt_ori_execute)(zend_op_array *op_array TSRMLS_DC);
 static void (*pt_ori_execute_internal)(zend_execute_data *execute_data_ptr, int return_value_used TSRMLS_DC);
 ZEND_API void phptrace_execute(zend_op_array *op_array TSRMLS_DC);
 ZEND_API void phptrace_execute_internal(zend_execute_data *execute_data, int return_value_used TSRMLS_DC);
+#else
+static void (*pt_ori_execute_ex)(zend_execute_data *execute_data TSRMLS_DC);
+static void (*pt_ori_execute_internal)(zend_execute_data *execute_data_ptr, zend_fcall_info *fci, int return_value_used TSRMLS_DC);
+ZEND_API void phptrace_execute_ex(zend_execute_data *execute_data TSRMLS_DC);
+ZEND_API void phptrace_execute_internal(zend_execute_data *execute_data, zend_fcall_info *fci, int return_value_used TSRMLS_DC);
+#endif
 
 
 /**
@@ -123,9 +130,14 @@ PHP_MINIT_FUNCTION(phptrace)
 
     /* Replace executor */
     PTD("Replace executor");
+#if PHP_VERSION_ID < 50500
     pt_ori_execute = zend_execute;
-    pt_ori_execute_internal = zend_execute_internal;
     zend_execute = phptrace_execute;
+#else
+    pt_ori_execute_ex = zend_execute_ex;
+    zend_execute_ex = phptrace_execute_ex;
+#endif
+    pt_ori_execute_internal = zend_execute_internal;
     zend_execute_internal = phptrace_execute_internal;
 
     /* Open ctrl module */
@@ -155,7 +167,11 @@ PHP_MSHUTDOWN_FUNCTION(phptrace)
 
     /* Restore original executor */
     PTD("Restore executor");
+#if PHP_VERSION_ID < 50500
     zend_execute = pt_ori_execute;
+#else
+    zend_execute_ex = pt_ori_execute_ex;
+#endif
     zend_execute_internal = pt_ori_execute_internal;
 
     /* Close ctrl module */
@@ -207,12 +223,24 @@ void pt_frame_build(phptrace_frame *frame, zend_execute_data *ex, zend_op_array 
     /* init */
     memset(frame, 0, sizeof(phptrace_frame));
 
+#if PHP_VERSION_ID < 50500
     if (internal || ex) {
         op_array = ex->op_array;
         zf = ex->function_state.function;
     } else {
         zf = (zend_function *) op_array;
     }
+#else
+    /**
+     * Current execute_data is the data going to be executed not the entry
+     * point, so we switch to previous data. The internal function is a
+     * exception because it's no need to execute by op_array.
+     */
+    if (!internal && ex->prev_execute_data) {
+        ex = ex->prev_execute_data;
+    }
+    zf = ex->function_state.function;
+#endif
 
     /* internal */
     frame->internal = internal;
@@ -318,6 +346,11 @@ void pt_frame_build(phptrace_frame *frame, zend_execute_data *ex, zend_op_array 
         frame->lineno = ex->prev_execute_data->opline->lineno; /* try using prev */
     } else if (op_array && op_array->opcodes) {
         frame->lineno = op_array->opcodes->lineno;
+    /**
+     * TODO use definition lineno when entry lineno is null ?
+     * } else if (ex != EG(current_execute_data) && EG(current_execute_data)->opline) {
+     *     frame->lineno = EG(current_execute_data)->opline->lineno; [> try using current <]
+     */
     } else {
         frame->lineno = 0;
     }
@@ -329,6 +362,10 @@ void pt_frame_build(phptrace_frame *frame, zend_execute_data *ex, zend_op_array 
         frame->filename = sdsnew(ex->prev_execute_data->op_array->filename); /* try using prev */
     } else if (op_array) {
         frame->filename = sdsnew(op_array->filename);
+    /**
+     * } else if (ex != EG(current_execute_data) && EG(current_execute_data)->op_array) {
+     *     frame->filename = sdsnew(EG(current_execute_data)->op_array->filename); [> try using current <]
+     */
     } else {
         frame->filename = NULL;
     }
@@ -355,7 +392,15 @@ void pt_frame_set_retval(phptrace_frame *frame, zend_bool internal, zend_execute
     zval *retval;
 
     if (internal) {
+#if PHP_VERSION_ID < 50500
         retval = ((temp_variable *)((char *) ex->Ts + ex->opline->result.var))->var.ptr;
+#else
+        if (fci != NULL) {
+            retval = *fci->retval_ptr_ptr;
+        } else {
+            retval = EX_TMP_VAR(ex, ex->opline->result.var)->var.ptr;
+        }
+#endif
     } else if (*EG(return_value_ptr_ptr)) {
         retval = *EG(return_value_ptr_ptr);
     }
@@ -493,8 +538,15 @@ static void pt_display_backtrace(zend_execute_data *ex, zend_bool internal TSRML
  * PHP-Trace Executor Replacement
  * --------------------
  */
+#if PHP_VERSION_ID < 50500
 ZEND_API void phptrace_execute_core(int internal, zend_execute_data *execute_data, zend_op_array *op_array, int rvu TSRMLS_DC)
 {
+    zend_fcall_info *fci = NULL;
+#else
+ZEND_API void phptrace_execute_core(int internal, zend_execute_data *execute_data, zend_fcall_info *fci, int rvu TSRMLS_DC)
+{
+    zend_op_array *op_array = NULL;
+#endif
     zend_bool do_trace;
     zval *retval = NULL;
     phptrace_comm_message *msg;
@@ -580,6 +632,7 @@ exec:
     }
 
     /* call original */
+#if PHP_VERSION_ID < 50500
     if (internal) {
         if (pt_ori_execute_internal) {
             pt_ori_execute_internal(execute_data, rvu TSRMLS_CC);
@@ -589,11 +642,22 @@ exec:
     } else {
         pt_ori_execute(op_array TSRMLS_CC);
     }
+#else
+    if (internal) {
+        if (pt_ori_execute_internal) {
+            pt_ori_execute_internal(execute_data, fci, rvu TSRMLS_CC);
+        } else {
+            execute_internal(execute_data, fci, rvu TSRMLS_CC);
+        }
+    } else {
+        pt_ori_execute_ex(execute_data TSRMLS_CC);
+    }
+#endif
 
     if (do_trace) {
         PROFILING_SET(frame.exit);
 
-        pt_frame_set_retval(&frame, internal, execute_data, NULL TSRMLS_CC);
+        pt_frame_set_retval(&frame, internal, execute_data, fci TSRMLS_CC);
 
         /* Send frame message */
         if (0) {
@@ -614,12 +678,24 @@ exec:
     PTG(level)--;
 }
 
+#if PHP_VERSION_ID < 50500
 ZEND_API void phptrace_execute(zend_op_array *op_array TSRMLS_DC)
 {
     phptrace_execute_core(0, EG(current_execute_data), op_array, 0 TSRMLS_CC);
+#else
+ZEND_API void phptrace_execute_ex(zend_execute_data *execute_data TSRMLS_DC)
+{
+    phptrace_execute_core(0, execute_data, NULL, 0 TSRMLS_CC);
+#endif
 }
 
+#if PHP_VERSION_ID < 50500
 ZEND_API void phptrace_execute_internal(zend_execute_data *execute_data, int return_value_used TSRMLS_DC)
 {
     phptrace_execute_core(1, execute_data, NULL, return_value_used TSRMLS_CC);
+#else
+ZEND_API void phptrace_execute_internal(zend_execute_data *execute_data, zend_fcall_info *fci, int return_value_used TSRMLS_DC)
+{
+    phptrace_execute_core(1, execute_data, fci, return_value_used TSRMLS_CC);
+#endif
 }
