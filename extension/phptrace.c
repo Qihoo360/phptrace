@@ -23,6 +23,16 @@
 #define PING_UPDATE() PTG(ping) = phptrace_time_sec()
 #define PING_TIMEOUT() (phptrace_time_sec() > PTG(ping) + PTG(idle_timeout))
 
+#if PHP_VERSION_ID < 50200
+/**
+ * AG(allocated_memory) is the value we want, but it available only when
+ * MEMORY_LIMIT is ON during PHP compilation, so use zero instead for safe.
+ */
+#define zend_memory_usage(args...) 0
+#define zend_memory_peak_usage(args...) 0
+typedef unsigned long zend_uintptr_t;
+#endif
+
 #define PROFILING_SET(p) do { \
     p.wall_time = phptrace_time_usec(); \
     p.cpu_time = phptrace_time_usec(); \
