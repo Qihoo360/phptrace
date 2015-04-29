@@ -29,7 +29,7 @@
     p.mempeak = zend_memory_peak_usage(0 TSRMLS_CC); \
 } while (0);
 
-static void pt_frame_build(phptrace_frame *frame, zend_execute_data *execute_data, zend_op_array *op_array, zend_bool internal TSRMLS_DC);
+static void pt_frame_build(phptrace_frame *frame, zend_execute_data *ex, zend_op_array *op_array, zend_bool internal TSRMLS_DC);
 static void pt_frame_destroy(phptrace_frame *frame TSRMLS_DC);
 static void pt_frame_set_retval(phptrace_frame *frame, zend_bool internal, zend_execute_data *ex, zend_fcall_info *fci TSRMLS_DC);
 static void pt_fname_display(phptrace_frame *frame, zend_bool indent, const char *format, ...);
@@ -198,38 +198,30 @@ PHP_MINFO_FUNCTION(phptrace)
  * PHP-Trace Function
  * --------------------
  */
-void pt_frame_build(phptrace_frame *frame, zend_execute_data *execute_data, zend_op_array *op_array, zend_bool internal TSRMLS_DC)
+void pt_frame_build(phptrace_frame *frame, zend_execute_data *ex, zend_op_array *op_array, zend_bool internal TSRMLS_DC)
 {
     int i;
     zval **args;
-    zend_execute_data *ex = execute_data;
     zend_function *zf;
 
     /* init */
     memset(frame, 0, sizeof(phptrace_frame));
 
+    if (internal || ex) {
+        op_array = ex->op_array;
+        zf = ex->function_state.function;
+    } else {
+        zf = (zend_function *) op_array;
+    }
+
     /* internal */
     frame->internal = internal;
     frame->level = PTG(level);
 
-    /**
-     * Current execute_data is the data going to be executed not the entry
-     * point, so we switch to previous data. The internal function is a
-     * exception because it's no need to execute by op_array.
-     */
-    if (!execute_data) {
-        return;
-    }
-    if (!internal) {
-        zf = (zend_function *) op_array;
-    } else {
-        zf = ex->function_state.function;
-    }
-
     /* names */
     if (zf->common.function_name) {
         /* type, class name */
-        if (ex->object) {
+        if (ex && ex->object) {
             frame->type = PT_FUNC_MEMBER;
             /**
              * User care about which method is called exactly, so use
@@ -262,9 +254,16 @@ void pt_frame_build(phptrace_frame *frame, zend_execute_data *execute_data, zend
         }
     } else {
         int add_filename = 1;
+        long ev = 0;
+
+        if (ex) {
+            ev = ex->opline->extended_value;
+        } else if (op_array && op_array->opcodes) {
+            ev = op_array->opcodes->extended_value;
+        }
 
         /* special user function */
-        switch (ex->opline->extended_value) {
+        switch (ev) {
             case ZEND_INCLUDE_ONCE:
                 frame->type = PT_FUNC_INCLUDE_ONCE;
                 frame->function = "include_once";
@@ -299,7 +298,7 @@ void pt_frame_build(phptrace_frame *frame, zend_execute_data *execute_data, zend
     }
 
     /* args */
-    if (ex->function_state.arguments) {
+    if (ex && ex->function_state.arguments) {
         frame->arg_count = (int)(zend_uintptr_t) *(ex->function_state.arguments);
         args = (zval **)(ex->function_state.arguments - frame->arg_count);
         frame->args = calloc(frame->arg_count, sizeof(sds));
@@ -312,24 +311,24 @@ void pt_frame_build(phptrace_frame *frame, zend_execute_data *execute_data, zend
     }
 
     /* lineno */
-    if (ex->opline) {
+    if (ex && ex->opline) {
         frame->lineno = ex->opline->lineno;
-    } else if (ex->prev_execute_data && ex->prev_execute_data->opline) {
+    } else if (ex && ex->prev_execute_data && ex->prev_execute_data->opline) {
         /* FIXME try it in loop ? */
         frame->lineno = ex->prev_execute_data->opline->lineno; /* try using prev */
-    } else if (ex != execute_data && execute_data->opline) {
-        frame->lineno = execute_data->opline->lineno; /* try using current */
+    } else if (op_array && op_array->opcodes) {
+        frame->lineno = op_array->opcodes->lineno;
     } else {
         frame->lineno = 0;
     }
 
     /* filename */
-    if (ex->op_array) {
+    if (ex && ex->op_array) {
         frame->filename = sdsnew(ex->op_array->filename);
-    } else if (ex->prev_execute_data && ex->prev_execute_data->op_array) {
+    } else if (ex && ex->prev_execute_data && ex->prev_execute_data->op_array) {
         frame->filename = sdsnew(ex->prev_execute_data->op_array->filename); /* try using prev */
-    } else if (ex != execute_data && execute_data->op_array) {
-        frame->filename = sdsnew(execute_data->op_array->filename); /* try using current */
+    } else if (op_array) {
+        frame->filename = sdsnew(op_array->filename);
     } else {
         frame->filename = NULL;
     }
@@ -356,11 +355,7 @@ void pt_frame_set_retval(phptrace_frame *frame, zend_bool internal, zend_execute
     zval *retval;
 
     if (internal) {
-        if (fci != NULL) {
-            retval = *fci->retval_ptr_ptr;
-        } else {
-            retval = ((temp_variable *)((char *) ex->Ts + ex->opline->result.var))->var.ptr;
-        }
+        retval = ((temp_variable *)((char *) ex->Ts + ex->opline->result.var))->var.ptr;
     } else if (*EG(return_value_ptr_ptr)) {
         retval = *EG(return_value_ptr_ptr);
     }
@@ -621,7 +616,7 @@ exec:
 
 ZEND_API void phptrace_execute(zend_op_array *op_array TSRMLS_DC)
 {
-    phptrace_execute_core(0, NULL, op_array, 0 TSRMLS_CC);
+    phptrace_execute_core(0, EG(current_execute_data), op_array, 0 TSRMLS_CC);
 }
 
 ZEND_API void phptrace_execute_internal(zend_execute_data *execute_data, int return_value_used TSRMLS_DC)
