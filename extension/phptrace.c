@@ -46,7 +46,7 @@ typedef unsigned long zend_uintptr_t;
 #endif
 
 
-static void pt_frame_build(phptrace_frame *frame, zend_bool internal, zend_execute_data *ex, zend_op_array *op_array TSRMLS_DC);
+static void pt_frame_build(phptrace_frame *frame, zend_bool internal, unsigned char type, zend_execute_data *ex, zend_op_array *op_array TSRMLS_DC);
 static void pt_frame_destroy(phptrace_frame *frame TSRMLS_DC);
 static void pt_frame_set_retval(phptrace_frame *frame, zend_bool internal, zend_execute_data *ex, zend_fcall_info *fci TSRMLS_DC);
 static void pt_fname_display(phptrace_frame *frame, zend_bool indent, const char *format, ...);
@@ -234,7 +234,7 @@ PHP_MINFO_FUNCTION(phptrace)
  * PHP-Trace Function
  * --------------------
  */
-void pt_frame_build(phptrace_frame *frame, zend_bool internal, zend_execute_data *ex, zend_op_array *op_array TSRMLS_DC)
+void pt_frame_build(phptrace_frame *frame, zend_bool internal, unsigned char type, zend_execute_data *ex, zend_op_array *op_array TSRMLS_DC)
 {
     int i;
     zval **args;
@@ -262,15 +262,16 @@ void pt_frame_build(phptrace_frame *frame, zend_bool internal, zend_execute_data
     zf = ex->function_state.function;
 #endif
 
-    /* internal */
-    frame->internal = internal;
+    /* types, level */
+    frame->type = type;
+    frame->functype = internal ? PT_FUNC_INTERNAL : 0x00;
     frame->level = PTG(level);
 
     /* names */
     if (zf->common.function_name) {
-        /* type, class name */
+        /* functype, class name */
         if (ex && ex->object) {
-            frame->type = PT_FUNC_MEMBER;
+            frame->functype |= PT_FUNC_MEMBER;
             /**
              * User care about which method is called exactly, so use
              * zf->common.scope->name instead of ex->object->name.
@@ -282,10 +283,10 @@ void pt_frame_build(phptrace_frame *frame, zend_bool internal, zend_execute_data
                 PTD("Catch a entry with ex->object but without zf->common.scope");
             }
         } else if (zf->common.scope) {
-            frame->type = PT_FUNC_STATIC;
+            frame->functype |= PT_FUNC_STATIC;
             frame->class = sdsnew(zf->common.scope->name);
         } else {
-            frame->type = PT_FUNC_NORMAL;
+            frame->functype |= PT_FUNC_NORMAL;
         }
 
         /* function name */
@@ -321,29 +322,29 @@ void pt_frame_build(phptrace_frame *frame, zend_bool internal, zend_execute_data
         /* special user function */
         switch (ev) {
             case ZEND_INCLUDE_ONCE:
-                frame->type = PT_FUNC_INCLUDE_ONCE;
+                frame->functype |= PT_FUNC_INCLUDE_ONCE;
                 frame->function = "include_once";
                 break;
             case ZEND_REQUIRE_ONCE:
-                frame->type = PT_FUNC_REQUIRE_ONCE;
+                frame->functype |= PT_FUNC_REQUIRE_ONCE;
                 frame->function = "require_once";
                 break;
             case ZEND_INCLUDE:
-                frame->type = PT_FUNC_INCLUDE;
+                frame->functype |= PT_FUNC_INCLUDE;
                 frame->function = "include";
                 break;
             case ZEND_REQUIRE:
-                frame->type = PT_FUNC_REQUIRE;
+                frame->functype |= PT_FUNC_REQUIRE;
                 frame->function = "require";
                 break;
             case ZEND_EVAL:
-                frame->type = PT_FUNC_EVAL;
+                frame->functype |= PT_FUNC_EVAL;
                 frame->function = sdsnew("{eval}");
                 add_filename = 0;
                 break;
             default:
                 /* should be function main */
-                frame->type = PT_FUNC_NORMAL;
+                frame->functype |= PT_FUNC_NORMAL;
                 frame->function = sdsnew("{main}");
                 add_filename = 0;
                 break;
@@ -512,13 +513,13 @@ void pt_fname_display(phptrace_frame *frame, zend_bool indent, const char *forma
     va_end(ap);
 
     /* frame */
-    if (frame->type == PT_FUNC_NORMAL) {
+    if ((frame->functype & PT_FUNC_TYPES) == PT_FUNC_NORMAL) {
         fprintf(stderr, "%s(", frame->function);
-    } else if (frame->type == PT_FUNC_MEMBER) {
+    } else if ((frame->functype & PT_FUNC_TYPES) == PT_FUNC_MEMBER) {
         fprintf(stderr, "%s->%s(", frame->class, frame->function);
-    } else if (frame->type == PT_FUNC_STATIC) {
+    } else if ((frame->functype & PT_FUNC_TYPES) == PT_FUNC_STATIC) {
         fprintf(stderr, "%s::%s(", frame->class, frame->function);
-    } else if (frame->type & PT_FUNC_INCLUDES) {
+    } else if (frame->functype & PT_FUNC_TYPES & PT_FUNC_INCLUDES) {
         fprintf(stderr, "%s", frame->function);
         goto done;
     } else {
@@ -538,16 +539,20 @@ void pt_fname_display(phptrace_frame *frame, zend_bool indent, const char *forma
     fprintf(stderr, ")");
 
     /* return value */
-    if (frame->retval) {
+    if (frame->type == PT_FRAME_EXIT && frame->retval) {
         fprintf(stderr, " = %s", frame->retval);
     }
 
 done:
     /* TODO output relative filepath */
     fprintf(stderr, " called at [%s:%d]", frame->filename, frame->lineno);
-    fprintf(stderr, " wt: %.3f ct: %.3f\n",
-            ((frame->exit.wall_time - frame->entry.wall_time) / 1000000.0),
-            ((frame->exit.cpu_time - frame->entry.cpu_time) / 1000000.0));
+    if (frame->type == PT_FRAME_EXIT) {
+        fprintf(stderr, " wt: %.3f ct: %.3f\n",
+                ((frame->exit.wall_time - frame->entry.wall_time) / 1000000.0),
+                ((frame->exit.cpu_time - frame->entry.cpu_time) / 1000000.0));
+    } else {
+        fprintf(stderr, "\n");
+    }
 }
 
 #if 0
@@ -651,7 +656,7 @@ exec:
     PTG(level)++;
 
     if (do_trace) {
-        pt_frame_build(&frame, internal, execute_data, op_array TSRMLS_CC);
+        pt_frame_build(&frame, internal, PT_FRAME_ENTRY, execute_data, op_array TSRMLS_CC);
 
         /* Send frame message */
         if (0) {
@@ -696,6 +701,7 @@ exec:
         PROFILING_SET(frame.exit);
 
         pt_frame_set_retval(&frame, internal, execute_data, fci TSRMLS_CC);
+        frame.type = PT_FRAME_EXIT;
 
         /* Send frame message */
         if (0) {
