@@ -13,26 +13,19 @@
  * PHP-Trace Global
  * --------------------
  */
-/* FIXME remove PTD */
+/* Debug output FIXME */
 #define PTD(format, args...) fprintf(stderr, "[PTDebug:%d] " format "\n", __LINE__, ## args)
 
+/* Ctrl module */
 #define CTRL ((int8_t *) (PTG(ctrl).ctrl_seg.shmaddr))[PTG(pid)]
 #define CTRL_IS_ACTIVE() (CTRL & PT_CTRL_ACTIVE)
 #define CTRL_SET_INACTIVE() (CTRL &= ~PT_CTRL_ACTIVE)
 
+/* Ping process */
 #define PING_UPDATE() PTG(ping) = phptrace_time_sec()
 #define PING_TIMEOUT() (phptrace_time_sec() > PTG(ping) + PTG(idle_timeout))
 
-#if PHP_VERSION_ID < 50200
-/**
- * AG(allocated_memory) is the value we want, but it available only when
- * MEMORY_LIMIT is ON during PHP compilation, so use zero instead for safe.
- */
-#define zend_memory_usage(args...) 0
-#define zend_memory_peak_usage(args...) 0
-typedef unsigned long zend_uintptr_t;
-#endif
-
+/* Profiling */
 #define PROFILING_SET(p) do { \
     p.wall_time = phptrace_time_usec(); \
     p.cpu_time = phptrace_time_usec(); \
@@ -40,12 +33,24 @@ typedef unsigned long zend_uintptr_t;
     p.mempeak = zend_memory_peak_usage(0 TSRMLS_CC); \
 } while (0);
 
-static void pt_frame_build(phptrace_frame *frame, zend_execute_data *ex, zend_op_array *op_array, zend_bool internal TSRMLS_DC);
+/**
+ * Compatible with PHP 5.1
+ * zend_memory_usage() in PHP 5.1
+ * AG(allocated_memory) is the value we want, but it available only when
+ * MEMORY_LIMIT is ON during PHP compilation, so use zero instead for safe.
+ */
+#if PHP_VERSION_ID < 50200
+#define zend_memory_usage(args...) 0
+#define zend_memory_peak_usage(args...) 0
+typedef unsigned long zend_uintptr_t;
+#endif
+
+
+static void pt_frame_build(phptrace_frame *frame, zend_bool internal, zend_execute_data *ex, zend_op_array *op_array TSRMLS_DC);
 static void pt_frame_destroy(phptrace_frame *frame TSRMLS_DC);
 static void pt_frame_set_retval(phptrace_frame *frame, zend_bool internal, zend_execute_data *ex, zend_fcall_info *fci TSRMLS_DC);
 static void pt_fname_display(phptrace_frame *frame, zend_bool indent, const char *format, ...);
 static sds pt_repr_zval(zval *zv, int limit TSRMLS_DC);
-static void pt_display_backtrace(zend_execute_data *ex, zend_bool internal TSRMLS_DC);
 
 #if PHP_VERSION_ID < 50500
 static void (*pt_ori_execute)(zend_op_array *op_array TSRMLS_DC);
@@ -114,7 +119,7 @@ PHP_INI_END()
 /* php_phptrace_init_globals */
 static void php_phptrace_init_globals(zend_phptrace_globals *ptg)
 {
-    ptg->enable = 0;
+    ptg->enable = ptg->do_trace = 0;
     ptg->data_dir = NULL;
 
     memset(ptg->ctrl_file, 0, sizeof(ptg->ctrl_file));
@@ -122,7 +127,7 @@ static void php_phptrace_init_globals(zend_phptrace_globals *ptg)
     ptg->ctrl.ctrl_seg.shmaddr = ptg->comm.seg.shmaddr = MAP_FAILED; /* TODO using more intuitive element */
     ptg->recv_size = ptg->send_size = 0;
 
-    ptg->do_trace = ptg->pid = ptg->level = 0;
+    ptg->pid = ptg->level = 0;
 
     ptg->ping = 0;
     ptg->idle_timeout = 30;
@@ -229,7 +234,7 @@ PHP_MINFO_FUNCTION(phptrace)
  * PHP-Trace Function
  * --------------------
  */
-void pt_frame_build(phptrace_frame *frame, zend_execute_data *ex, zend_op_array *op_array, zend_bool internal TSRMLS_DC)
+void pt_frame_build(phptrace_frame *frame, zend_bool internal, zend_execute_data *ex, zend_op_array *op_array TSRMLS_DC)
 {
     int i;
     zval **args;
@@ -247,9 +252,9 @@ void pt_frame_build(phptrace_frame *frame, zend_execute_data *ex, zend_op_array 
     }
 #else
     /**
-     * Current execute_data is the data going to be executed not the entry
-     * point, so we switch to previous data. The internal function is a
-     * exception because it's no need to execute by op_array.
+     * In PHP 5.5 and after, execute_data is the data going to be executed, not
+     * the entry point, so we switch to previous data. The internal function is
+     * a exception because it's no need to execute by op_array.
      */
     if (!internal && ex->prev_execute_data) {
         ex = ex->prev_execute_data;
@@ -545,9 +550,9 @@ done:
             ((frame->exit.cpu_time - frame->entry.cpu_time) / 1000000.0));
 }
 
+#if 0
 static void pt_display_backtrace(zend_execute_data *ex, zend_bool internal TSRMLS_DC)
 {
-#if 0
     int num = 0;
     phptrace_frame frame;
 
@@ -563,8 +568,8 @@ static void pt_display_backtrace(zend_execute_data *ex, zend_bool internal TSRML
 
         ex = ex->prev_execute_data;
     }
-#endif
 }
+#endif
 
 
 /**
@@ -621,7 +626,7 @@ ZEND_API void phptrace_execute_core(int internal, zend_execute_data *execute_dat
                         PTG(do_trace) = 1;
                         break;
                     case 0x10000002:
-                        pt_display_backtrace(execute_data, 0 TSRMLS_CC);
+                        /* pt_display_backtrace(execute_data, 0 TSRMLS_CC); */
                         break;
                     case 0x10001001:
                         printf("set zvallen: %d\n", *(int *) msg->data);
@@ -646,7 +651,7 @@ exec:
     PTG(level)++;
 
     if (do_trace) {
-        pt_frame_build(&frame, execute_data, op_array, internal TSRMLS_CC);
+        pt_frame_build(&frame, internal, execute_data, op_array TSRMLS_CC);
 
         /* Send frame message */
         if (0) {
@@ -715,20 +720,20 @@ exec:
 ZEND_API void phptrace_execute(zend_op_array *op_array TSRMLS_DC)
 {
     phptrace_execute_core(0, EG(current_execute_data), op_array, 0 TSRMLS_CC);
+}
+
+ZEND_API void phptrace_execute_internal(zend_execute_data *execute_data, int return_value_used TSRMLS_DC)
+{
+    phptrace_execute_core(1, execute_data, NULL, return_value_used TSRMLS_CC);
+}
 #else
 ZEND_API void phptrace_execute_ex(zend_execute_data *execute_data TSRMLS_DC)
 {
     phptrace_execute_core(0, execute_data, NULL, 0 TSRMLS_CC);
-#endif
 }
 
-#if PHP_VERSION_ID < 50500
-ZEND_API void phptrace_execute_internal(zend_execute_data *execute_data, int return_value_used TSRMLS_DC)
-{
-    phptrace_execute_core(1, execute_data, NULL, return_value_used TSRMLS_CC);
-#else
 ZEND_API void phptrace_execute_internal(zend_execute_data *execute_data, zend_fcall_info *fci, int return_value_used TSRMLS_DC)
 {
     phptrace_execute_core(1, execute_data, fci, return_value_used TSRMLS_CC);
-#endif
 }
+#endif
