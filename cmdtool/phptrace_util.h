@@ -6,6 +6,10 @@
 #include "phptrace_protocol.h"
 #include "phptrace_ctrl.h"
 #include "phptrace_time.h"
+
+#include "phptrace_comm.h"
+#include "phptrace_type.h"
+
 #include "sds.h"
 
 #include "sys_trace.h"
@@ -186,7 +190,8 @@ sds sdscatrepr_noquto(sds s, const char *p, size_t len);
 sds print_indent_str(sds s, char* str, int32_t size);
 sds print_time(sds s, uint64_t t);
 
-sds standard_transform(phptrace_context_t *ctx, phptrace_file_record_t *r);
+sds standard_transform(phptrace_context_t *ctx, phptrace_frame *r);
+//sds standard_transform(phptrace_context_t *ctx, phptrace_file_record_t *r);
 sds dump_transform(phptrace_context_t *ctx, phptrace_file_record_t *r);
 sds json_transform(phptrace_context_t *ctx, phptrace_file_record_t *r);
 

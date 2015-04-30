@@ -288,9 +288,65 @@ sds sdscatrepr_noquto(sds s, const char *p, size_t len)
     return s;
 }
 
-sds standard_transform(phptrace_context_t *ctx, phptrace_file_record_t *r)
+int entry_flag;
+sds standard_transform(phptrace_context_t *ctx, phptrace_frame *f)
 {
+    int i;
     sds buf = sdsempty();
+
+    if (entry_flag) {
+    //if (f->type == RECORD_FLAG_ENTRY) {
+        buf = sdscatprintf (buf, "%lld.%06d", (long long)(f->entry.wall_time / 1000000), (int)(f->entry.wall_time % 1000000));   
+        buf = sdscatprintf (buf, "%*s", f->level, "  ");
+        if (f->type == PT_FUNC_NORMAL) {
+            buf = sdscatprintf (buf, "%s(", f->function);
+        } else if (f->type == PT_FUNC_MEMBER) {
+            buf = sdscatprintf (buf, "%s->%s(", f->class, f->function);
+        } else if (f->type == PT_FUNC_STATIC) {
+            buf = sdscatprintf (buf, "%s::%s(", f->class, f->function);
+        } else if (f->type & PT_FUNC_INCLUDES) {
+            buf = sdscatprintf (buf, "%s", f->function);
+            goto done;
+        } else {
+            buf = sdscatprintf (buf, "unknown");
+            goto done;
+        }
+        
+        if (f->arg_count) {
+            for (i = 0; i < f->arg_count; i++) {
+                buf = sdscatprintf (buf, "%s", f->args[i]);
+                if (i < f->arg_count - 1) {
+                    buf = sdscatprintf (buf, ", ");
+                }
+            }
+        }
+        buf = sdscatprintf (buf, ") at [%s:%u]\n", f->filename, f->lineno);
+    } else {
+        buf = sdscatprintf (buf, "%lld.%06d", (long long)(f->exit.wall_time / 1000000), (int)(f->exit.wall_time % 1000000));   
+        buf = sdscatprintf (buf, "%*s", f->level, "  ");
+        if (f->type == PT_FUNC_NORMAL) {
+            buf = sdscatprintf (buf, "%s", f->function);
+        } else if (f->type == PT_FUNC_MEMBER) {
+            buf = sdscatprintf (buf, "%s->%s", f->class, f->function);
+        } else if (f->type == PT_FUNC_STATIC) {
+            buf = sdscatprintf (buf, "%s::%s", f->class, f->function);
+        } else if (f->type & PT_FUNC_INCLUDES) {
+            buf = sdscatprintf (buf, "%s", f->function);
+        } else {
+            buf = sdscatprintf (buf, "unknown");
+        }
+
+        buf = sdscatprintf (buf, "  =>  ");
+        if (f->retval) {
+            buf = sdscatprintf (buf, "%s", f->retval);
+        }
+
+        buf = sdscatprintf(buf, " wt: %.5f ct: %.5f\n", 
+                ((f->exit.wall_time - f->entry.wall_time) / 1000000.0),
+                ((f->exit.cpu_time - f->entry.cpu_time) / 1000000.0));
+    }
+done:
+    /*
     if (r->flag == RECORD_FLAG_ENTRY) {
         buf = print_time(buf, r->start_time);
         buf = print_indent_str(buf, "  ", r->level);
@@ -307,7 +363,7 @@ sds standard_transform(phptrace_context_t *ctx, phptrace_file_record_t *r)
         buf = sdscatprintf (buf, "    ");
         buf = print_time(buf, RECORD_EXIT(r, cost_time));
     }
-    buf = sdscat(buf, "\n");
+    */
     log_printf (LL_DEBUG, " record_sds[%s]", buf);
     return buf;
 }
@@ -556,6 +612,204 @@ void count_summary(phptrace_context_t *ctx)
 
 extern int interrupted;
 
+//void trace(phptrace_context_t *ctx)
+//{
+//    int rc;
+//    phptrace_file_record_t rcd;
+//    int state = STATE_OPEN;
+//    uint64_t flag;
+//    uint64_t seq = 0;
+//
+//    sds buf;
+//    size_t raw_size;
+//    uint32_t len;
+//    uint64_t magic_number;
+//    void *mem_ptr = NULL;
+//    void *tmp_ptr = NULL;
+//    int opendata_wait_interval = OPEN_DATA_WAIT_INTERVAL;
+//    int data_wait_interval = DATA_WAIT_INTERVAL;
+//
+//    /* exclusive time mode */
+//    if (ctx->exclusive_flag) {
+//        ctx->sub_cost_time = calloc(ctx->max_level + 2, sizeof(int64_t));
+//        ctx->sub_cpu_time = calloc(ctx->max_level + 2, sizeof(int64_t));
+//    }
+//
+//    while (1) {
+//        if (interrupted) {
+//            break;
+//        }
+//
+//        if (state == STATE_END) {
+//            break;
+//        }
+//
+//        if (!ctx->in_filename) {
+//            phptrace_ctrl_heartbeat_ping(&(ctx->ctrl), ctx->php_pid);
+//        }
+//
+//        if (state != STATE_OPEN) {
+//            phptrace_mem_read_64b(flag, mem_ptr);
+//            log_printf (LL_DEBUG, "flag=(%lld) (0x%llx)", flag, flag);
+//
+//            if (flag == WAIT_FLAG) {                        /* wait flag */
+//                if (ctx->in_filename) {
+//                    break;
+//                }
+//
+//                log_printf (LL_DEBUG, "  WAIT_FLAG, will wait %d ms.\n", data_wait_interval);
+//                phptrace_msleep(data_wait_interval);
+//                data_wait_interval = grow_interval(data_wait_interval, MAX_DATA_WAIT_INTERVAL);
+//                continue; 
+//            } else if (flag == MAGIC_NUMBER_TAILER) {       /* check tailer */
+//                state = STATE_TAILER;
+//            }
+//            data_wait_interval = DATA_WAIT_INTERVAL;        /* reset the data wait interval */
+//        }
+//        
+//        switch (state) { 
+//            case STATE_OPEN:
+//                rc = update_mmap_filename(ctx);
+//                if (rc < 0) {
+//                    error_msg(ctx, ERR_TRACE, "update trace mmap filename failed");
+//                    die(ctx, -1);
+//                }
+//
+//                log_printf(LL_DEBUG, "phptrace_mmap_read '%s' before if", ctx->mmap_filename);
+//                if (!ctx->seg.shmaddr || ctx->seg.shmaddr == MAP_FAILED) {
+//                    ctx->seg = phptrace_mmap_read(ctx->mmap_filename);
+//                    log_printf(LL_DEBUG, "phptrace_mmap_read '%s' after if", ctx->mmap_filename);
+//                    if (ctx->seg.shmaddr == MAP_FAILED) {
+//                        if (ctx->in_filename) {             /* -r option, open failed */
+//                            error_msg(ctx, ERR_TRACE, "Can not open %s to read, %s!", ctx->in_filename, strerror(errno));
+//                            die(ctx, -1);
+//                        }
+//
+//                        if (errno == ENOENT) {              /* file not exist, should wait */
+//                            log_printf(LL_DEBUG, "trace mmap file not exist, will sleep %d ms.\n", opendata_wait_interval);
+//                            phptrace_msleep(opendata_wait_interval);
+//                            opendata_wait_interval = grow_interval(opendata_wait_interval, MAX_OPEN_DATA_WAIT_INTERVAL);
+//                            continue;
+//                        } else {
+//                            log_printf(LL_NOTICE, "phptrace_mmap_read '%s' failed!", ctx->mmap_filename);
+//                            die(ctx, -1);
+//                        }
+//                    }
+//                }
+//
+//                /* open tracelog success */
+//                ctx->rotate_cnt++;
+//                if (!ctx->in_filename) {
+//                    unlink(ctx->mmap_filename);
+//                }
+//                opendata_wait_interval = OPEN_DATA_WAIT_INTERVAL;
+//                state = STATE_HEADER;
+//
+//                mem_ptr = ctx->seg.shmaddr;
+//                break;
+//            case STATE_HEADER:
+//                if (flag != MAGIC_NUMBER_HEADER) {
+//                    error_msg(ctx, ERR_TRACE, "header's magic number is not correct, trace file may be damaged");
+//                    die(ctx, -1);
+//                }
+//                tmp_ptr = phptrace_mem_read_header(&(ctx->file.header), mem_ptr);
+//                raw_size = tmp_ptr - mem_ptr;
+//                mem_ptr = tmp_ptr;
+//
+//                state = STATE_RECORD;
+//                log_printf (LL_DEBUG, " [ok load header]");
+//
+//                if (ctx->rotate_cnt == 1 && (ctx->output_flag & OUTPUT_FLAG_WRITE)) {                          /* dump header to out_fp */
+//                    buf = sdsnewlen(NULL, raw_size);
+//                    phptrace_mem_write_header(&(ctx->file.header), buf);
+//                    fwrite(buf, sizeof(char), raw_size, ctx->out_fp);
+//
+//                    log_printf(LL_DEBUG, "[dump] header raw_size=%u", raw_size);
+//                    sdsfree(buf);
+//                }
+//                break;
+//            case STATE_RECORD:
+//                if (flag != seq) {
+//                    error_msg(ctx, ERR_TRACE, "sequence number is incorrect, trace file may be damaged");
+//                    if (ctx->output_flag & OUTPUT_FLAG_WRITE) {
+//                        state = STATE_END;
+//                        continue;
+//                    }
+//                    die(ctx, -1);
+//                }
+//
+//                if (ctx->max_function > 0 && ctx->max_function * 2 < flag) {                   /* max records limit */
+//                    state = STATE_END;
+//                    continue;
+//                }
+//
+//                mem_ptr = phptrace_mem_read_record(&(rcd), mem_ptr, flag);
+//                if (!mem_ptr) {
+//                    error_msg(ctx, ERR_TRACE, "read record failed, maybe write too fast");
+//                    if (ctx->output_flag & OUTPUT_FLAG_WRITE) {
+//                        state = STATE_END;
+//                        continue;
+//                    }
+//                    die(ctx, -1);
+//                }
+//
+//                if (ctx->opt_flag & OPT_FLAG_COUNT) {
+//                    if (rcd.flag == RECORD_FLAG_EXIT) {
+//                        count_record(ctx, &(rcd));
+//                    }
+//                } else {
+//                    buf = ctx->record_transform(ctx, &(rcd));
+//                    fwrite(buf, sizeof(char), sdslen(buf), ctx->out_fp);
+//                    fflush(NULL);
+//                    sdsfree(buf);
+//                }
+//
+//                phptrace_record_free(&(rcd));
+//                seq++;
+//                break;
+//            case STATE_TAILER:
+//                if (flag != MAGIC_NUMBER_TAILER) {
+//                    error_msg(ctx, ERR_TRACE, "tailer's magic number is not correct, trace file may be damaged");
+//                    if (ctx->output_flag & OUTPUT_FLAG_WRITE) {
+//                        state = STATE_END;
+//                        continue;
+//                    }
+//                    die(ctx, -1);
+//                }
+//
+//                if (ctx->file.tailer.filename) {                    /* free tailer.filename */
+//                    sdsfree(ctx->file.tailer.filename);
+//                    ctx->file.tailer.filename = NULL;
+//                }
+//                tmp_ptr = phptrace_mem_read_tailer(&(ctx->file.tailer), mem_ptr);
+//                raw_size = tmp_ptr - mem_ptr;
+//                mem_ptr = tmp_ptr;
+//
+//                if (ctx->in_filename) {                             /* -r option, read from file */
+//                    state = STATE_END;
+//                } else {
+//                    state = STATE_OPEN;
+//                }
+//                log_printf (LL_DEBUG, " [ok load tailer]");
+//                break;
+//        }
+//    }
+//
+//    if (ctx->output_flag & OUTPUT_FLAG_WRITE) {                      /* dump empty tailer to out_fp */
+//        len = 0;
+//        magic_number = MAGIC_NUMBER_TAILER;
+//        fwrite(&magic_number, sizeof(uint64_t), 1, ctx->out_fp);
+//        fwrite(&len, sizeof(uint32_t), 1, ctx->out_fp);
+//
+//        fflush(NULL);
+//        log_printf(LL_DEBUG, "[dump] empty tailer");
+//    } else if (ctx->opt_flag & OPT_FLAG_COUNT) {
+//        count_summary(ctx);
+//    }
+//
+//    die(ctx, 0);
+//}
+
 void trace(phptrace_context_t *ctx)
 {
     int rc;
@@ -567,17 +821,48 @@ void trace(phptrace_context_t *ctx)
     sds buf;
     size_t raw_size;
     uint32_t len;
+    uint32_t type;
     uint64_t magic_number;
     void *mem_ptr = NULL;
     void *tmp_ptr = NULL;
     int opendata_wait_interval = OPEN_DATA_WAIT_INTERVAL;
     int data_wait_interval = DATA_WAIT_INTERVAL;
 
+    /* new protocol API */
+    phptrace_comm_socket sock;
+    phptrace_comm_message *msg;
+    phptrace_frame frame;
+
+    memset(&sock, 0, sizeof(sock));
+
     /* exclusive time mode */
     if (ctx->exclusive_flag) {
         ctx->sub_cost_time = calloc(ctx->max_level + 2, sizeof(int64_t));
         ctx->sub_cpu_time = calloc(ctx->max_level + 2, sizeof(int64_t));
     }
+
+    while (phptrace_comm_sopen(&sock, ctx->mmap_filename, 1) < 0) {
+        if (interrupted) {
+            return;
+        }
+
+        if (ctx->in_filename || errno != ENOENT) {             /* -r option or open failed (except for non-exist) */
+            error_msg(ctx, ERR_TRACE, "Can not open %s to read, %s!", ctx->mmap_filename, strerror(errno));
+            die(ctx, -1);
+        } else {                                                /* file not exist, should wait */
+            log_printf(LL_DEBUG, "trace mmap file not exist, will sleep %d ms.\n", opendata_wait_interval);
+            phptrace_msleep(opendata_wait_interval);
+            opendata_wait_interval = grow_interval(opendata_wait_interval, MAX_OPEN_DATA_WAIT_INTERVAL);
+        }
+    }
+
+    ctx->rotate_cnt++;
+    if (!ctx->in_filename) {
+        //unlink(ctx->mmap_filename);
+    }
+    state = STATE_HEADER;
+
+    phptrace_comm_swrite(&sock, 0x10000001, NULL, 0);           /* send to do trace */
 
     while (1) {
         if (interrupted) {
@@ -589,167 +874,149 @@ void trace(phptrace_context_t *ctx)
         }
 
         if (!ctx->in_filename) {
-            phptrace_ctrl_heartbeat_ping(&(ctx->ctrl), ctx->php_pid);
+        //    phptrace_ctrl_heartbeat_ping(&(ctx->ctrl), ctx->php_pid);
         }
 
-        if (state != STATE_OPEN) {
-            phptrace_mem_read_64b(flag, mem_ptr);
-            log_printf (LL_DEBUG, "flag=(%lld) (0x%llx)", flag, flag);
+        type = phptrace_comm_sread_type(sock);
+        log_printf (LL_DEBUG, "msg type=(%u)", type);
 
-            if (flag == WAIT_FLAG) {                        /* wait flag */
-                if (ctx->in_filename) {
-                    break;
-                }
-
-                log_printf (LL_DEBUG, "  WAIT_FLAG, will wait %d ms.\n", data_wait_interval);
-                phptrace_msleep(data_wait_interval);
-                data_wait_interval = grow_interval(data_wait_interval, MAX_DATA_WAIT_INTERVAL);
-                continue; 
-            } else if (flag == MAGIC_NUMBER_TAILER) {       /* check tailer */
-                state = STATE_TAILER;
+        if (type == PT_MSG_EMPTY) {                         /* wait flag */
+            if (ctx->in_filename) {
+                break;
             }
-            data_wait_interval = DATA_WAIT_INTERVAL;        /* reset the data wait interval */
+
+            log_printf (LL_DEBUG, "  wait_type will wait %d ms.\n", data_wait_interval);
+            phptrace_msleep(data_wait_interval);
+            data_wait_interval = grow_interval(data_wait_interval, MAX_DATA_WAIT_INTERVAL);
+            continue; 
         }
+        //else if (flag == MAGIC_NUMBER_TAILER) {       /* check tailer */
+         //   state = STATE_TAILER;
+        //}
+
+        data_wait_interval = DATA_WAIT_INTERVAL;            /* reset the data wait interval */
+
+        msg = phptrace_comm_sread(&sock);
         
-        switch (state) { 
-            case STATE_OPEN:
-                rc = update_mmap_filename(ctx);
-                if (rc < 0) {
-                    error_msg(ctx, ERR_TRACE, "update trace mmap filename failed");
-                    die(ctx, -1);
-                }
+        switch (msg->type) {
+            case 0x10000101:    /* @TODO  data type */
+                phptrace_type_unpack_frame(&frame, msg->data);
 
-                log_printf(LL_DEBUG, "phptrace_mmap_read '%s' before if", ctx->mmap_filename);
-                if (!ctx->seg.shmaddr || ctx->seg.shmaddr == MAP_FAILED) {
-                    ctx->seg = phptrace_mmap_read(ctx->mmap_filename);
-                    log_printf(LL_DEBUG, "phptrace_mmap_read '%s' after if", ctx->mmap_filename);
-                    if (ctx->seg.shmaddr == MAP_FAILED) {
-                        if (ctx->in_filename) {             /* -r option, open failed */
-                            error_msg(ctx, ERR_TRACE, "Can not open %s to read, %s!", ctx->in_filename, strerror(errno));
-                            die(ctx, -1);
-                        }
-
-                        if (errno == ENOENT) {              /* file not exist, should wait */
-                            log_printf(LL_DEBUG, "trace mmap file not exist, will sleep %d ms.\n", opendata_wait_interval);
-                            phptrace_msleep(opendata_wait_interval);
-                            opendata_wait_interval = grow_interval(opendata_wait_interval, MAX_OPEN_DATA_WAIT_INTERVAL);
-                            continue;
-                        } else {
-                            log_printf(LL_NOTICE, "phptrace_mmap_read '%s' failed!", ctx->mmap_filename);
-                            die(ctx, -1);
-                        }
-                    }
-                }
-
-                /* open tracelog success */
-                ctx->rotate_cnt++;
-                if (!ctx->in_filename) {
-                    unlink(ctx->mmap_filename);
-                }
-                opendata_wait_interval = OPEN_DATA_WAIT_INTERVAL;
-                state = STATE_HEADER;
-
-                mem_ptr = ctx->seg.shmaddr;
-                break;
-            case STATE_HEADER:
-                if (flag != MAGIC_NUMBER_HEADER) {
-                    error_msg(ctx, ERR_TRACE, "header's magic number is not correct, trace file may be damaged");
-                    die(ctx, -1);
-                }
-                tmp_ptr = phptrace_mem_read_header(&(ctx->file.header), mem_ptr);
-                raw_size = tmp_ptr - mem_ptr;
-                mem_ptr = tmp_ptr;
-
-                state = STATE_RECORD;
-                log_printf (LL_DEBUG, " [ok load header]");
-
-                if (ctx->rotate_cnt == 1 && (ctx->output_flag & OUTPUT_FLAG_WRITE)) {                          /* dump header to out_fp */
-                    buf = sdsnewlen(NULL, raw_size);
-                    phptrace_mem_write_header(&(ctx->file.header), buf);
-                    fwrite(buf, sizeof(char), raw_size, ctx->out_fp);
-
-                    log_printf(LL_DEBUG, "[dump] header raw_size=%u", raw_size);
-                    sdsfree(buf);
-                }
-                break;
-            case STATE_RECORD:
-                if (flag != seq) {
-                    error_msg(ctx, ERR_TRACE, "sequence number is incorrect, trace file may be damaged");
-                    if (ctx->output_flag & OUTPUT_FLAG_WRITE) {
-                        state = STATE_END;
-                        continue;
-                    }
-                    die(ctx, -1);
-                }
-
-                if (ctx->max_function > 0 && ctx->max_function * 2 < flag) {                   /* max records limit */
-                    state = STATE_END;
-                    continue;
-                }
-
-                mem_ptr = phptrace_mem_read_record(&(rcd), mem_ptr, flag);
-                if (!mem_ptr) {
-                    error_msg(ctx, ERR_TRACE, "read record failed, maybe write too fast");
-                    if (ctx->output_flag & OUTPUT_FLAG_WRITE) {
-                        state = STATE_END;
-                        continue;
-                    }
-                    die(ctx, -1);
-                }
+                //printf ("%*s%s\n", frame.level * 2, " ", frame.function);
 
                 if (ctx->opt_flag & OPT_FLAG_COUNT) {
-                    if (rcd.flag == RECORD_FLAG_EXIT) {
-                        count_record(ctx, &(rcd));
-                    }
+
                 } else {
-                    buf = ctx->record_transform(ctx, &(rcd));
+                    buf = ctx->record_transform(ctx, &(frame));
                     fwrite(buf, sizeof(char), sdslen(buf), ctx->out_fp);
                     fflush(NULL);
                     sdsfree(buf);
                 }
 
-                phptrace_record_free(&(rcd));
                 seq++;
                 break;
-            case STATE_TAILER:
-                if (flag != MAGIC_NUMBER_TAILER) {
-                    error_msg(ctx, ERR_TRACE, "tailer's magic number is not correct, trace file may be damaged");
-                    if (ctx->output_flag & OUTPUT_FLAG_WRITE) {
-                        state = STATE_END;
-                        continue;
-                    }
-                    die(ctx, -1);
-                }
-
-                if (ctx->file.tailer.filename) {                    /* free tailer.filename */
-                    sdsfree(ctx->file.tailer.filename);
-                    ctx->file.tailer.filename = NULL;
-                }
-                tmp_ptr = phptrace_mem_read_tailer(&(ctx->file.tailer), mem_ptr);
-                raw_size = tmp_ptr - mem_ptr;
-                mem_ptr = tmp_ptr;
-
-                if (ctx->in_filename) {                             /* -r option, read from file */
-                    state = STATE_END;
-                } else {
-                    state = STATE_OPEN;
-                }
-                log_printf (LL_DEBUG, " [ok load tailer]");
-                break;
         }
+
+    //    switch (state) { 
+    //        case STATE_HEADER:
+    //            if (flag != MAGIC_NUMBER_HEADER) {
+    //                error_msg(ctx, ERR_TRACE, "header's magic number is not correct, trace file may be damaged");
+    //                die(ctx, -1);
+    //            }
+    //            tmp_ptr = phptrace_mem_read_header(&(ctx->file.header), mem_ptr);
+    //            raw_size = tmp_ptr - mem_ptr;
+    //            mem_ptr = tmp_ptr;
+
+    //            state = STATE_RECORD;
+    //            log_printf (LL_DEBUG, " [ok load header]");
+
+    //            if (ctx->rotate_cnt == 1 && (ctx->output_flag & OUTPUT_FLAG_WRITE)) {                          /* dump header to out_fp */
+    //                buf = sdsnewlen(NULL, raw_size);
+    //                phptrace_mem_write_header(&(ctx->file.header), buf);
+    //                fwrite(buf, sizeof(char), raw_size, ctx->out_fp);
+
+    //                log_printf(LL_DEBUG, "[dump] header raw_size=%u", raw_size);
+    //                sdsfree(buf);
+    //            }
+    //            break;
+    //        case STATE_RECORD:
+    //            if (flag != seq) {
+    //                error_msg(ctx, ERR_TRACE, "sequence number is incorrect, trace file may be damaged");
+    //                if (ctx->output_flag & OUTPUT_FLAG_WRITE) {
+    //                    state = STATE_END;
+    //                    continue;
+    //                }
+    //                die(ctx, -1);
+    //            }
+
+    //            if (ctx->max_function > 0 && ctx->max_function * 2 < flag) {                   /* max records limit */
+    //                state = STATE_END;
+    //                continue;
+    //            }
+
+    //            mem_ptr = phptrace_mem_read_record(&(rcd), mem_ptr, flag);
+    //            if (!mem_ptr) {
+    //                error_msg(ctx, ERR_TRACE, "read record failed, maybe write too fast");
+    //                if (ctx->output_flag & OUTPUT_FLAG_WRITE) {
+    //                    state = STATE_END;
+    //                    continue;
+    //                }
+    //                die(ctx, -1);
+    //            }
+
+    //            if (ctx->opt_flag & OPT_FLAG_COUNT) {
+    //                if (rcd.flag == RECORD_FLAG_EXIT) {
+    //                    count_record(ctx, &(rcd));
+    //                }
+    //            } else {
+    //                buf = ctx->record_transform(ctx, &(rcd));
+    //                fwrite(buf, sizeof(char), sdslen(buf), ctx->out_fp);
+    //                fflush(NULL);
+    //                sdsfree(buf);
+    //            }
+
+    //            phptrace_record_free(&(rcd));
+    //            seq++;
+    //            break;
+    //        case STATE_TAILER:
+    //            if (flag != MAGIC_NUMBER_TAILER) {
+    //                error_msg(ctx, ERR_TRACE, "tailer's magic number is not correct, trace file may be damaged");
+    //                if (ctx->output_flag & OUTPUT_FLAG_WRITE) {
+    //                    state = STATE_END;
+    //                    continue;
+    //                }
+    //                die(ctx, -1);
+    //            }
+
+    //            if (ctx->file.tailer.filename) {                    /* free tailer.filename */
+    //                sdsfree(ctx->file.tailer.filename);
+    //                ctx->file.tailer.filename = NULL;
+    //            }
+    //            tmp_ptr = phptrace_mem_read_tailer(&(ctx->file.tailer), mem_ptr);
+    //            raw_size = tmp_ptr - mem_ptr;
+    //            mem_ptr = tmp_ptr;
+
+    //            if (ctx->in_filename) {                             /* -r option, read from file */
+    //                state = STATE_END;
+    //            } else {
+    //                state = STATE_OPEN;
+    //            }
+    //            log_printf (LL_DEBUG, " [ok load tailer]");
+    //            break;
+    //    }
     }
 
-    if (ctx->output_flag & OUTPUT_FLAG_WRITE) {                      /* dump empty tailer to out_fp */
-        len = 0;
-        magic_number = MAGIC_NUMBER_TAILER;
-        fwrite(&magic_number, sizeof(uint64_t), 1, ctx->out_fp);
-        fwrite(&len, sizeof(uint32_t), 1, ctx->out_fp);
-
-        fflush(NULL);
-        log_printf(LL_DEBUG, "[dump] empty tailer");
-    } else if (ctx->opt_flag & OPT_FLAG_COUNT) {
-        count_summary(ctx);
-    }
+//    if (ctx->output_flag & OUTPUT_FLAG_WRITE) {                      /* dump empty tailer to out_fp */
+//        len = 0;
+//        magic_number = MAGIC_NUMBER_TAILER;
+//        fwrite(&magic_number, sizeof(uint64_t), 1, ctx->out_fp);
+//        fwrite(&len, sizeof(uint32_t), 1, ctx->out_fp);
+//
+//        fflush(NULL);
+//        log_printf(LL_DEBUG, "[dump] empty tailer");
+//    } else if (ctx->opt_flag & OPT_FLAG_COUNT) {
+//        count_summary(ctx);
+//    }
 
     die(ctx, 0);
 }

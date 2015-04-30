@@ -56,8 +56,8 @@
 #define MAGIC_NUMBER_TAILER 0x657461746f720000
 #define WAIT_FLAG ((uint64_t)-1LL)
 
-#define RECORD_FLAG_ENTRY    (1<<0)
-#define RECORD_FLAG_EXIT    (1<<1) 
+#define RECORD_FLAG_ENTRY       (0x00100000)
+#define RECORD_FLAG_EXIT        (0x00100001) 
 
 typedef struct phptrace_file_header_s {
     uint64_t magic_number;

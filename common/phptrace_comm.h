@@ -52,6 +52,9 @@ typedef struct {
 #define phptrace_comm_freesize(handler) \
     (size_t) ((handler)->size - ((handler)->current - (handler)->head)) - (size_t) sizeof(phptrace_comm_message)
 
+#define phptrace_comm_sread_type(socket) \
+    (((phptrace_comm_message *) ((socket).recv_handler.current))->type)
+
 int phptrace_comm_screate(phptrace_comm_socket *sock, const char *filename, int crossover, size_t send_size, size_t recv_size);
 int phptrace_comm_sopen(phptrace_comm_socket *sock, const char *filename, int crossover);
 void phptrace_comm_sclose(phptrace_comm_socket *sock);

@@ -512,6 +512,7 @@ ZEND_API void phptrace_execute_core(int internal, zend_execute_data *execute_dat
 
     /* Check ctrl module */
     if (CTRL_IS_ACTIVE()) {
+        PTD("ctrl is active");
         /* Open comm socket */
         if (PTG(comm).seg.shmaddr == MAP_FAILED) {
             snprintf(PTG(comm_file), sizeof(PTG(comm_file)), "%s/%s.%d", PTG(data_dir), PHPTRACE_COMM_FILENAME, PTG(pid));
@@ -534,9 +535,13 @@ ZEND_API void phptrace_execute_core(int internal, zend_execute_data *execute_dat
             msg = phptrace_comm_sread(&PTG(comm));
             PTD("Msg type: 0x%08x", msg->type);
 
-            if (msg == NULL || (msg->type == PT_MSG_EMPTY && PING_TIMEOUT())) {
-                PTD("Msg is NULL or ping timeout");
+            if (msg == NULL) {
                 CTRL_SET_INACTIVE();
+                break;
+            } else if (msg->type == PT_MSG_EMPTY) {
+                if (PING_TIMEOUT()) {
+                    CTRL_SET_INACTIVE();
+                }
                 break;
             } else if (msg->type != PT_MSG_EMPTY) {
                 PING_UPDATE();
@@ -570,11 +575,13 @@ exec:
 
     PTG(level)++;
 
+    PTD("phptrace_execute_core do_trace=%d", do_trace);
     if (do_trace) {
         pt_frame_build(&frame, execute_data, internal TSRMLS_CC);
 
+        PROFILING_SET(frame.entry);
         /* Send frame message */
-        if (0) {
+        if (1) {
             msg = phptrace_comm_swrite_begin(&PTG(comm), phptrace_type_len_frame(&frame));
             phptrace_type_pack_frame(&frame, msg->data);
             phptrace_comm_swrite_end(&PTG(comm), 0x10000101, msg); /* FIXME type */
@@ -586,7 +593,6 @@ exec:
             EG(return_value_ptr_ptr) = &retval;
         }
 
-        PROFILING_SET(frame.entry);
     }
 
     /* call original */
@@ -606,7 +612,7 @@ exec:
         pt_frame_set_retval(&frame, internal, execute_data, fci TSRMLS_CC);
 
         /* Send frame message */
-        if (0) {
+        if (1) {
             msg = phptrace_comm_swrite_begin(&PTG(comm), phptrace_type_len_frame(&frame));
             phptrace_type_pack_frame(&frame, msg->data);
             phptrace_comm_swrite_end(&PTG(comm), 0x10000101, msg); /* FIXME type */

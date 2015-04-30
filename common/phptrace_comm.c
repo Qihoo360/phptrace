@@ -208,3 +208,4 @@ phptrace_comm_message *phptrace_comm_read(phptrace_comm_handler *handler, int mo
 
     return msg;
 }
+
