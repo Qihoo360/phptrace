@@ -14,6 +14,8 @@ int phptrace_comm_screate(phptrace_comm_socket *sock, const char *filename, int 
     phptrace_comm_socket_meta *meta;
 
     sock->filename = (char *) filename;
+    /* TODO use zero fill this file before mmap, make sure another process has
+     * a clear space after mmap immediately. */
     sock->seg = phptrace_mmap_create(filename, sizeof(phptrace_comm_socket_meta) + send_size + recv_size);
     if (sock->seg.shmaddr == MAP_FAILED) {
         return -1;
@@ -21,12 +23,12 @@ int phptrace_comm_screate(phptrace_comm_socket *sock, const char *filename, int 
 
     /* Init meta info */
     meta = (phptrace_comm_socket_meta *) sock->seg.shmaddr;
-    meta->magic = PT_MAGIC_NUMBER;
+    meta->magic = 0;
     meta->send_size = send_size;
     meta->recv_size = recv_size;
     p = sock->seg.shmaddr + sizeof(phptrace_comm_socket_meta);
 
-    /* Attach handler */
+    /* Init, attach handler */
     if (crossover) {
         phptrace_comm_init(&sock->recv_handler, p, meta->send_size);
         phptrace_comm_init(&sock->send_handler, p + meta->send_size, meta->recv_size);
@@ -34,9 +36,11 @@ int phptrace_comm_screate(phptrace_comm_socket *sock, const char *filename, int 
         phptrace_comm_init(&sock->send_handler, p, meta->send_size);
         phptrace_comm_init(&sock->recv_handler, p + meta->send_size, meta->recv_size);
     }
-
     phptrace_comm_clear(&sock->send_handler);
     phptrace_comm_clear(&sock->recv_handler);
+
+    /* Make it accessable at last step */
+    meta->magic = PT_MAGIC_NUMBER;
 
     return 0;
 }
