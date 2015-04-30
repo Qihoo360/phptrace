@@ -606,46 +606,43 @@ ZEND_API void phptrace_execute_core(int internal, zend_execute_data *execute_dat
                 CTRL_SET_INACTIVE();
                 goto exec;
             }
-
-            /* Clear */
-            phptrace_comm_clear(&PTG(comm).send_handler);
-            phptrace_comm_clear(&PTG(comm).recv_handler);
-
             PING_UPDATE();
         }
 
         /* Handle message */
         while (1) {
             msg = phptrace_comm_sread(&PTG(comm));
+            if (msg == NULL) {
+                if (PING_TIMEOUT()) {
+                    PTD("ping timeout");
+                    /* TODO off all */
+                    CTRL_SET_INACTIVE();
+                }
+                break;
+            }
             PTD("Msg type: 0x%08x", msg->type);
 
-            if (msg == NULL || (msg->type == PT_MSG_EMPTY && PING_TIMEOUT())) {
-                PTD("Msg is NULL or ping timeout");
-                CTRL_SET_INACTIVE();
-                break;
-            } else if (msg->type != PT_MSG_EMPTY) {
-                PING_UPDATE();
-
-                switch (msg->type) { /* TODO beautiful handler */
-                    case 0x10000001:
-                        PTG(do_trace) = 1;
-                        break;
-                    case 0x10000002:
-                        /* pt_display_backtrace(execute_data, 0 TSRMLS_CC); */
-                        break;
-                    case 0x10001001:
-                        printf("set zvallen: %d\n", *(int *) msg->data);
-                        break;
-                    default:
-                        break;
-                }
+            PING_UPDATE();
+            switch (msg->type) { /* TODO beautiful handler */
+                case 0x10000001:
+                    PTG(do_trace) = 1;
+                    break;
+                case 0x10000002:
+                    /* pt_display_backtrace(execute_data, 0 TSRMLS_CC); */
+                    break;
+                case 0x10001001:
+                    printf("set zvallen: %d\n", *(int *) msg->data);
+                    break;
+                default:
+                    break;
             }
         }
     } else {
         /* Close comm socket */
         if (PTG(comm).seg.shmaddr != MAP_FAILED) {
             PTD("Comm socket close");
-            phptrace_comm_sclose(&PTG(comm));
+            phptrace_comm_sclose(&PTG(comm), 1);
+            PTG(do_trace) = 0;
         }
     }
 
@@ -659,12 +656,13 @@ exec:
         pt_frame_build(&frame, internal, PT_FRAME_ENTRY, execute_data, op_array TSRMLS_CC);
 
         /* Send frame message */
-        if (0) {
+        if (1) {
             msg = phptrace_comm_swrite_begin(&PTG(comm), phptrace_type_len_frame(&frame));
             phptrace_type_pack_frame(&frame, msg->data);
             phptrace_comm_swrite_end(&PTG(comm), 0x10000101, msg); /* FIXME type */
+        } else {
+            pt_fname_display(&frame, 1, "> ");
         }
-        pt_fname_display(&frame, 1, "> ");
 
         /* Register reture value ptr */
         if (!internal && EG(return_value_ptr_ptr) == NULL) {
@@ -704,12 +702,13 @@ exec:
         frame.type = PT_FRAME_EXIT;
 
         /* Send frame message */
-        if (0) {
+        if (1) {
             msg = phptrace_comm_swrite_begin(&PTG(comm), phptrace_type_len_frame(&frame));
             phptrace_type_pack_frame(&frame, msg->data);
             phptrace_comm_swrite_end(&PTG(comm), 0x10000101, msg); /* FIXME type */
+        } else {
+            pt_fname_display(&frame, 1, "< ");
         }
-        pt_fname_display(&frame, 1, "< ");
 
         /* Free reture value */
         if (!internal && retval != NULL) {
