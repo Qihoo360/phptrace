@@ -55,7 +55,7 @@ typedef unsigned long zend_uintptr_t;
 static void pt_frame_build(phptrace_frame *frame, zend_bool internal, unsigned char type, zend_execute_data *ex, zend_op_array *op_array TSRMLS_DC);
 static void pt_frame_destroy(phptrace_frame *frame TSRMLS_DC);
 static void pt_frame_set_retval(phptrace_frame *frame, zend_bool internal, zend_execute_data *ex, zend_fcall_info *fci TSRMLS_DC);
-static void pt_fname_display(phptrace_frame *frame, zend_bool indent, const char *format, ...);
+static void pt_frame_display(phptrace_frame *frame, zend_bool indent, const char *format, ...);
 static sds pt_repr_zval(zval *zv, int limit TSRMLS_DC);
 
 #if PHP_VERSION_ID < 50500
@@ -466,55 +466,20 @@ void pt_frame_set_retval(phptrace_frame *frame, zend_bool internal, zend_execute
     }
 }
 
-sds pt_repr_zval(zval *zv, int limit TSRMLS_DC)
+void pt_frame_send(phptrace_frame *frame)
 {
-    int tlen = 0;
-    char buf[128], *tstr = NULL;
-    sds result;
+    phptrace_comm_message *msg;
 
-    /* php_var_export_ex is a good example */
-    switch (Z_TYPE_P(zv)) {
-        case IS_BOOL:
-            if (Z_LVAL_P(zv)) {
-                return sdsnew("true");
-            } else {
-                return sdsnew("false");
-            }
-        case IS_NULL:
-            return sdsnew("NULL");
-        case IS_LONG:
-            sprintf(buf, "%ld", Z_LVAL_P(zv));
-            return sdsnew(buf);
-        case IS_DOUBLE:
-            sprintf(buf, "%f", Z_DVAL_P(zv));
-            return sdsnew(buf);
-        case IS_STRING:
-            tlen = (limit <= 0 || Z_STRLEN_P(zv) < limit) ? Z_STRLEN_P(zv) : limit;
-            result = sdscatrepr(sdsempty(), Z_STRVAL_P(zv), tlen);
-            if (limit > 0 && Z_STRLEN_P(zv) > limit) {
-                result = sdscat(result, "...");
-            }
-            return result;
-        case IS_ARRAY:
-            return sdscatprintf(sdsempty(), "array(%d)", zend_hash_num_elements(Z_ARRVAL_P(zv)));
-        case IS_OBJECT:
-            if (Z_OBJ_HANDLER(*zv, get_class_name)) {
-                Z_OBJ_HANDLER(*zv, get_class_name)(zv, (const char **) &tstr, (zend_uint *) &tlen, 0 TSRMLS_CC);
-                result = sdscatprintf(sdsempty(), "object(%s)#%d", tstr, Z_OBJ_HANDLE_P(zv));
-                efree(tstr);
-            } else {
-                result = sdscatprintf(sdsempty(), "object(unknown)#%d", Z_OBJ_HANDLE_P(zv));
-            }
-            return result;
-        case IS_RESOURCE:
-            tstr = (char *) zend_rsrc_list_get_rsrc_type(Z_LVAL_P(zv) TSRMLS_CC);
-            return sdscatprintf(sdsempty(), "resource(%s)#%ld", tstr ? tstr : "Unknown", Z_LVAL_P(zv));
-        default:
-            return sdsnew("{unknown}");
+    msg = phptrace_comm_swrite_begin(&PTG(comm), phptrace_type_len_frame(frame));
+    if (!msg) {
+        /* TODO frame too large */
+        return;
     }
+    phptrace_type_pack_frame(frame, msg->data);
+    phptrace_comm_swrite_end(&PTG(comm), 0x10000101, msg); /* FIXME type */
 }
 
-void pt_fname_display(phptrace_frame *frame, zend_bool indent, const char *format, ...)
+void pt_frame_display(phptrace_frame *frame, zend_bool indent, const char *format, ...)
 {
     int i;
     va_list ap;
@@ -572,6 +537,67 @@ done:
     }
 }
 
+sds pt_repr_zval(zval *zv, int limit TSRMLS_DC)
+{
+    int tlen = 0;
+    char buf[128], *tstr = NULL;
+    sds result;
+
+    /* php_var_export_ex is a good example */
+    switch (Z_TYPE_P(zv)) {
+        case IS_BOOL:
+            if (Z_LVAL_P(zv)) {
+                return sdsnew("true");
+            } else {
+                return sdsnew("false");
+            }
+        case IS_NULL:
+            return sdsnew("NULL");
+        case IS_LONG:
+            sprintf(buf, "%ld", Z_LVAL_P(zv));
+            return sdsnew(buf);
+        case IS_DOUBLE:
+            sprintf(buf, "%f", Z_DVAL_P(zv));
+            return sdsnew(buf);
+        case IS_STRING:
+            tlen = (limit <= 0 || Z_STRLEN_P(zv) < limit) ? Z_STRLEN_P(zv) : limit;
+            result = sdscatrepr(sdsempty(), Z_STRVAL_P(zv), tlen);
+            if (limit > 0 && Z_STRLEN_P(zv) > limit) {
+                result = sdscat(result, "...");
+            }
+            return result;
+        case IS_ARRAY:
+            return sdscatprintf(sdsempty(), "array(%d)", zend_hash_num_elements(Z_ARRVAL_P(zv)));
+        case IS_OBJECT:
+            if (Z_OBJ_HANDLER(*zv, get_class_name)) {
+                Z_OBJ_HANDLER(*zv, get_class_name)(zv, (const char **) &tstr, (zend_uint *) &tlen, 0 TSRMLS_CC);
+                result = sdscatprintf(sdsempty(), "object(%s)#%d", tstr, Z_OBJ_HANDLE_P(zv));
+                efree(tstr);
+            } else {
+                result = sdscatprintf(sdsempty(), "object(unknown)#%d", Z_OBJ_HANDLE_P(zv));
+            }
+            return result;
+        case IS_RESOURCE:
+            tstr = (char *) zend_rsrc_list_get_rsrc_type(Z_LVAL_P(zv) TSRMLS_CC);
+            return sdscatprintf(sdsempty(), "resource(%s)#%ld", tstr ? tstr : "Unknown", Z_LVAL_P(zv));
+        default:
+            return sdsnew("{unknown}");
+    }
+}
+
+void pt_ctrl_set_inactive(void)
+{
+    PTD("Ctrl set inactive");
+    CTRL_SET_INACTIVE();
+
+    /* toggle trace off, close comm-module */
+    PTG(dotrace) &= ~TRACE_TO_TOOL;
+    if (PTG(comm).seg.shmaddr != MAP_FAILED) {
+        PTD("Comm socket close");
+        phptrace_comm_sclose(&PTG(comm), 1);
+    }
+}
+
 #if 0
 static void pt_display_backtrace(zend_execute_data *ex, zend_bool internal TSRMLS_DC)
 {
@@ -585,7 +611,7 @@ static void pt_display_backtrace(zend_execute_data *ex, zend_bool internal TSRML
 
         pt_frame_build(&frame, ex, internal TSRMLS_CC);
         frame.level = 1;
-        pt_fname_display(&frame, 0, "#%-3d", num++);
+        pt_frame_display(&frame, 0, "#%-3d", num++);
         pt_frame_destroy(&frame TSRMLS_CC);
 
         ex = ex->prev_execute_data;
@@ -620,7 +646,7 @@ ZEND_API void phptrace_execute_core(int internal, zend_execute_data *execute_dat
             PTD("Comm socket %s create", PTG(comm_file));
             if (phptrace_comm_screate(&PTG(comm), PTG(comm_file), 0, PTG(send_size), PTG(recv_size)) == -1) {
                 PTD("Comm socket create failed");
-                CTRL_SET_INACTIVE();
+                pt_ctrl_set_inactive();
                 goto exec;
             }
             PING_UPDATE();
@@ -629,38 +655,34 @@ ZEND_API void phptrace_execute_core(int internal, zend_execute_data *execute_dat
         /* Handle message */
         while (1) {
             msg = phptrace_comm_sread(&PTG(comm));
+
             if (msg == NULL) {
                 if (PING_TIMEOUT()) {
                     PTD("ping timeout");
-                    /* TODO off all */
-                    CTRL_SET_INACTIVE();
+                    pt_ctrl_set_inactive();
                 }
                 break;
             }
-            PTD("Msg type: 0x%08x", msg->type);
 
             PING_UPDATE();
-            switch (msg->type) { /* TODO beautiful handler */
+            switch (msg->type) {
                 case 0x10000001:
+                    PTD("msg handle: start trace");
                     PTG(dotrace) |= TRACE_TO_TOOL;
                     break;
+
                 case 0x10000002:
-                    /* pt_display_backtrace(execute_data, 0 TSRMLS_CC); */
+                    PTD("msg handle: stop trace");
+                    PTG(dotrace) &= ~TRACE_TO_TOOL;
                     break;
-                case 0x10001001:
-                    printf("set zvallen: %d\n", *(int *) msg->data);
-                    break;
+
                 default:
+                    PTD("msg handle: unknown type of %x", msg->type);
                     break;
             }
         }
-    } else {
-        /* Close comm socket */
-        if (PTG(comm).seg.shmaddr != MAP_FAILED) {
-            PTD("Comm socket close");
-            phptrace_comm_sclose(&PTG(comm), 1);
-            PTG(dotrace) &= ~TRACE_TO_TOOL;
-        }
+    } else if (PTG(comm).seg.shmaddr != MAP_FAILED) { /* comm-module still open */
+        pt_ctrl_set_inactive();
     }
 
 exec:
@@ -684,12 +706,10 @@ exec:
 
         /* Send frame message */
         if (PTG(dotrace) & TRACE_TO_TOOL) {
-            msg = phptrace_comm_swrite_begin(&PTG(comm), phptrace_type_len_frame(&frame));
-            phptrace_type_pack_frame(&frame, msg->data);
-            phptrace_comm_swrite_end(&PTG(comm), 0x10000101, msg); /* FIXME type */
+            pt_frame_send(&frame);
         }
         if (PTG(dotrace) & TRACE_TO_OUTPUT) {
-            pt_fname_display(&frame, 1, "> ");
+            pt_frame_display(&frame, 1, "> ");
         }
     }
 
@@ -724,12 +744,10 @@ exec:
 
         /* Send frame message */
         if (PTG(dotrace) & TRACE_TO_TOOL) {
-            msg = phptrace_comm_swrite_begin(&PTG(comm), phptrace_type_len_frame(&frame));
-            phptrace_type_pack_frame(&frame, msg->data);
-            phptrace_comm_swrite_end(&PTG(comm), 0x10000101, msg); /* FIXME type */
+            pt_frame_send(&frame);
         }
         if (PTG(dotrace) & TRACE_TO_OUTPUT) {
-            pt_fname_display(&frame, 1, "< ");
+            pt_frame_display(&frame, 1, "< ");
         }
 
         /* Free reture value */
