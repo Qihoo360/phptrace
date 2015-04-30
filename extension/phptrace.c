@@ -371,7 +371,7 @@ void pt_frame_build(phptrace_frame *frame, zend_bool internal, unsigned char typ
     if (frame->arg_count > 0) {
         frame->args = calloc(frame->arg_count, sizeof(sds));
         for (i = 0; i < frame->arg_count; i++) {
-            frame->args[i] = pt_repr_zval(args[i], 0 TSRMLS_CC);
+            frame->args[i] = pt_repr_zval(args[i], 32 TSRMLS_CC);
         }
     }
 
@@ -445,18 +445,17 @@ void pt_frame_set_retval(phptrace_frame *frame, zend_bool internal, zend_execute
     }
 
     if (retval) {
-        frame->retval = pt_repr_zval(retval, 0 TSRMLS_CC);
+        frame->retval = pt_repr_zval(retval, 32 TSRMLS_CC);
     }
 }
 
 sds pt_repr_zval(zval *zv, int limit TSRMLS_DC)
 {
-    int tmp_len = 0;
-    char buf[128], *tmp_str = NULL;
+    int tlen = 0;
+    char buf[128], *tstr = NULL;
     sds result;
 
     /* php_var_export_ex is a good example */
-    /* TODO limit string length */
     switch (Z_TYPE_P(zv)) {
         case IS_BOOL:
             if (Z_LVAL_P(zv)) {
@@ -473,25 +472,26 @@ sds pt_repr_zval(zval *zv, int limit TSRMLS_DC)
             sprintf(buf, "%f", Z_DVAL_P(zv));
             return sdsnew(buf);
         case IS_STRING:
-            /* TODO addslashes and deal special chars, make it binary safe */
-            result = sdsnewlen("'", Z_STRLEN_P(zv) + 2);
-            memcpy(result + 1, Z_STRVAL_P(zv), Z_STRLEN_P(zv));
-            result[Z_STRLEN_P(zv) + 1] = '\'';
+            tlen = (limit <= 0 || Z_STRLEN_P(zv) < limit) ? Z_STRLEN_P(zv) : limit;
+            result = sdscatrepr(sdsempty(), Z_STRVAL_P(zv), tlen);
+            if (limit > 0 && Z_STRLEN_P(zv) > limit) {
+                result = sdscat(result, "...");
+            }
             return result;
         case IS_ARRAY:
             return sdscatprintf(sdsempty(), "array(%d)", zend_hash_num_elements(Z_ARRVAL_P(zv)));
         case IS_OBJECT:
             if (Z_OBJ_HANDLER(*zv, get_class_name)) {
-                Z_OBJ_HANDLER(*zv, get_class_name)(zv, (const char **) &tmp_str, (zend_uint *) &tmp_len, 0 TSRMLS_CC);
-                result = sdscatprintf(sdsempty(), "object(%s)#%d", tmp_str, Z_OBJ_HANDLE_P(zv));
-                efree(tmp_str);
+                Z_OBJ_HANDLER(*zv, get_class_name)(zv, (const char **) &tstr, (zend_uint *) &tlen, 0 TSRMLS_CC);
+                result = sdscatprintf(sdsempty(), "object(%s)#%d", tstr, Z_OBJ_HANDLE_P(zv));
+                efree(tstr);
             } else {
                 result = sdscatprintf(sdsempty(), "object(unknown)#%d", Z_OBJ_HANDLE_P(zv));
             }
             return result;
         case IS_RESOURCE:
-            tmp_str = (char *) zend_rsrc_list_get_rsrc_type(Z_LVAL_P(zv) TSRMLS_CC);
-            return sdscatprintf(sdsempty(), "resource(%s)#%ld", tmp_str ? tmp_str : "Unknown", Z_LVAL_P(zv));
+            tstr = (char *) zend_rsrc_list_get_rsrc_type(Z_LVAL_P(zv) TSRMLS_CC);
+            return sdscatprintf(sdsempty(), "resource(%s)#%ld", tstr ? tstr : "Unknown", Z_LVAL_P(zv));
         default:
             return sdsnew("{unknown}");
     }
