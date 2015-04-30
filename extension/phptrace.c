@@ -6,7 +6,9 @@
 #include "php_ini.h"
 #include "ext/standard/info.h"
 #include "php_phptrace.h"
+
 #include "zend_extensions.h"
+#include "SAPI.h"
 
 
 /**
@@ -32,6 +34,10 @@
     p.mem = zend_memory_usage(0 TSRMLS_CC); \
     p.mempeak = zend_memory_peak_usage(0 TSRMLS_CC); \
 } while (0);
+
+/* Flags of dotrace */
+#define TRACE_TO_OUTPUT (1 << 0)
+#define TRACE_TO_TOOL   (1 << 1)
 
 /**
  * Compatible with PHP 5.1
@@ -72,6 +78,9 @@ ZEND_API void phptrace_execute_internal(zend_execute_data *execute_data, zend_fc
 
 ZEND_DECLARE_MODULE_GLOBALS(phptrace)
 
+/* Make sapi_module accessable */
+extern sapi_module_struct sapi_module;
+
 /* True global resources - no need for thread safety here */
 static int le_phptrace;
 
@@ -110,7 +119,7 @@ ZEND_GET_MODULE(phptrace)
 /* PHP_INI */
 PHP_INI_BEGIN()
     STD_PHP_INI_ENTRY("phptrace.enable",    "1",    PHP_INI_SYSTEM, OnUpdateBool, enable, zend_phptrace_globals, phptrace_globals)
-    STD_PHP_INI_ENTRY("phptrace.do_trace",  "0",    PHP_INI_SYSTEM, OnUpdateBool, do_trace, zend_phptrace_globals, phptrace_globals)
+    STD_PHP_INI_ENTRY("phptrace.dotrace",   "0",    PHP_INI_SYSTEM, OnUpdateLong, dotrace, zend_phptrace_globals, phptrace_globals)
     STD_PHP_INI_ENTRY("phptrace.data_dir",  "/tmp", PHP_INI_SYSTEM, OnUpdateString, data_dir, zend_phptrace_globals, phptrace_globals)
     STD_PHP_INI_ENTRY("phptrace.recv_size", "4m",   PHP_INI_SYSTEM, OnUpdateLong, recv_size, zend_phptrace_globals, phptrace_globals)
     STD_PHP_INI_ENTRY("phptrace.send_size", "64m",  PHP_INI_SYSTEM, OnUpdateLong, send_size, zend_phptrace_globals, phptrace_globals)
@@ -119,7 +128,7 @@ PHP_INI_END()
 /* php_phptrace_init_globals */
 static void php_phptrace_init_globals(zend_phptrace_globals *ptg)
 {
-    ptg->enable = ptg->do_trace = 0;
+    ptg->enable = ptg->dotrace = 0;
     ptg->data_dir = NULL;
 
     memset(ptg->ctrl_file, 0, sizeof(ptg->ctrl_file));
@@ -172,6 +181,14 @@ PHP_MINIT_FUNCTION(phptrace)
     if (PTG(ctrl).ctrl_seg.shmaddr == MAP_FAILED) {
         PTD("Ctrl module %s failed", PTG(ctrl_file));
         return FAILURE;
+    }
+
+    /* Trace in CLI */
+    if (PTG(dotrace) && sapi_module.name[0]=='c' && sapi_module.name[1]=='l'
+            && sapi_module.name[2]=='i') {
+        PTG(dotrace) = TRACE_TO_OUTPUT;
+    } else {
+        PTG(dotrace) = 0;
     }
 
     return SUCCESS;
@@ -590,7 +607,7 @@ ZEND_API void phptrace_execute_core(int internal, zend_execute_data *execute_dat
 {
     zend_op_array *op_array = NULL;
 #endif
-    zend_bool do_trace;
+    long dotrace;
     zval *retval = NULL;
     phptrace_comm_message *msg;
     phptrace_frame frame;
@@ -625,7 +642,7 @@ ZEND_API void phptrace_execute_core(int internal, zend_execute_data *execute_dat
             PING_UPDATE();
             switch (msg->type) { /* TODO beautiful handler */
                 case 0x10000001:
-                    PTG(do_trace) = 1;
+                    PTG(dotrace) |= TRACE_TO_TOOL;
                     break;
                 case 0x10000002:
                     /* pt_display_backtrace(execute_data, 0 TSRMLS_CC); */
@@ -642,27 +659,21 @@ ZEND_API void phptrace_execute_core(int internal, zend_execute_data *execute_dat
         if (PTG(comm).seg.shmaddr != MAP_FAILED) {
             PTD("Comm socket close");
             phptrace_comm_sclose(&PTG(comm), 1);
-            PTG(do_trace) = 0;
+            PTG(dotrace) &= ~TRACE_TO_TOOL;
         }
     }
 
 exec:
-    /* assign to a local variable to prevent changing during executing */
-    do_trace = PTG(do_trace);
+    /* Assigning to a LOCAL VARIABLE at begining is to prevent value changed
+     * during executing. And whether send frame mesage back is controlled by
+     * GLOBAL VALUE because comm-module may be closed in recursion and sending
+     * in exit point will be affected. */
+    dotrace = PTG(dotrace);
 
     PTG(level)++;
 
-    if (do_trace) {
+    if (dotrace) {
         pt_frame_build(&frame, internal, PT_FRAME_ENTRY, execute_data, op_array TSRMLS_CC);
-
-        /* Send frame message */
-        if (1) {
-            msg = phptrace_comm_swrite_begin(&PTG(comm), phptrace_type_len_frame(&frame));
-            phptrace_type_pack_frame(&frame, msg->data);
-            phptrace_comm_swrite_end(&PTG(comm), 0x10000101, msg); /* FIXME type */
-        } else {
-            pt_fname_display(&frame, 1, "> ");
-        }
 
         /* Register reture value ptr */
         if (!internal && EG(return_value_ptr_ptr) == NULL) {
@@ -670,6 +681,16 @@ exec:
         }
 
         PROFILING_SET(frame.entry);
+
+        /* Send frame message */
+        if (PTG(dotrace) & TRACE_TO_TOOL) {
+            msg = phptrace_comm_swrite_begin(&PTG(comm), phptrace_type_len_frame(&frame));
+            phptrace_type_pack_frame(&frame, msg->data);
+            phptrace_comm_swrite_end(&PTG(comm), 0x10000101, msg); /* FIXME type */
+        }
+        if (PTG(dotrace) & TRACE_TO_OUTPUT) {
+            pt_fname_display(&frame, 1, "> ");
+        }
     }
 
     /* call original */
@@ -695,18 +716,19 @@ exec:
     }
 #endif
 
-    if (do_trace) {
+    if (dotrace) {
         PROFILING_SET(frame.exit);
 
         pt_frame_set_retval(&frame, internal, execute_data, fci TSRMLS_CC);
         frame.type = PT_FRAME_EXIT;
 
         /* Send frame message */
-        if (1) {
+        if (PTG(dotrace) & TRACE_TO_TOOL) {
             msg = phptrace_comm_swrite_begin(&PTG(comm), phptrace_type_len_frame(&frame));
             phptrace_type_pack_frame(&frame, msg->data);
             phptrace_comm_swrite_end(&PTG(comm), 0x10000101, msg); /* FIXME type */
-        } else {
+        }
+        if (PTG(dotrace) & TRACE_TO_OUTPUT) {
             pt_fname_display(&frame, 1, "< ");
         }
 

@@ -36,7 +36,7 @@ PHP_MINFO_FUNCTION(phptrace);
  */
 ZEND_BEGIN_MODULE_GLOBALS(phptrace)
     zend_bool               enable;
-    zend_bool               do_trace;       /* toggle of trace */
+    long                    dotrace;        /* flags of trace */
 
     char                    *data_dir;      /* data path, should be writable */
 
