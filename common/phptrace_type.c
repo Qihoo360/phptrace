@@ -25,8 +25,8 @@ size_t phptrace_type_len_frame(phptrace_frame *frame)
     int i;
     size_t size = 0;
 
-    size += sizeof(uint8_t);                                  /* internal */
     size += sizeof(uint8_t);                                  /* type */
+    size += sizeof(uint8_t);                                  /* functype */
     size += sizeof(uint32_t);                                 /* lineno */
 
     size += LEN_SDS(frame->filename);                         /* filename */
@@ -59,8 +59,8 @@ size_t phptrace_type_pack_frame(phptrace_frame *frame, char *buf)
     int i;
     char *ori = buf;
 
-    PACK(buf, uint8_t, frame->internal);
     PACK(buf, uint8_t, frame->type);
+    PACK(buf, uint8_t, frame->functype);
     PACK(buf, uint32_t, frame->lineno);
 
     PACK_SDS(buf, frame->filename);
@@ -92,8 +92,8 @@ phptrace_frame *phptrace_type_unpack_frame(phptrace_frame *frame, char *buf)
 {
     int i, len;
 
-    UNPACK(buf, uint8_t, frame->internal);
     UNPACK(buf, uint8_t, frame->type);
+    UNPACK(buf, uint8_t, frame->functype);
     UNPACK(buf, uint32_t, frame->lineno);
 
     UNPACK_SDS(buf, frame->filename);

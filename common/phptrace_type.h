@@ -6,12 +6,19 @@
 #include <stdlib.h>
 #include "sds/sds.h"
 
+#define PT_FRAME_ENTRY          1 /* function entry */
+#define PT_FRAME_EXIT           2 /* function exit */
+#define PT_FRAME_STACK          3 /* backtrace stack */
+
+#define PT_FUNC_INTERNAL        0x80 /* function is ZEND_INTERNAL_FUNCTION */
+
+#define PT_FUNC_TYPES           0x7f /* mask for type of function call */
+#define PT_FUNC_INCLUDES        0x10 /* mask for includes type */
+
 #define PT_FUNC_UNKNOWN         0x00
 #define PT_FUNC_NORMAL          0x01
 #define PT_FUNC_MEMBER          0x02
 #define PT_FUNC_STATIC          0x03
-
-#define PT_FUNC_INCLUDES        0x10
 #define PT_FUNC_INCLUDE         0x10
 #define PT_FUNC_INCLUDE_ONCE    0x11
 #define PT_FUNC_REQUIRE         0x12
@@ -19,8 +26,9 @@
 #define PT_FUNC_EVAL            0x14
 
 typedef struct {
-    uint8_t internal;           /* is ZEND_INTERNAL_FUNCTION */
-    uint8_t type;               /* flags of PT_FUNC_xxx */
+    uint8_t type;               /* frame type, entry or exit */
+    uint8_t functype;           /* function flags of PT_FUNC_xxx */
+
     uint32_t lineno;            /* entry lineno */
     sds filename;               /* entry filename */
     sds class;                  /* class name */
