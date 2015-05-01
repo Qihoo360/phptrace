@@ -55,8 +55,10 @@ typedef unsigned long zend_uintptr_t;
 static void pt_frame_build(phptrace_frame *frame, zend_bool internal, unsigned char type, zend_execute_data *ex, zend_op_array *op_array TSRMLS_DC);
 static void pt_frame_destroy(phptrace_frame *frame TSRMLS_DC);
 static void pt_frame_set_retval(phptrace_frame *frame, zend_bool internal, zend_execute_data *ex, zend_fcall_info *fci TSRMLS_DC);
-static void pt_frame_display(phptrace_frame *frame, zend_bool indent, const char *format, ...);
+static int pt_frame_send(phptrace_frame *frame TSRMLS_DC);
+static void pt_frame_display(phptrace_frame *frame TSRMLS_DC, zend_bool indent, const char *format, ...);
 static sds pt_repr_zval(zval *zv, int limit TSRMLS_DC);
+static void pt_ctrl_set_inactive(void);
 
 #if PHP_VERSION_ID < 50500
 static void (*pt_ori_execute)(zend_op_array *op_array TSRMLS_DC);
@@ -158,7 +160,6 @@ PHP_MINIT_FUNCTION(phptrace)
     }
 
     /* Replace executor */
-    PTD("Replace executor");
 #if PHP_VERSION_ID < 50500
     pt_ori_execute = zend_execute;
     zend_execute = phptrace_execute;
@@ -179,7 +180,7 @@ PHP_MINIT_FUNCTION(phptrace)
         phptrace_ctrl_open(&PTG(ctrl), PTG(ctrl_file));
     }
     if (PTG(ctrl).ctrl_seg.shmaddr == MAP_FAILED) {
-        PTD("Ctrl module %s failed", PTG(ctrl_file));
+        php_error(E_ERROR, "PHPTrace ctrl file %s open failed", PTG(ctrl_file));
         return FAILURE;
     }
 
@@ -203,7 +204,6 @@ PHP_MSHUTDOWN_FUNCTION(phptrace)
     }
 
     /* Restore original executor */
-    PTD("Restore executor");
 #if PHP_VERSION_ID < 50500
     zend_execute = pt_ori_execute;
 #else
@@ -251,7 +251,7 @@ PHP_MINFO_FUNCTION(phptrace)
  * PHP-Trace Function
  * --------------------
  */
-void pt_frame_build(phptrace_frame *frame, zend_bool internal, unsigned char type, zend_execute_data *ex, zend_op_array *op_array TSRMLS_DC)
+static void pt_frame_build(phptrace_frame *frame, zend_bool internal, unsigned char type, zend_execute_data *ex, zend_op_array *op_array TSRMLS_DC)
 {
     int i;
     zval **args;
@@ -297,7 +297,7 @@ void pt_frame_build(phptrace_frame *frame, zend_bool internal, unsigned char typ
                 frame->class = sdsnew(zf->common.scope->name);
             } else {
                 /* FIXME zend use zend_get_object_classname() */
-                PTD("Catch a entry with ex->object but without zf->common.scope");
+                php_error(E_WARNING, "PHPTrace catch a entry with ex->object but without zf->common.scope");
             }
         } else if (zf->common.scope) {
             frame->functype |= PT_FUNC_STATIC;
@@ -425,7 +425,7 @@ void pt_frame_build(phptrace_frame *frame, zend_bool internal, unsigned char typ
     }
 }
 
-void pt_frame_destroy(phptrace_frame *frame TSRMLS_DC)
+static void pt_frame_destroy(phptrace_frame *frame TSRMLS_DC)
 {
     int i;
 
@@ -441,7 +441,7 @@ void pt_frame_destroy(phptrace_frame *frame TSRMLS_DC)
     sdsfree(frame->retval);
 }
 
-void pt_frame_set_retval(phptrace_frame *frame, zend_bool internal, zend_execute_data *ex, zend_fcall_info *fci TSRMLS_DC)
+static void pt_frame_set_retval(phptrace_frame *frame, zend_bool internal, zend_execute_data *ex, zend_fcall_info *fci TSRMLS_DC)
 {
     zval *retval;
 
@@ -466,20 +466,22 @@ void pt_frame_set_retval(phptrace_frame *frame, zend_bool internal, zend_execute
     }
 }
 
-void pt_frame_send(phptrace_frame *frame)
+static int pt_frame_send(phptrace_frame *frame TSRMLS_DC)
 {
     phptrace_comm_message *msg;
 
     msg = phptrace_comm_swrite_begin(&PTG(comm), phptrace_type_len_frame(frame));
     if (!msg) {
-        /* TODO frame too large */
-        return;
+        php_error(E_WARNING, "PHPTrace comm-module write begin failed, tried to allocate %ld bytes", phptrace_type_len_frame(frame));
+        return -1;
     }
     phptrace_type_pack_frame(frame, msg->data);
     phptrace_comm_swrite_end(&PTG(comm), 0x10000101, msg); /* FIXME type */
+
+    return 0;
 }
 
-void pt_frame_display(phptrace_frame *frame, zend_bool indent, const char *format, ...)
+static void pt_frame_display(phptrace_frame *frame TSRMLS_DC, zend_bool indent, const char *format, ...)
 {
     int i;
     va_list ap;
@@ -537,7 +539,7 @@ done:
     }
 }
 
-sds pt_repr_zval(zval *zv, int limit TSRMLS_DC)
+static sds pt_repr_zval(zval *zv, int limit TSRMLS_DC)
 {
     int tlen = 0;
     char buf[128], *tstr = NULL;
@@ -567,6 +569,7 @@ sds pt_repr_zval(zval *zv, int limit TSRMLS_DC)
             }
             return result;
         case IS_ARRAY:
+            /* TODO more info */
             return sdscatprintf(sdsempty(), "array(%d)", zend_hash_num_elements(Z_ARRVAL_P(zv)));
         case IS_OBJECT:
             if (Z_OBJ_HANDLER(*zv, get_class_name)) {
@@ -585,7 +588,7 @@ sds pt_repr_zval(zval *zv, int limit TSRMLS_DC)
     }
 }
 
-void pt_ctrl_set_inactive(void)
+static void pt_ctrl_set_inactive(void)
 {
     PTD("Ctrl set inactive");
     CTRL_SET_INACTIVE();
@@ -598,7 +601,7 @@ void pt_ctrl_set_inactive(void)
     }
 }
 
-#if 0
+#if MONQUE_0
 static void pt_display_backtrace(zend_execute_data *ex, zend_bool internal TSRMLS_DC)
 {
     int num = 0;
@@ -611,7 +614,7 @@ static void pt_display_backtrace(zend_execute_data *ex, zend_bool internal TSRML
 
         pt_frame_build(&frame, ex, internal TSRMLS_CC);
         frame.level = 1;
-        pt_frame_display(&frame, 0, "#%-3d", num++);
+        pt_frame_display(&frame TSRMLS_CC, 0, "#%-3d", num++);
         pt_frame_destroy(&frame TSRMLS_CC);
 
         ex = ex->prev_execute_data;
@@ -641,11 +644,11 @@ ZEND_API void phptrace_execute_core(int internal, zend_execute_data *execute_dat
     /* Check ctrl module */
     if (CTRL_IS_ACTIVE()) {
         /* Open comm socket */
-        if (PTG(comm).seg.shmaddr == MAP_FAILED) {
+        if (PTG(comm).seg.shmaddr == MAP_FAILED) { /* TODO get rid of seg.shmaddr */
             snprintf(PTG(comm_file), sizeof(PTG(comm_file)), "%s/%s.%d", PTG(data_dir), PHPTRACE_COMM_FILENAME, PTG(pid));
             PTD("Comm socket %s create", PTG(comm_file));
             if (phptrace_comm_screate(&PTG(comm), PTG(comm_file), 0, PTG(send_size), PTG(recv_size)) == -1) {
-                PTD("Comm socket create failed");
+                php_error(E_WARNING, "PHPTrace comm-module %s open failed", PTG(ctrl_file));
                 pt_ctrl_set_inactive();
                 goto exec;
             }
@@ -677,7 +680,7 @@ ZEND_API void phptrace_execute_core(int internal, zend_execute_data *execute_dat
                     break;
 
                 default:
-                    PTD("msg handle: unknown type of %x", msg->type);
+                    php_error(E_NOTICE, "PHPTrace unknown message received with type 0x%x", msg->type);
                     break;
             }
         }
@@ -706,10 +709,10 @@ exec:
 
         /* Send frame message */
         if (PTG(dotrace) & TRACE_TO_TOOL) {
-            pt_frame_send(&frame);
+            pt_frame_send(&frame TSRMLS_CC);
         }
         if (PTG(dotrace) & TRACE_TO_OUTPUT) {
-            pt_frame_display(&frame, 1, "> ");
+            pt_frame_display(&frame TSRMLS_CC, 1, "> ");
         }
     }
 
@@ -744,10 +747,10 @@ exec:
 
         /* Send frame message */
         if (PTG(dotrace) & TRACE_TO_TOOL) {
-            pt_frame_send(&frame);
+            pt_frame_send(&frame TSRMLS_CC);
         }
         if (PTG(dotrace) & TRACE_TO_OUTPUT) {
-            pt_frame_display(&frame, 1, "< ");
+            pt_frame_display(&frame TSRMLS_CC, 1, "< ");
         }
 
         /* Free reture value */
