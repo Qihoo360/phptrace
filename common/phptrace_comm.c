@@ -1,9 +1,7 @@
-/**
- * These functions doing a general propose communication between process
- * through a fixed-size memory (mmap). And provide some socket like interface.
- */
+/* These functions doing a general propose communication between process on a
+ * fixed-size memory through mmap. And provide some socket like interface. */
 
-
+#include <string.h>
 #include <unistd.h>
 #include "phptrace_comm.h"
 

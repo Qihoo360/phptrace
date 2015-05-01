@@ -10,6 +10,10 @@
 #include "zend_extensions.h"
 #include "SAPI.h"
 
+#include "phptrace_time.h"
+#include "phptrace_type.h"
+#include "sds/sds.h"
+
 
 /**
  * PHP-Trace Global
@@ -17,6 +21,15 @@
  */
 /* Debug output FIXME */
 #define PTD(format, args...) fprintf(stderr, "[PTDebug:%d] " format "\n", __LINE__, ## args)
+
+/* TODO Definitions in phptrace_protocol.h. We won't need that file, so put
+ * it here temporarily. */
+/* We use PID_MAX+1 as the size of file phptrace.ctrl 4 million is the hard
+ * limit of linux kernel so far, It is 99999 on Mac OS X which is coverd by
+ * this value.  So 4*1024*1024 can serve both linux and unix(include darwin) */
+#define PID_MAX 4194304 /* 4*1024*1024 */
+#define PHPTRACE_CTRL_FILENAME "phptrace.ctrl"
+#define PHPTRACE_COMM_FILENAME "phptrace.comm"
 
 /* Ctrl module */
 #define CTRL ((int8_t *) (PTG(ctrl).ctrl_seg.shmaddr))[PTG(pid)]
@@ -396,7 +409,7 @@ static void pt_frame_build(phptrace_frame *frame, zend_bool internal, unsigned c
     if (ex && ex->opline) {
         frame->lineno = ex->opline->lineno;
     } else if (ex && ex->prev_execute_data && ex->prev_execute_data->opline) {
-        /* FIXME try it in loop ? */
+        /* TODO try it in loop ? */
         frame->lineno = ex->prev_execute_data->opline->lineno; /* try using prev */
     } else if (op_array && op_array->opcodes) {
         frame->lineno = op_array->opcodes->lineno;
@@ -644,7 +657,7 @@ ZEND_API void phptrace_execute_core(int internal, zend_execute_data *execute_dat
     /* Check ctrl module */
     if (CTRL_IS_ACTIVE()) {
         /* Open comm socket */
-        if (PTG(comm).seg.shmaddr == MAP_FAILED) { /* TODO get rid of seg.shmaddr */
+        if (PTG(comm).seg.shmaddr == MAP_FAILED) {
             snprintf(PTG(comm_file), sizeof(PTG(comm_file)), "%s/%s.%d", PTG(data_dir), PHPTRACE_COMM_FILENAME, PTG(pid));
             PTD("Comm socket %s create", PTG(comm_file));
             if (phptrace_comm_screate(&PTG(comm), PTG(comm_file), 0, PTG(send_size), PTG(recv_size)) == -1) {

@@ -2,8 +2,6 @@
 #define PHPTRACE_TYPE_H
 
 #include <stdint.h>
-#include <string.h>
-#include <stdlib.h>
 #include "sds/sds.h"
 
 #define PT_FRAME_ENTRY          1 /* function entry */

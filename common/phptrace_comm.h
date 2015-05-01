@@ -2,7 +2,6 @@
 #define PHPTRACE_COMM_H
 
 #include <stdint.h>
-#include <string.h>
 #include "phptrace_mmap.h"
 
 #define PT_MAGIC_NUMBER     0x6563617274706870 /* ascii codes of "phptrace" */
