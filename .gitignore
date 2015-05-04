@@ -27,3 +27,11 @@
 *.i*86
 *.x86_64
 *.hex
+
+# Extension
+extension/*
+extension/!config.m4
+extension/!php_phptrace.h
+extension/!phptrace.c
+extension/!phptrace.php
+extension/!tests
