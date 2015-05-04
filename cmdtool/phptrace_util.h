@@ -29,7 +29,7 @@
 #endif
 
 #define PHPTRACE_NAME "phptrace"
-#define PHPTRACE_VERSION "0.2.3 stable"
+#define PHPTRACE_VERSION "0.3.0 rc"
 #define PHPTRACE_DEVELOPER "360 infra webcore team"
 
 #define MAX_TEMP_LENGTH 100
@@ -160,8 +160,11 @@ struct phptrace_context_s {
     int64_t *sub_cpu_time;                              /* count the time of sub calls' cpu time when exclusive mode */
     int64_t max_function;
 
+    /*
     phptrace_file_t file;
     phptrace_segment_t seg;
+    */
+
     phptrace_ctrl_t ctrl;
 
     phptrace_record_transform_t record_transform;     /* transform,  a function point32_ter */

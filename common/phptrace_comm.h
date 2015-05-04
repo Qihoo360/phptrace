@@ -6,11 +6,25 @@
 
 #define SEQ_MAX             1000
 
-#define PT_MSG_EMPTY        0x00000000
-#define PT_MSG_ROTATE       0x00000001
-#define PT_MSG_RESEQ        0x00000002
+#define PT_MSG_EMPTY                    0x00000000
+#define PT_MSG_ROTATE                   0x00000001
+#define PT_MSG_RESEQ                    0x00000002
 /* User defined type should not begin with 0 at left-most bit */
-#define PT_MSG_NORMAL       0x10000000
+#define PT_MSG_NORMAL                   0x10000000
+
+#define PT_MSG_TYPE_BASE                0
+#define PT_MSG_DO_BASE                  (PT_MSG_TYPE_BASE + 0x00010000)
+#define PT_MSG_DO_TRACE                 (PT_MSG_DO_BASE + 1)
+#define PT_MSG_DO_STATUS                (PT_MSG_DO_BASE + 2)
+#define PT_MSG_DO_FILTER                (PT_MSG_DO_BASE + 3)
+#define PT_MSG_DO_PING                  (PT_MSG_DO_BASE + 4)
+
+#define PT_MSG_GET_BASE                 (PT_MSG_TYPE_BASE + 0x00100000)
+#define PT_MSG_GET_FILTER_ARGS          (PT_MSG_GET_BASE + 1);
+
+#define PT_MSG_SET_BASE                 (PT_MSG_TYPE_BASE + 0x00110000)
+
+#define PT_MSG_RET                      0x80000000
 
 typedef struct {
     size_t size;                /* buffer size */

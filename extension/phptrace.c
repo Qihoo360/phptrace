@@ -626,13 +626,14 @@ ZEND_API void phptrace_execute_core(int internal, zend_execute_data *execute_dat
             } else if (msg->type == PT_MSG_EMPTY) {
                 if (PING_TIMEOUT()) {
                     CTRL_SET_INACTIVE();
+                    PTG(do_trace) = 0;
                 }
                 break;
             } else if (msg->type != PT_MSG_EMPTY) {
                 PING_UPDATE();
 
                 switch (msg->type) { /* TODO beautiful handler */
-                    case 0x10000001:
+                    case PT_MSG_DO_TRACE:
                         PTG(do_trace) = 1;
                         break;
                     case 0x10000002:
@@ -649,6 +650,7 @@ ZEND_API void phptrace_execute_core(int internal, zend_execute_data *execute_dat
     } else {
         /* Close comm socket */
         if (PTG(comm).seg.shmaddr != MAP_FAILED) {
+            PTG(do_trace) = 0;
             PTD("Comm socket close");
             phptrace_comm_sclose(&PTG(comm));
         }
@@ -669,7 +671,7 @@ exec:
         if (1) {
             msg = phptrace_comm_swrite_begin(&PTG(comm), phptrace_type_len_frame(&frame));
             phptrace_type_pack_frame(&frame, msg->data);
-            phptrace_comm_swrite_end(&PTG(comm), 0x10000101, msg); /* FIXME type */
+            phptrace_comm_swrite_end(&PTG(comm), PT_MSG_RET, msg); /* FIXME type */
         }
         pt_fname_display(&frame, 1, "> ");
 
@@ -713,7 +715,7 @@ exec:
         if (1) {
             msg = phptrace_comm_swrite_begin(&PTG(comm), phptrace_type_len_frame(&frame));
             phptrace_type_pack_frame(&frame, msg->data);
-            phptrace_comm_swrite_end(&PTG(comm), 0x10000101, msg); /* FIXME type */
+            phptrace_comm_swrite_end(&PTG(comm), PT_MSG_RET, msg); /* FIXME type */
         }
         pt_fname_display(&frame, 1, "< ");
 
