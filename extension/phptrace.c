@@ -489,7 +489,7 @@ static int pt_frame_send(phptrace_frame *frame TSRMLS_DC)
         return -1;
     }
     phptrace_type_pack_frame(frame, msg->data);
-    phptrace_comm_swrite_end(&PTG(comm), 0x10000101, msg); /* FIXME type */
+    phptrace_comm_swrite_end(&PTG(comm), PT_MSG_RET, msg);
 
     return 0;
 }
@@ -656,7 +656,6 @@ ZEND_API void phptrace_execute_core(int internal, zend_execute_data *execute_dat
 
     /* Check ctrl module */
     if (CTRL_IS_ACTIVE()) {
-        PTD("ctrl is active");
         /* Open comm socket */
         if (PTG(comm).seg.shmaddr == MAP_FAILED) {
             snprintf(PTG(comm_file), sizeof(PTG(comm_file)), "%s/%s.%d", PTG(data_dir), PHPTRACE_COMM_FILENAME, PTG(pid));
@@ -681,16 +680,14 @@ ZEND_API void phptrace_execute_core(int internal, zend_execute_data *execute_dat
                 break;
             }
 
-            PING_UPDATE();
             switch (msg->type) {
-                case 0x10000001:
+                case PT_MSG_DO_TRACE:
                     PTD("msg handle: start trace");
                     PTG(dotrace) |= TRACE_TO_TOOL;
                     break;
 
-                case 0x10000002:
-                    PTD("msg handle: stop trace");
-                    PTG(dotrace) &= ~TRACE_TO_TOOL;
+                case PT_MSG_DO_PING:
+                    PING_UPDATE();
                     break;
 
                 default:
