@@ -301,6 +301,10 @@ static void pt_frame_build(phptrace_frame *frame, zend_bool internal, unsigned c
     frame->functype = internal ? PT_FUNC_INTERNAL : 0x00;
     frame->level = PTG(level);
 
+    /* args init */
+    frame->arg_count = 0;
+    frame->args = NULL;
+
     /* names */
     if (zf->common.function_name) {
         /* functype, class name */
@@ -334,6 +338,25 @@ static void pt_frame_build(phptrace_frame *frame, zend_bool internal, unsigned c
              * zend_resolve_method_name(ex->object ?  Z_OBJCE_P(ex->object) : zf->common.scope, zf)
              */
             frame->function = sdsnew(zf->common.function_name);
+        }
+
+        /* args */
+#if PHP_VERSION_ID < 50300
+        if (EG(argument_stack).top >= 2) {
+            frame->arg_count = (int)(zend_uintptr_t) *(EG(argument_stack).top_element - 2);
+            args = (zval **)(EG(argument_stack).top_element - 2 - frame->arg_count);
+        }
+#else
+        if (ex && ex->function_state.arguments) {
+            frame->arg_count = (int)(zend_uintptr_t) *(ex->function_state.arguments);
+            args = (zval **)(ex->function_state.arguments - frame->arg_count);
+        }
+#endif
+        if (frame->arg_count > 0) {
+            frame->args = calloc(frame->arg_count, sizeof(sds));
+            for (i = 0; i < frame->arg_count; i++) {
+                frame->args[i] = pt_repr_zval(args[i], 32 TSRMLS_CC);
+            }
         }
     } else {
         int add_filename = 1;
@@ -373,39 +396,21 @@ static void pt_frame_build(phptrace_frame *frame, zend_bool internal, unsigned c
                 break;
             case ZEND_EVAL:
                 frame->functype |= PT_FUNC_EVAL;
-                frame->function = sdsnew("{eval}");
+                frame->function = "{eval}"; /* TODO add eval code */
                 add_filename = 0;
                 break;
             default:
                 /* should be function main */
                 frame->functype |= PT_FUNC_NORMAL;
-                frame->function = sdsnew("{main}");
+                frame->function = "{main}";
                 add_filename = 0;
                 break;
         }
+        frame->function = sdsnew(frame->function);
         if (add_filename) {
-            frame->function = sdscatprintf(sdsempty(), "{%s:%s}", frame->function, zf->op_array.filename);
-        }
-    }
-
-    /* args */
-    frame->arg_count = 0;
-    frame->args = NULL;
-#if PHP_VERSION_ID < 50300
-    if (EG(argument_stack).top >= 2) {
-        frame->arg_count = (int)(zend_uintptr_t) *(EG(argument_stack).top_element - 2);
-        args = (zval **)(EG(argument_stack).top_element - 2 - frame->arg_count);
-    }
-#else
-    if (ex && ex->function_state.arguments) {
-        frame->arg_count = (int)(zend_uintptr_t) *(ex->function_state.arguments);
-        args = (zval **)(ex->function_state.arguments - frame->arg_count);
-    }
-#endif
-    if (frame->arg_count > 0) {
-        frame->args = calloc(frame->arg_count, sizeof(sds));
-        for (i = 0; i < frame->arg_count; i++) {
-            frame->args[i] = pt_repr_zval(args[i], 32 TSRMLS_CC);
+            frame->arg_count = 1;
+            frame->args = calloc(frame->arg_count, sizeof(sds));
+            frame->args[0] = sdscatrepr(sdsempty(), zf->op_array.filename, strlen(zf->op_array.filename));
         }
     }
 
@@ -523,13 +528,14 @@ static void pt_frame_display(phptrace_frame *frame TSRMLS_DC, zend_bool indent, 
     va_end(ap);
 
     /* frame */
-    if ((frame->functype & PT_FUNC_TYPES) == PT_FUNC_NORMAL) {
+    if ((frame->functype & PT_FUNC_TYPES) == PT_FUNC_NORMAL ||
+            frame->functype & PT_FUNC_TYPES & PT_FUNC_INCLUDES) {
         fprintf(stderr, "%s(", frame->function);
     } else if ((frame->functype & PT_FUNC_TYPES) == PT_FUNC_MEMBER) {
         fprintf(stderr, "%s->%s(", frame->class, frame->function);
     } else if ((frame->functype & PT_FUNC_TYPES) == PT_FUNC_STATIC) {
         fprintf(stderr, "%s::%s(", frame->class, frame->function);
-    } else if (frame->functype & PT_FUNC_TYPES & PT_FUNC_INCLUDES) {
+    } else if ((frame->functype & PT_FUNC_TYPES) == PT_FUNC_EVAL) {
         fprintf(stderr, "%s", frame->function);
         goto done;
     } else {

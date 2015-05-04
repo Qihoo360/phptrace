@@ -17,11 +17,11 @@
 #define PT_FUNC_NORMAL          0x01
 #define PT_FUNC_MEMBER          0x02
 #define PT_FUNC_STATIC          0x03
+#define PT_FUNC_EVAL            0x04
 #define PT_FUNC_INCLUDE         0x10
 #define PT_FUNC_INCLUDE_ONCE    0x11
 #define PT_FUNC_REQUIRE         0x12
 #define PT_FUNC_REQUIRE_ONCE    0x13
-#define PT_FUNC_EVAL            0x14
 
 typedef struct {
     uint8_t type;               /* frame type, entry or exit */
