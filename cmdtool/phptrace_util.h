@@ -129,7 +129,7 @@ typedef struct address_info_s {
 
 typedef struct phptrace_context_s phptrace_context_t;
 
-typedef sds (*phptrace_record_transform_t)(phptrace_context_t *ctx, phptrace_file_record_t *r);
+typedef sds (*phptrace_record_transform_t)(phptrace_context_t *ctx, phptrace_frame *r);
 
 struct phptrace_context_s {
     int32_t php_pid;                                    /* pid of the -p option, default -1 */

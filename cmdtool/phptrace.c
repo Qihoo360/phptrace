@@ -232,12 +232,6 @@ int main(int argc, char *argv[])
             error_msg(&context, ERR, "Can not open %s to dump. (%s)", context.out_filename, (errno ? strerror(errno) : "null"));
             die(&context, -1);
         }
-
-        if (context.output_flag & OUTPUT_FLAG_WRITE) {           /* -w option, dump */
-            context.record_transform = dump_transform;
-        } else if (context.output_flag & OUTPUT_FLAG_JSON) {     /* -o option, --format json */
-            context.record_transform = json_transform;
-        }
     }
 
     trace(&context);

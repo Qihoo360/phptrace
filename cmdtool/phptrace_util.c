@@ -318,13 +318,11 @@ extern int interrupted;
 
 void trace(phptrace_context_t *ctx)
 {
-    int rc;
     int state = STATE_OPEN;
     uint64_t seq = 0;
 
     sds buf;
     uint32_t type;
-    uint64_t magic_number;
     int opendata_wait_interval = OPEN_DATA_WAIT_INTERVAL;
     int data_wait_interval = DATA_WAIT_INTERVAL;
 
