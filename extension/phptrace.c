@@ -19,8 +19,12 @@
  * PHP-Trace Global
  * --------------------
  */
-/* Debug output FIXME */
+/* Debug output */
+#if PHPTRACE_DEBUG
 #define PTD(format, args...) fprintf(stderr, "[PTDebug:%d] " format "\n", __LINE__, ## args)
+#else
+#define PTD(format, args...)
+#endif
 
 /* TODO Definitions in phptrace_protocol.h. We won't need that file, so put
  * it here temporarily. */
@@ -154,7 +158,7 @@ static void php_phptrace_init_globals(zend_phptrace_globals *ptg)
     ptg->pid = ptg->level = 0;
 
     ptg->ping = 0;
-    ptg->idle_timeout = 30;
+    ptg->idle_timeout = 30; /* hardcoded */
 }
 
 
@@ -674,7 +678,7 @@ ZEND_API void phptrace_execute_core(int internal, zend_execute_data *execute_dat
 
             if (msg == NULL) {
                 if (PING_TIMEOUT()) {
-                    PTD("ping timeout");
+                    PTD("Ping timeout");
                     pt_ctrl_set_inactive();
                 }
                 break;

@@ -4,7 +4,7 @@
 extern zend_module_entry phptrace_module_entry;
 #define phpext_phptrace_ptr &phptrace_module_entry
 
-#define PHP_PHPTRACE_VERSION "0.3.0" /* TODO this version is totaly brand-new */
+#define PHP_PHPTRACE_VERSION "0.3.0"
 
 #ifdef PHP_WIN32
 #   define PHP_PHPTRACE_API __declspec(dllexport)
@@ -49,7 +49,6 @@ ZEND_BEGIN_MODULE_GLOBALS(phptrace)
     uint32_t                level;          /* nesting level */
 
     uint32_t                ping;           /* last ping time (second) */
-    /* TODO move timeout to ini setting */
     uint32_t                idle_timeout;   /* idle timeout, for current - last ping */
 ZEND_END_MODULE_GLOBALS(phptrace)
 
