@@ -460,18 +460,27 @@ static void pt_frame_destroy(phptrace_frame *frame TSRMLS_DC)
 
 static void pt_frame_set_retval(phptrace_frame *frame, zend_bool internal, zend_execute_data *ex, zend_fcall_info *fci TSRMLS_DC)
 {
-    zval *retval;
+    zval *retval = NULL;
 
     if (internal) {
-#if PHP_VERSION_ID < 50400
-        retval = ((temp_variable *)((char *) ex->Ts + ex->opline->result.u.var))->var.ptr;
-#elif PHP_VERSION_ID < 50500
-        retval = ((temp_variable *)((char *) ex->Ts + ex->opline->result.var))->var.ptr;
-#else
+        /* Ensure there is no exception occurs before fetching return value.
+         * opline would be replaced by the Exception's opline if exception was
+         * thrown which processed in function zend_throw_exception_internal().
+         * It may cause a SEGMENTATION FAULT if we get the return value from a
+         * exception opline. */
+#if PHP_VERSION_ID >= 50500
         if (fci != NULL) {
             retval = *fci->retval_ptr_ptr;
-        } else {
+        } else if (ex->opline && !EG(exception)) {
             retval = EX_TMP_VAR(ex, ex->opline->result.var)->var.ptr;
+        }
+#else
+        if (ex->opline && !EG(exception)) {
+#if PHP_VERSION_ID < 50400
+            retval = ((temp_variable *)((char *) ex->Ts + ex->opline->result.u.var))->var.ptr;
+#else
+            retval = ((temp_variable *)((char *) ex->Ts + ex->opline->result.var))->var.ptr;
+#endif
         }
 #endif
     } else if (*EG(return_value_ptr_ptr)) {
@@ -653,6 +662,7 @@ ZEND_API void phptrace_execute_core(int internal, zend_execute_data *execute_dat
 {
     zend_op_array *op_array = NULL;
 #endif
+    zend_bool dobailout = 0;
     long dotrace;
     zval *retval = NULL;
     phptrace_comm_message *msg;
@@ -731,33 +741,43 @@ exec:
         }
     }
 
-    /* call original */
+    /* Call original under zend_try. baitout will be called when exit(), error
+     * occurs, exception thrown and etc, so we have to catch it and free our
+     * resources. */
+    zend_try {
 #if PHP_VERSION_ID < 50500
-    if (internal) {
-        if (pt_ori_execute_internal) {
-            pt_ori_execute_internal(execute_data, rvu TSRMLS_CC);
+        if (internal) {
+            if (pt_ori_execute_internal) {
+                pt_ori_execute_internal(execute_data, rvu TSRMLS_CC);
+            } else {
+                execute_internal(execute_data, rvu TSRMLS_CC);
+            }
         } else {
-            execute_internal(execute_data, rvu TSRMLS_CC);
+            pt_ori_execute(op_array TSRMLS_CC);
         }
-    } else {
-        pt_ori_execute(op_array TSRMLS_CC);
-    }
 #else
-    if (internal) {
-        if (pt_ori_execute_internal) {
-            pt_ori_execute_internal(execute_data, fci, rvu TSRMLS_CC);
+        if (internal) {
+            if (pt_ori_execute_internal) {
+                pt_ori_execute_internal(execute_data, fci, rvu TSRMLS_CC);
+            } else {
+                execute_internal(execute_data, fci, rvu TSRMLS_CC);
+            }
         } else {
-            execute_internal(execute_data, fci, rvu TSRMLS_CC);
+            pt_ori_execute_ex(execute_data TSRMLS_CC);
         }
-    } else {
-        pt_ori_execute_ex(execute_data TSRMLS_CC);
-    }
 #endif
+    } zend_catch {
+        dobailout = 1;
+        /* call zend_bailout() at the end of this function, we still want to
+         * send message. */
+    } zend_end_try();
 
     if (dotrace) {
         PROFILING_SET(frame.exit);
 
-        pt_frame_set_retval(&frame, internal, execute_data, fci TSRMLS_CC);
+        if (!dobailout) {
+            pt_frame_set_retval(&frame, internal, execute_data, fci TSRMLS_CC);
+        }
         frame.type = PT_FRAME_EXIT;
 
         /* Send frame message */
@@ -771,12 +791,17 @@ exec:
         /* Free reture value */
         if (!internal && retval != NULL) {
             zval_ptr_dtor(&retval);
+            EG(return_value_ptr_ptr) = NULL;
         }
 
         pt_frame_destroy(&frame TSRMLS_CC);
     }
 
     PTG(level)--;
+
+    if (dobailout) {
+        zend_bailout();
+    }
 }
 
 #if PHP_VERSION_ID < 50500
