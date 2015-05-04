@@ -1,9 +1,8 @@
-/**
- * These functions doing a general propose communication between process
- * through a fixed-size memory (mmap). And provide some socket like interface.
- */
+/* These functions doing a general propose communication between process on a
+ * fixed-size memory through mmap. And provide some socket like interface. */
 
-
+#include <string.h>
+#include <unistd.h>
 #include "phptrace_comm.h"
 
 
@@ -12,6 +11,9 @@ int phptrace_comm_screate(phptrace_comm_socket *sock, const char *filename, int 
     void *p;
     phptrace_comm_socket_meta *meta;
 
+    sock->filename = (char *) filename;
+    /* TODO use zero fill this file before mmap, make sure another process has
+     * a clear space after mmap immediately. */
     sock->seg = phptrace_mmap_create(filename, sizeof(phptrace_comm_socket_meta) + send_size + recv_size);
     if (sock->seg.shmaddr == MAP_FAILED) {
         return -1;
@@ -19,11 +21,12 @@ int phptrace_comm_screate(phptrace_comm_socket *sock, const char *filename, int 
 
     /* Init meta info */
     meta = (phptrace_comm_socket_meta *) sock->seg.shmaddr;
+    meta->magic = 0;
     meta->send_size = send_size;
     meta->recv_size = recv_size;
     p = sock->seg.shmaddr + sizeof(phptrace_comm_socket_meta);
 
-    /* Attach handler */
+    /* Init, attach handler */
     if (crossover) {
         phptrace_comm_init(&sock->recv_handler, p, meta->send_size);
         phptrace_comm_init(&sock->send_handler, p + meta->send_size, meta->recv_size);
@@ -31,6 +34,11 @@ int phptrace_comm_screate(phptrace_comm_socket *sock, const char *filename, int 
         phptrace_comm_init(&sock->send_handler, p, meta->send_size);
         phptrace_comm_init(&sock->recv_handler, p + meta->send_size, meta->recv_size);
     }
+    phptrace_comm_clear(&sock->send_handler);
+    phptrace_comm_clear(&sock->recv_handler);
+
+    /* Make it accessable at last step */
+    meta->magic = PT_MAGIC_NUMBER;
 
     return 0;
 }
@@ -40,6 +48,7 @@ int phptrace_comm_sopen(phptrace_comm_socket *sock, const char *filename, int cr
     void *p;
     phptrace_comm_socket_meta *meta;
 
+    sock->filename = (char *) filename;
     sock->seg = phptrace_mmap_write(filename);
     if (sock->seg.shmaddr == MAP_FAILED) {
         return -1;
@@ -47,6 +56,9 @@ int phptrace_comm_sopen(phptrace_comm_socket *sock, const char *filename, int cr
 
     /* Init meta info */
     meta = (phptrace_comm_socket_meta *) sock->seg.shmaddr;
+    if (meta->magic != PT_MAGIC_NUMBER) {
+        return -1;
+    }
     p = sock->seg.shmaddr + sizeof(phptrace_comm_socket_meta);
 
     /* Attach handler */
@@ -61,7 +73,7 @@ int phptrace_comm_sopen(phptrace_comm_socket *sock, const char *filename, int cr
     return 0;
 }
 
-void phptrace_comm_sclose(phptrace_comm_socket *sock)
+void phptrace_comm_sclose(phptrace_comm_socket *sock, int delfile)
 {
     phptrace_comm_uninit(&sock->send_handler);
     phptrace_comm_uninit(&sock->recv_handler);
@@ -69,6 +81,10 @@ void phptrace_comm_sclose(phptrace_comm_socket *sock)
     phptrace_unmap(&sock->seg);
     sock->seg.shmaddr = MAP_FAILED;
     sock->seg.size = 0;
+
+    if (delfile) {
+        unlink(sock->filename);
+    }
 }
 
 void phptrace_comm_init(phptrace_comm_handler *handler, void *head, size_t size)
@@ -76,6 +92,7 @@ void phptrace_comm_init(phptrace_comm_handler *handler, void *head, size_t size)
     /* init handler element */
     handler->size = size;
     handler->head = head;
+
     handler->current = handler->head;
     handler->sequence = 0;
 }
@@ -88,9 +105,10 @@ void phptrace_comm_uninit(phptrace_comm_handler *handler)
 
 void phptrace_comm_clear(phptrace_comm_handler *handler)
 {
+    memset(handler->head, 0, handler->size);
+
     handler->current = handler->head;
     handler->sequence = 0;
-    memset(handler->head, 0, handler->size);
 }
 
 phptrace_comm_message *phptrace_comm_next(phptrace_comm_handler *handler)
@@ -129,6 +147,7 @@ phptrace_comm_message *phptrace_comm_write_begin(phptrace_comm_handler *handler,
         msg = (phptrace_comm_message *) (handler->current = handler->head);
     }
 
+    /* set message except real type */
     msg->seq = handler->sequence;
     msg->type = PT_MSG_EMPTY;
     msg->len = size;
@@ -138,18 +157,18 @@ phptrace_comm_message *phptrace_comm_write_begin(phptrace_comm_handler *handler,
 
 void phptrace_comm_write_end(phptrace_comm_handler *handler, unsigned int type, phptrace_comm_message *msg)
 {
+    /* make next block empty */
+    phptrace_comm_next(handler);
+    phptrace_comm_write_begin(handler, 0);
+
     /* set message type, make it readable */
     msg->type = type;
 
-    phptrace_comm_next(handler);
-
     /* reset sequence */
-    if (handler->sequence > SEQ_MAX) {
+    if (handler->sequence > PT_COMM_SEQMAX) {
         handler->sequence = 0;
         phptrace_comm_write_end(handler, PT_MSG_RESEQ, phptrace_comm_write_begin(handler, 0));
     }
-
-    phptrace_comm_write_begin(handler, 0); /* make next block empty */
 }
 
 /**
@@ -196,7 +215,7 @@ phptrace_comm_message *phptrace_comm_read(phptrace_comm_handler *handler, int mo
     /* Invalid type */
     if (msg->type == PT_MSG_EMPTY) {
         /* Empty */
-        return msg;
+        return NULL;
     } else if (msg->seq != handler->sequence) {
         /* Sequence error */
         return NULL;

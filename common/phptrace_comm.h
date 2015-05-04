@@ -1,10 +1,11 @@
 #ifndef PHPTRACE_COMM_H
 #define PHPTRACE_COMM_H
 
-#include <string.h>
+#include <stdint.h>
 #include "phptrace_mmap.h"
 
-#define SEQ_MAX             1000
+#define PT_MAGIC_NUMBER     0x6563617274706870 /* ascii codes of "phptrace" */
+#define PT_COMM_SEQMAX      1000
 
 #define PT_MSG_EMPTY                    0x00000000
 #define PT_MSG_ROTATE                   0x00000001
@@ -27,26 +28,28 @@
 #define PT_MSG_RET                      0x80000000
 
 typedef struct {
-    size_t size;                /* buffer size */
+    uint64_t size;              /* buffer size */
     void *head;                 /* head of buffer */
     void *current;              /* current pointer */
-    unsigned int sequence;      /* current sequence */
+    uint32_t sequence;          /* current sequence */
 } phptrace_comm_handler;
 
 typedef struct {
-    unsigned int seq;           /* message sequence */
-    unsigned int type;          /* message type */
-    size_t len;                 /* message length */
+    uint32_t seq;               /* message sequence */
+    uint32_t type;              /* message type */
+    uint32_t len;               /* message length */
     char data[];                /* scaleable data */
 } phptrace_comm_message;
 
 typedef struct {
     phptrace_segment_t seg;     /* mmap segment */
+    char *filename;
     phptrace_comm_handler send_handler;
     phptrace_comm_handler recv_handler;
 } phptrace_comm_socket;
 
 typedef struct {
+    uint64_t magic;
     size_t send_size;           /* send handler size */
     size_t recv_size;           /* recv handler size */
 } phptrace_comm_socket_meta;
@@ -71,7 +74,7 @@ typedef struct {
 
 int phptrace_comm_screate(phptrace_comm_socket *sock, const char *filename, int crossover, size_t send_size, size_t recv_size);
 int phptrace_comm_sopen(phptrace_comm_socket *sock, const char *filename, int crossover);
-void phptrace_comm_sclose(phptrace_comm_socket *sock);
+void phptrace_comm_sclose(phptrace_comm_socket *sock, int delfile);
 void phptrace_comm_init(phptrace_comm_handler *handler, void *head, size_t size);
 void phptrace_comm_uninit(phptrace_comm_handler *handler);
 void phptrace_comm_clear(phptrace_comm_handler *handler);

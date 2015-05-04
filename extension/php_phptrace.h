@@ -20,9 +20,6 @@ extern zend_module_entry phptrace_module_entry;
 
 #include "phptrace_comm.h"
 #include "phptrace_ctrl.h"
-#include "phptrace_protocol.h"
-#include "phptrace_time.h"
-#include "phptrace_type.h"
 
 PHP_MINIT_FUNCTION(phptrace);
 PHP_MSHUTDOWN_FUNCTION(phptrace);
@@ -36,7 +33,7 @@ PHP_MINFO_FUNCTION(phptrace);
  */
 ZEND_BEGIN_MODULE_GLOBALS(phptrace)
     zend_bool               enable;
-    zend_bool               do_trace;       /* toggle of trace */
+    long                    dotrace;        /* flags of trace */
 
     char                    *data_dir;      /* data path, should be writable */
 

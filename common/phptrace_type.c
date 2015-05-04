@@ -1,3 +1,5 @@
+#include <stdlib.h>
+#include <string.h>
 #include "phptrace_type.h"
 
 #define LEN_SDS(s) \
