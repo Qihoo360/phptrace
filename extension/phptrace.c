@@ -77,6 +77,11 @@ static void pt_frame_display(phptrace_frame *frame TSRMLS_DC, zend_bool indent, 
 static sds pt_repr_zval(zval *zv, int limit TSRMLS_DC);
 static void pt_ctrl_set_inactive(void);
 
+/* FIXME */
+static phptrace_status *pt_status_build(phptrace_status *status, zend_bool internal, zend_execute_data *ex TSRMLS_DC);
+static void pt_status_display(phptrace_status *status TSRMLS_DC);
+PHP_FUNCTION(phptrace_dostatus);
+
 #if PHP_VERSION_ID < 50500
 static void (*pt_ori_execute)(zend_op_array *op_array TSRMLS_DC);
 static void (*pt_ori_execute_internal)(zend_execute_data *execute_data_ptr, int return_value_used TSRMLS_DC);
@@ -107,6 +112,7 @@ static int le_phptrace;
  * Every user visible function must have an entry in phptrace_functions[].
  */
 const zend_function_entry phptrace_functions[] = {
+    PHP_FE(phptrace_dostatus, NULL)
 #ifdef PHP_FE_END
     PHP_FE_END  /* Must be the last line in phptrace_functions[] */
 #else
@@ -262,6 +268,13 @@ PHP_MINFO_FUNCTION(phptrace)
  * PHP-Trace Interface
  * --------------------
  */
+PHP_FUNCTION(phptrace_dostatus)
+{
+    /* FIXME test function, remove before publish */
+    phptrace_status *status;
+    status = pt_status_build(NULL, 1, EG(current_execute_data) TSRMLS_CC);
+    pt_status_display(status TSRMLS_CC);
+}
 
 
 /**
@@ -285,14 +298,6 @@ static void pt_frame_build(phptrace_frame *frame, zend_bool internal, unsigned c
         zf = (zend_function *) op_array;
     }
 #else
-    /**
-     * In PHP 5.5 and after, execute_data is the data going to be executed, not
-     * the entry point, so we switch to previous data. The internal function is
-     * a exception because it's no need to execute by op_array.
-     */
-    if (!internal && ex->prev_execute_data) {
-        ex = ex->prev_execute_data;
-    }
     zf = ex->function_state.function;
 #endif
 
@@ -342,6 +347,7 @@ static void pt_frame_build(phptrace_frame *frame, zend_bool internal, unsigned c
 
         /* args */
 #if PHP_VERSION_ID < 50300
+        /* TODO support fetching arguments in backtrace */
         if (EG(argument_stack).top >= 2) {
             frame->arg_count = (int)(zend_uintptr_t) *(EG(argument_stack).top_element - 2);
             args = (zval **)(EG(argument_stack).top_element - 2 - frame->arg_count);
@@ -517,6 +523,8 @@ static void pt_frame_display(phptrace_frame *frame TSRMLS_DC, zend_bool indent, 
     int i;
     va_list ap;
 
+    /* FIXME do not cal fprintf directly */
+
     /* indent */
     if (indent) {
         fprintf(stderr, "%*s", (frame->level - 1) * 4, "");
@@ -633,26 +641,78 @@ static void pt_ctrl_set_inactive(void)
     }
 }
 
-#if MONQUE_0
-static void pt_display_backtrace(zend_execute_data *ex, zend_bool internal TSRMLS_DC)
+static phptrace_status *pt_status_build(phptrace_status *status, zend_bool internal, zend_execute_data *ex TSRMLS_DC)
 {
-    int num = 0;
-    phptrace_frame frame;
+    int i;
+    zend_execute_data *ex_ori = ex;
 
-    while (ex) {
-        if (!internal && !ex->prev_execute_data) {
-            break;
+    /* init */
+    if (status == NULL) {
+        status = (phptrace_status *) calloc(1, sizeof(phptrace_status));
+    } else {
+        memset(status, 0, sizeof(phptrace_status));
+    }
+
+    /* version */
+    status->php_version = PHP_VERSION;
+    status->zend_version = get_zend_version();
+
+    /* sapi */
+    status->sapi_name = sapi_module.name;
+    status->request_method = (char *) SG(request_info).request_method;
+    status->request_uri = SG(request_info).request_uri;
+    status->request_query = SG(request_info).query_string;
+    status->script_path = SG(request_info).path_translated;
+    status->proto_num = SG(request_info).proto_num;
+
+    /* argc, argv */
+    status->argc = SG(request_info).argc;
+    status->argv = SG(request_info).argv;
+
+    /* frame */
+    for (i = 0; ex; ex = ex->prev_execute_data, i++) ;
+    status->frame_count = i;
+    status->frames = calloc(status->frame_count, sizeof(phptrace_frame));
+    for (i = 0, ex = ex_ori; i < status->frame_count && ex; i++, ex = ex->prev_execute_data) {
+        pt_frame_build(status->frames + i, internal, PT_FRAME_STACK, ex, NULL TSRMLS_CC);
+        status->frames[i].level = 1;
+    }
+
+    return status;
+}
+
+static void pt_status_display(phptrace_status *status TSRMLS_DC)
+{
+    int i;
+
+    zend_printf("PHP Version: %s\n", status->php_version);
+    zend_printf("Zend Version: %s", status->zend_version);
+
+    zend_printf("SAPI: %s\n", status->sapi_name);
+    if (status->request_method) {
+        zend_printf("request method: %s\n", status->request_method);
+        zend_printf("request uri: %s\n", status->request_uri);
+        zend_printf("request query: %s\n", status->request_query);
+        zend_printf("script path: %s\n", status->script_path);
+    }
+    zend_printf("proto_num: %d\n", status->proto_num);
+
+    if (status->argc) {
+        zend_printf("Arguments:\n");
+        zend_printf("Count: %d\n", status->argc);
+        for (i = 0; i < status->argc; i++) {
+            zend_printf("Argv[%d]: %s\n", i, status->argv[i]);
         }
+    }
 
-        pt_frame_build(&frame, ex, internal TSRMLS_CC);
-        frame.level = 1;
-        pt_frame_display(&frame TSRMLS_CC, 0, "#%-3d", num++);
-        pt_frame_destroy(&frame TSRMLS_CC);
-
-        ex = ex->prev_execute_data;
+    if (status->frame_count) {
+        zend_printf("Frames:\n");
+        zend_printf("Count: %d\n", status->frame_count);
+        for (i = 0; i < status->frame_count; i++) {
+            pt_frame_display(status->frames + i TSRMLS_CC, 0, "#%-3d", i);
+        }
     }
 }
-#endif
 
 
 /**
@@ -668,11 +728,22 @@ ZEND_API void phptrace_execute_core(int internal, zend_execute_data *execute_dat
 {
     zend_op_array *op_array = NULL;
 #endif
-    zend_bool dobailout = 0;
     long dotrace;
+    zend_bool dobailout = 0;
+    zend_execute_data *ex_entry = execute_data;
     zval *retval = NULL;
     phptrace_comm_message *msg;
     phptrace_frame frame;
+
+#if PHP_VERSION_ID >= 50500
+    /* Why has a ex_entry ?
+     * In PHP 5.5 and after, execute_data is the data going to be executed, not
+     * the entry point, so we switch to previous data. The internal function is
+     * a exception because it's no need to execute by op_array. */
+    if (!internal && execute_data->prev_execute_data) {
+        ex_entry = execute_data->prev_execute_data;
+    }
+#endif
 
     /* Check ctrl module */
     if (CTRL_IS_ACTIVE()) {
@@ -702,8 +773,15 @@ ZEND_API void phptrace_execute_core(int internal, zend_execute_data *execute_dat
 
             switch (msg->type) {
                 case PT_MSG_DO_TRACE:
-                    PTD("msg handle: start trace");
+                    PTD("msg handle: do trace");
                     PTG(dotrace) |= TRACE_TO_TOOL;
+                    break;
+
+                case PT_MSG_DO_STATUS:
+                    PTD("msg handle: do status");
+                    phptrace_status *status;
+                    status = pt_status_build(NULL, internal, ex_entry TSRMLS_CC);
+                    pt_status_display(status TSRMLS_CC);
                     break;
 
                 case PT_MSG_DO_PING:
@@ -729,7 +807,7 @@ exec:
     PTG(level)++;
 
     if (dotrace) {
-        pt_frame_build(&frame, internal, PT_FRAME_ENTRY, execute_data, op_array TSRMLS_CC);
+        pt_frame_build(&frame, internal, PT_FRAME_ENTRY, ex_entry, op_array TSRMLS_CC);
 
         /* Register reture value ptr */
         if (!internal && EG(return_value_ptr_ptr) == NULL) {

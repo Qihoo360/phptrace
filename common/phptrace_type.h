@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include "sds/sds.h"
 
+/* phptrace_frame */
 #define PT_FRAME_ENTRY          1 /* function entry */
 #define PT_FRAME_EXIT           2 /* function exit */
 #define PT_FRAME_STACK          3 /* backtrace stack */
@@ -55,5 +56,25 @@ typedef struct {
 size_t phptrace_type_len_frame(phptrace_frame *frame);
 size_t phptrace_type_pack_frame(phptrace_frame *frame, char *buf);
 phptrace_frame *phptrace_type_unpack_frame(phptrace_frame *frame, char *buf);
+
+/* phptrace_status
+ * NO NEED to use sds because all string is allocated. */
+typedef struct {
+    char *php_version;
+    char *zend_version;
+
+    char *sapi_name;
+    char *request_method;
+    char *request_uri;
+    char *request_query;
+    char *script_path;
+
+	int argc;
+	char **argv;
+    int proto_num;
+
+    uint32_t frame_count;
+    phptrace_frame *frames;
+} phptrace_status;
 
 #endif
