@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include "phptrace_mmap.h"
+#include "phptrace_type.h"
 
 #define PT_MAGIC_NUMBER     0x6563617274706870 /* ascii codes of "phptrace" */
 #define PT_COMM_SEQMAX      1000
@@ -69,8 +70,8 @@ typedef struct {
 #define phptrace_comm_freesize(handler) \
     (size_t) ((handler)->size - ((handler)->current - (handler)->head)) - (size_t) sizeof(phptrace_comm_message)
 
-#define phptrace_comm_sread_type(socket) \
-    (((phptrace_comm_message *) ((socket).recv_handler.current))->type)
+#define phptrace_comm_sread_type(p_socket) \
+    (((phptrace_comm_message *) ((p_socket)->recv_handler.current))->type)
 
 int phptrace_comm_screate(phptrace_comm_socket *sock, const char *filename, int crossover, size_t send_size, size_t recv_size);
 int phptrace_comm_sopen(phptrace_comm_socket *sock, const char *filename, int crossover);
@@ -83,5 +84,7 @@ phptrace_comm_message *phptrace_comm_write_begin(phptrace_comm_handler *handler,
 void phptrace_comm_write_end(phptrace_comm_handler *handler, unsigned int type, phptrace_comm_message *msg);
 phptrace_comm_message *phptrace_comm_write(phptrace_comm_handler *handler, unsigned int type, void *buf, size_t size);
 phptrace_comm_message *phptrace_comm_read(phptrace_comm_handler *handler, int movenext);
+
+phptrace_comm_message *phptrace_comm_write_message(uint32_t seq, uint32_t type, uint32_t len, phptrace_frame *f, void *buf);
 
 #endif

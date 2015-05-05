@@ -20,7 +20,8 @@
 }
 
 #define UNPACK_SDS(buf, ele) UNPACK(buf, uint32_t, len); \
-    if (len) { ele = sdsnewlen(buf, len); buf += len; }
+    if (len) { ele = sdsnewlen(buf, len); buf += len; } \
+    else { ele = NULL; }
 
 size_t phptrace_type_len_frame(phptrace_frame *frame)
 {
