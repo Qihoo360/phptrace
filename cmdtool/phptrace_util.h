@@ -129,7 +129,7 @@ typedef struct address_info_s {
 
 typedef struct phptrace_context_s phptrace_context_t;
 
-typedef sds (*phptrace_record_transform_t)(phptrace_context_t *ctx, phptrace_file_record_t *r);
+typedef sds (*phptrace_record_transform_t)(phptrace_context_t *ctx, phptrace_comm_message *msg, phptrace_frame *f);
 
 struct phptrace_context_s {
     int32_t php_pid;                                    /* pid of the -p option, default -1 */
@@ -164,6 +164,7 @@ struct phptrace_context_s {
     phptrace_file_t file;
     phptrace_segment_t seg;
     */
+    phptrace_comm_socket sock;
 
     phptrace_ctrl_t ctrl;
 
@@ -193,10 +194,10 @@ sds sdscatrepr_noquto(sds s, const char *p, size_t len);
 sds print_indent_str(sds s, char* str, int32_t size);
 sds print_time(sds s, uint64_t t);
 
-sds standard_transform(phptrace_context_t *ctx, phptrace_frame *r);
+sds standard_transform(phptrace_context_t *ctx, phptrace_comm_message *msg, phptrace_frame *f);
 //sds standard_transform(phptrace_context_t *ctx, phptrace_file_record_t *r);
-sds dump_transform(phptrace_context_t *ctx, phptrace_file_record_t *r);
-sds json_transform(phptrace_context_t *ctx, phptrace_file_record_t *r);
+sds dump_transform(phptrace_context_t *ctx, phptrace_comm_message *msg, phptrace_frame *f);
+sds json_transform(phptrace_context_t *ctx, phptrace_comm_message *msg, phptrace_frame *f);
 
 void phptrace_record_free(phptrace_file_record_t *r);
 int update_mmap_filename(phptrace_context_t *ctx);
@@ -213,7 +214,7 @@ int name_cmp(record_count_t *p, record_count_t *q);
 int mem_cmp(record_count_t *p, record_count_t *q);
 int avgmem_cmp(record_count_t *p, record_count_t *q);
 
-void count_record(phptrace_context_t *ctx, phptrace_file_record_t *r);
+void count_record(phptrace_context_t *ctx, phptrace_frame *f);
 void count_summary(phptrace_context_t *ctx);
 int set_sortby(phptrace_context_t *ctx, char *sortby);
 
