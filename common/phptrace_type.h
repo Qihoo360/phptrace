@@ -60,21 +60,27 @@ phptrace_frame *phptrace_type_unpack_frame(phptrace_frame *frame, char *buf);
 /* phptrace_status
  * NO NEED to use sds because all string is allocated. */
 typedef struct {
-    char *php_version;
-    char *zend_version;
+    char *php_version;      /* php version eg: 5.5.24 */
+    char *sapi_name;        /* sapi name eg: fpm-fcgi */
 
-    char *sapi_name;
-    char *request_method;
-    char *request_uri;
-    char *request_query;
-    char *script_path;
+    int64_t mem;            /* memory usage */
+    int64_t mempeak;        /* memory peak */
+    int64_t mem_real;       /* real memory usage */
+    int64_t mempeak_real;   /* real memory peak */
 
-	int argc;
-	char **argv;
+    double request_time;    /* request part, available in fpm, cli-server */
+    char *request_method;   /* [optional] */
+    char *request_uri;      /* [optional] */
+    char *request_query;    /* [optional] */
+    char *request_script;   /* [optional] */
+
+    int argc;               /* arguments part, available in cli */
+    char **argv;
+
     int proto_num;
 
-    uint32_t frame_count;
-    phptrace_frame *frames;
+    uint32_t frame_count;   /* backtrace depth */
+    phptrace_frame *frames; /* backtrace frames */
 } phptrace_status;
 
 #endif

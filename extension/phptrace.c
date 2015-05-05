@@ -520,62 +520,67 @@ static int pt_frame_send(phptrace_frame *frame TSRMLS_DC)
 
 static void pt_frame_display(phptrace_frame *frame TSRMLS_DC, zend_bool indent, const char *format, ...)
 {
-    int i;
+    int i, has_bracket = 1;
+    size_t len;
+    char *buf;
     va_list ap;
-
-    /* FIXME do not cal fprintf directly */
 
     /* indent */
     if (indent) {
-        fprintf(stderr, "%*s", (frame->level - 1) * 4, "");
+        zend_printf("%*s", (frame->level - 1) * 4, "");
     }
 
     /* format */
-    va_start(ap, format);
-    vfprintf(stderr, format, ap);
-    va_end(ap);
+    if (format) {
+        va_start(ap, format);
+        len = vspprintf(&buf, 0, format, ap); /* zend_vspprintf() is alias */
+        zend_write(buf, len);
+        efree(buf);
+        va_end(ap);
+    }
 
     /* frame */
     if ((frame->functype & PT_FUNC_TYPES) == PT_FUNC_NORMAL ||
             frame->functype & PT_FUNC_TYPES & PT_FUNC_INCLUDES) {
-        fprintf(stderr, "%s(", frame->function);
+        zend_printf("%s(", frame->function);
     } else if ((frame->functype & PT_FUNC_TYPES) == PT_FUNC_MEMBER) {
-        fprintf(stderr, "%s->%s(", frame->class, frame->function);
+        zend_printf("%s->%s(", frame->class, frame->function);
     } else if ((frame->functype & PT_FUNC_TYPES) == PT_FUNC_STATIC) {
-        fprintf(stderr, "%s::%s(", frame->class, frame->function);
+        zend_printf("%s::%s(", frame->class, frame->function);
     } else if ((frame->functype & PT_FUNC_TYPES) == PT_FUNC_EVAL) {
-        fprintf(stderr, "%s", frame->function);
-        goto done;
+        zend_printf("%s", frame->function);
+        has_bracket = 0;
     } else {
-        fprintf(stderr, "unknown");
-        goto done;
+        zend_printf("unknown");
+        has_bracket = 0;
     }
 
     /* arguments */
     if (frame->arg_count) {
         for (i = 0; i < frame->arg_count; i++) {
-            fprintf(stderr, "%s", frame->args[i]);
+            zend_printf("%s", frame->args[i]);
             if (i < frame->arg_count - 1) {
-                fprintf(stderr, ", ");
+                zend_printf(", ");
             }
         }
     }
-    fprintf(stderr, ")");
+    if (has_bracket) {
+        zend_printf(")");
+    }
 
     /* return value */
     if (frame->type == PT_FRAME_EXIT && frame->retval) {
-        fprintf(stderr, " = %s", frame->retval);
+        zend_printf(" = %s", frame->retval);
     }
 
-done:
     /* TODO output relative filepath */
-    fprintf(stderr, " called at [%s:%d]", frame->filename, frame->lineno);
+    zend_printf(" called at [%s:%d]", frame->filename, frame->lineno);
     if (frame->type == PT_FRAME_EXIT) {
-        fprintf(stderr, " wt: %.3f ct: %.3f\n",
+        zend_printf(" wt: %.3f ct: %.3f\n",
                 ((frame->exit.wall_time - frame->entry.wall_time) / 1000000.0),
                 ((frame->exit.cpu_time - frame->entry.cpu_time) / 1000000.0));
     } else {
-        fprintf(stderr, "\n");
+        zend_printf("\n");
     }
 }
 
@@ -647,30 +652,37 @@ static phptrace_status *pt_status_build(phptrace_status *status, zend_bool inter
     zend_execute_data *ex_ori = ex;
 
     /* init */
+    /* TODO improve init step of *_build functions */
     if (status == NULL) {
         status = (phptrace_status *) calloc(1, sizeof(phptrace_status));
     } else {
         memset(status, 0, sizeof(phptrace_status));
     }
 
-    /* version */
+    /* common */
     status->php_version = PHP_VERSION;
-    status->zend_version = get_zend_version();
-
-    /* sapi */
     status->sapi_name = sapi_module.name;
+
+    /* profile */
+    status->mem = zend_memory_usage(0 TSRMLS_CC);
+    status->mempeak = zend_memory_peak_usage(0 TSRMLS_CC);
+    status->mem_real = zend_memory_usage(1 TSRMLS_CC);
+    status->mempeak_real = zend_memory_peak_usage(1 TSRMLS_CC);
+
+    /* request */
     status->request_method = (char *) SG(request_info).request_method;
     status->request_uri = SG(request_info).request_uri;
     status->request_query = SG(request_info).query_string;
-    status->script_path = SG(request_info).path_translated;
+    status->request_time = SG(global_request_time);
+    status->request_script = SG(request_info).path_translated;
     status->proto_num = SG(request_info).proto_num;
 
-    /* argc, argv */
+    /* arguments */
     status->argc = SG(request_info).argc;
     status->argv = SG(request_info).argv;
 
     /* frame */
-    for (i = 0; ex; ex = ex->prev_execute_data, i++) ;
+    for (i = 0; ex; ex = ex->prev_execute_data, i++) ; /* calculate stack depth */
     status->frame_count = i;
     status->frames = calloc(status->frame_count, sizeof(phptrace_frame));
     for (i = 0, ex = ex_ori; i < status->frame_count && ex; i++, ex = ex->prev_execute_data) {
@@ -685,29 +697,40 @@ static void pt_status_display(phptrace_status *status TSRMLS_DC)
 {
     int i;
 
-    zend_printf("PHP Version: %s\n", status->php_version);
-    zend_printf("Zend Version: %s", status->zend_version);
+    zend_printf("------------------------------- Status --------------------------------\n");
+    zend_printf("PHP Version:       %s\n", status->php_version);
+    zend_printf("SAPI:              %s\n", status->sapi_name);
 
-    zend_printf("SAPI: %s\n", status->sapi_name);
+    zend_printf("memory:            %.2fm\n", status->mem / 1048576.0);
+    zend_printf("memory peak:       %.2fm\n", status->mempeak / 1048576.0);
+    zend_printf("real-memory:       %.2fm\n", status->mem_real / 1048576.0);
+    zend_printf("real-memory peak   %.2fm\n", status->mempeak_real / 1048576.0);
+
+    zend_printf("------------------------------- Request -------------------------------\n");
     if (status->request_method) {
-        zend_printf("request method: %s\n", status->request_method);
-        zend_printf("request uri: %s\n", status->request_uri);
-        zend_printf("request query: %s\n", status->request_query);
-        zend_printf("script path: %s\n", status->script_path);
+    zend_printf("request method:    %s\n", status->request_method);
     }
-    zend_printf("proto_num: %d\n", status->proto_num);
+    zend_printf("request time:      %f\n", status->request_time);
+    if (status->request_uri) {
+    zend_printf("request uri:       %s\n", status->request_uri);
+    }
+    if (status->request_query) {
+    zend_printf("request query:     %s\n", status->request_query);
+    }
+    if (status->request_script) {
+    zend_printf("request script:    %s\n", status->request_script);
+    }
+    zend_printf("proto_num:         %d\n", status->proto_num);
 
     if (status->argc) {
-        zend_printf("Arguments:\n");
-        zend_printf("Count: %d\n", status->argc);
+        zend_printf("------------------------------ Arguments ------------------------------\n");
         for (i = 0; i < status->argc; i++) {
-            zend_printf("Argv[%d]: %s\n", i, status->argv[i]);
+            zend_printf("$%-10d        %s\n", i, status->argv[i]);
         }
     }
 
     if (status->frame_count) {
-        zend_printf("Frames:\n");
-        zend_printf("Count: %d\n", status->frame_count);
+        zend_printf("------------------------------ Backtrace ------------------------------\n");
         for (i = 0; i < status->frame_count; i++) {
             pt_frame_display(status->frames + i TSRMLS_CC, 0, "#%-3d", i);
         }
