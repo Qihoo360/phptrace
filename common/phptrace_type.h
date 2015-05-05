@@ -55,7 +55,7 @@ typedef struct {
 
 size_t phptrace_type_len_frame(phptrace_frame *frame);
 size_t phptrace_type_pack_frame(phptrace_frame *frame, char *buf);
-phptrace_frame *phptrace_type_unpack_frame(phptrace_frame *frame, char *buf);
+size_t phptrace_type_unpack_frame(phptrace_frame *frame, char *buf);
 
 /* phptrace_status
  * NO NEED to use sds because all string is allocated. */
@@ -82,5 +82,9 @@ typedef struct {
     uint32_t frame_count;   /* backtrace depth */
     phptrace_frame *frames; /* backtrace frames */
 } phptrace_status;
+
+size_t phptrace_type_len_status(phptrace_status *status);
+size_t phptrace_type_pack_status(phptrace_status *status, char *buf);
+size_t phptrace_type_unpack_status(phptrace_status *status, char *buf);
 
 #endif
