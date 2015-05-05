@@ -2,21 +2,10 @@
  *  trace cmdtools
  */
 
+#include "phptrace.h"
 #include "phptrace_util.h"
 
-#include <stdio.h>
-#include <stdarg.h>
-#include <errno.h>
-#include <ctype.h>
-#include <getopt.h>
-#include <string.h>
-#include <limits.h>
-
-#if HAVE_INTTYPES_H
-# include <inttypes.h>
-#else
-# include <stdint.h>
-#endif
+#include "phptrace_status.h"
 
 enum {
     OPTION_STATUS = CHAR_MAX + 1,
@@ -36,12 +25,14 @@ static address_info_t address_templates[] = {
     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 };
 
-volatile int interrupted;        /* flag of interrupt (CTRL + C) */
+//volatile int interrupted;        /* flag of interrupt (CTRL + C) */
+
+//extern int interrupted;
 
 static void interrupt(int sig)
 {
-    log_printf(LL_DEBUG, "catch SIGINT signal");
     interrupted = sig;
+    log_printf(LL_DEBUG, "catch SIGINT signal interrupted=%d", interrupted);
 }
 
 static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
