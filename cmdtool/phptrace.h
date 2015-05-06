@@ -3,7 +3,6 @@
 
 #include "log.h"
 #include "phptrace_mmap.h"
-#include "phptrace_protocol.h"
 #include "phptrace_ctrl.h"
 #include "phptrace_time.h"
 

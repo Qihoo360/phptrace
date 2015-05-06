@@ -88,7 +88,7 @@ sds standard_transform(phptrace_context_t *ctx, phptrace_comm_message *msg, phpt
 sds dump_transform(phptrace_context_t *ctx, phptrace_comm_message *msg, phptrace_frame *f);
 sds json_transform(phptrace_context_t *ctx, phptrace_comm_message *msg, phptrace_frame *f);
 
-void phptrace_record_free(phptrace_file_record_t *r);
+//void phptrace_record_free(phptrace_file_record_t *r);
 int update_mmap_filename(phptrace_context_t *ctx);
 void trace_start(phptrace_context_t *ctx);
 void trace(phptrace_context_t *ctx);

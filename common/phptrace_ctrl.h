@@ -10,8 +10,9 @@
 #include <inttypes.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <errno.h>
 
-#include "phptrace_protocol.h"
+#include "phptrace_comm.h"
 #include "phptrace_mmap.h"
 
 typedef struct phptrace_ctrl_s {

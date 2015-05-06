@@ -372,30 +372,27 @@ sds json_transform(phptrace_context_t *ctx, phptrace_comm_message *msg, phptrace
     return buf;
 }
 
-void phptrace_record_free(phptrace_file_record_t *r)
-{
-    if (r->function_name != NULL) {
-        sdsfree (r->function_name);
-        r->function_name = NULL;
+#define FREE_SDS(var)           \
+    if (var) {                  \
+        sdsfree((var));         \
+        (var) = NULL;           \
     }
-    if (r->flag == RECORD_FLAG_ENTRY) {
-        if (RECORD_ENTRY(r, params)) {
-            sdsfree (RECORD_ENTRY(r, params)); 
-            RECORD_ENTRY(r, params) = NULL;
+
+void frame_free_sds(phptrace_frame *f)
+{
+    int i;
+    FREE_SDS(f->function)
+    FREE_SDS(f->filename)
+    FREE_SDS(f->class)
+    FREE_SDS(f->retval)
+    if (f->arg_count > 0) {
+        for (i = 0; i < f->arg_count; i++) {
+            sdsfree(f->args[i]);
         }
-        if (RECORD_ENTRY(r, filename)) { 
-            sdsfree (RECORD_ENTRY(r, filename));
-            RECORD_ENTRY(r, filename) = NULL;
-        }
-    } else {
-        if (RECORD_EXIT(r, return_value)) { 
-            sdsfree (RECORD_EXIT(r, return_value));
-            RECORD_EXIT(r, return_value) = NULL;
-        }
+        f->args = NULL;
+        f->arg_count = 0;
     }
 }
-
-//extern int interrupted;
 
 void trace(phptrace_context_t *ctx)
 {
@@ -508,6 +505,7 @@ void trace(phptrace_context_t *ctx)
                     sdsfree(buf);
                 }
 
+                frame_free_sds(&frame);
                 seq++;
                 break;
         }
