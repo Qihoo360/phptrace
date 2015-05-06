@@ -1,7 +1,5 @@
 #include "phptrace_util.h"
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/stat.h>
+#include "phptrace_count.h"
 
 static const char *ERR_MSG[] = {
     "",
@@ -164,7 +162,6 @@ void trace_start(phptrace_context_t *ctx)
         }
     }
     /*force to reopen when start a new trace*/
-    flag |= 1<<1 ;
     phptrace_ctrl_set(&(ctx->ctrl), flag, ctx->php_pid);
     ctx->trace_flag = flag;
     log_printf (LL_DEBUG, "[trace_start] set ctrl data ok: ctrl[pid=%d]=%u is opened!", ctx->php_pid, flag);
@@ -190,13 +187,29 @@ void process_opt_e(phptrace_context_t *ctx)
 
 void usage()
 {
-    printf ("usage: phptrace [-hvvv]  [-p pid] [--cleanup]\n\
-            -h                   -- show this help\n\
-            --cleanup            -- cleanup the trace switches of pid, or all the switches if no pid parameter\n\
-            -p pid               -- access the php process pid\n\
-            -v                   -- print verbose information\n\
-            \n");
+    printf ("usage: phptrace [-chlsnvvvvw]  [-p pid] [--cleanup]\n\
+   or: phptrace [-chlnvvvvw]  [-r infile]\n\
+    -h                   -- show this help\n\
+    --cleanup            -- cleanup the trace switches of pid, or all the switches if no pid parameter\n\
+    -p pid               -- access the php process pid\n\
+    -s                   -- print status of the php process by the pid\n\
+    -c[top_n]            -- count the wall time, cpu time, memory usage for each function calls of the php process.\n\
+                            list top_n of the functions (default is 20).\n\
+    -S sortby            -- sort the output of the count results. Legal values are wt, ct, \n\
+                            avgct, calls, mem and avgmem (default wt)\n\
+    --exclusive          -- count the exclusive wall time and cpu time instead of inclusive time\n\
+    --max-level level    -- specify the max function level when count or trace. There is no limit by default\n\
+                            except counting the exclusive time.\n\
+    -n function-count    -- specify the total function number to trace or count, there is no limit by default\n\
+    -l size              -- specify the max string length to print\n\
+    -v                   -- print verbose information\n\
+    -w outfile           -- write the trace data to file in phptrace format\n\
+    -r infile            -- read the trace file of phptrace format, instead of the process\n\
+    -o outfile           -- write the trace data to file in specified format\n\
+    --format format      -- specify the format when -o option is set. Legal values is json for now\n\
+    \n");
 }
+
 
 sds print_indent_str(sds s, char* str, int32_t size)
 {
@@ -211,6 +224,9 @@ sds sdscatrepr_noquto(sds s, const char *p, size_t len)
     while (len--) {
         switch (*p) {
             case '\\':
+            case '"':
+                s = sdscatprintf(s,"\\%c",*p);
+                break;
             case '\n': s = sdscatlen(s,"\\n",2); break;
             case '\r': s = sdscatlen(s,"\\r",2); break;
             case '\t': s = sdscatlen(s,"\\t",2); break;
@@ -231,6 +247,21 @@ sds sdscatrepr_noquto(sds s, const char *p, size_t len)
 
 sds phptrace_repr_function(sds buf, phptrace_frame *f)
 {
+    /*
+    if ((f->functype & PT_FUNC_TYPES) == PT_FUNC_NORMAL ||
+            f->functype & PT_FUNC_TYPES & PT_FUNC_INCLUDES) {
+        buf = sdscatprintf (buf, "%s", f->function);
+    } else if ((f->functype & PT_FUNC_TYPES) == PT_FUNC_MEMBER) {
+        buf = sdscatprintf (buf, "%s->%s", f->class, f->function);
+    } else if ((f->functype & PT_FUNC_TYPES) == PT_FUNC_STATIC) {
+        buf = sdscatprintf (buf, "%s::%s", f->class, f->function);
+    } else if ((f->functype & PT_FUNC_TYPES) == PT_FUNC_EVAL) {
+        buf = sdscatprintf (buf, "%s", f->function);
+    } else {
+        buf = sdscatprintf (buf, "unknown");
+    }
+    */
+
     if ((f->functype & PT_FUNC_TYPES) == PT_FUNC_NORMAL) {
         buf = sdscatprintf (buf, "%s", f->function);
     } else if ((f->functype & PT_FUNC_TYPES) == PT_FUNC_MEMBER) {
@@ -245,7 +276,7 @@ sds phptrace_repr_function(sds buf, phptrace_frame *f)
     return buf;
 }
 
-sds standard_transform(phptrace_context_t *ctx, phptrace_frame *f)
+sds standard_transform(phptrace_context_t *ctx, phptrace_comm_message *msg, phptrace_frame *f)
 {
     int i;
     sds buf = sdsempty();
@@ -290,6 +321,56 @@ sds standard_transform(phptrace_context_t *ctx, phptrace_frame *f)
     return buf;
 }
 
+sds dump_transform(phptrace_context_t *ctx, phptrace_comm_message *msg, phptrace_frame *f)
+{
+    sds buf;
+    size_t raw_size;
+
+    raw_size = phptrace_type_len_frame(f);
+    buf = sdsnewlen(NULL, raw_size + sizeof(phptrace_comm_message));
+    phptrace_comm_write_message(msg->seq, msg->type, raw_size, f, buf);
+    log_printf(LL_DEBUG, "[dump] record(sequence=%d) raw_size=%u", msg->seq, raw_size);
+    return buf;
+}
+
+sds json_transform(phptrace_context_t *ctx, phptrace_comm_message *msg, phptrace_frame *f)
+{
+    int i;
+    sds buf = sdsempty();
+
+    buf = sdscatprintf (buf, "{\"seq\":%u, \"type\":%u, \"level\":%u, \"func\":\"",
+            msg->seq, f->type, f->level);
+    buf = phptrace_repr_function(buf, f);
+
+    if (f->type == PT_FRAME_ENTRY) {
+        buf = sdscatprintf (buf, "\", \"st\":%"PRIu64", ", f->entry.wall_time);
+
+        buf = sdscatprintf (buf, "\"params\":\"");
+        if (f->arg_count) {
+            for (i = 0; i < f->arg_count; i++) {
+                buf = sdscatrepr_noquto (buf, f->args[i], sdslen(f->args[i]));
+                if (i < f->arg_count - 1) {
+                    buf = sdscatprintf (buf, ", ");
+                }
+            }
+        }
+        buf = sdscatprintf (buf, "\", \"file\":");
+        buf = sdscatrepr (buf, f->filename, sdslen(f->filename));
+        buf = sdscatprintf (buf, ", \"lineno\":%u }\n", f->lineno);
+    } else {
+        buf = sdscatprintf (buf, ", \"st\":%"PRIu64", ", f->exit.wall_time);
+        buf = sdscatprintf (buf, "\"return\":");
+        if (f->retval) {
+            buf = sdscatrepr (buf, f->retval, sdslen(f->retval));
+        }
+        buf = sdscatprintf (buf, ", \"wt\":%" PRIu64 ", \"ct\":%" PRIu64 ", \"mem\":%" PRId64 ", \"pmem\":%" PRId64 " }\n",
+                f->exit.wall_time - f->entry.wall_time,
+                f->exit.cpu_time - f->entry.cpu_time,
+                f->exit.mem - f->entry.mem,
+                f->exit.mempeak - f->entry.mempeak);
+    }
+    return buf;
+}
 
 void phptrace_record_free(phptrace_file_record_t *r)
 {
@@ -314,26 +395,26 @@ void phptrace_record_free(phptrace_file_record_t *r)
     }
 }
 
-extern int interrupted;
+//extern int interrupted;
 
 void trace(phptrace_context_t *ctx)
 {
-    int rc;
     int state = STATE_OPEN;
     uint64_t seq = 0;
+    uint64_t magic_number;
+    size_t tmp;
 
     sds buf;
     uint32_t type;
-    uint64_t magic_number;
     int opendata_wait_interval = OPEN_DATA_WAIT_INTERVAL;
     int data_wait_interval = DATA_WAIT_INTERVAL;
 
     /* new protocol API */
-    phptrace_comm_socket sock;
     phptrace_comm_message *msg;
     phptrace_frame frame;
+    phptrace_comm_socket *p_sock = &(ctx->sock);
 
-    memset(&sock, 0, sizeof(sock));
+    memset(p_sock, 0, sizeof(phptrace_comm_socket));
 
     /* exclusive time mode */
     if (ctx->exclusive_flag) {
@@ -341,15 +422,15 @@ void trace(phptrace_context_t *ctx)
         ctx->sub_cpu_time = calloc(ctx->max_level + 2, sizeof(int64_t));
     }
 
-    while (phptrace_comm_sopen(&sock, ctx->mmap_filename, 1) < 0) {
+    while (phptrace_comm_sopen(p_sock, ctx->mmap_filename, 1) < 0) {    /* meta: recv|send  */
         if (interrupted) {
-            return;
+            goto trace_end;
         }
 
-        if (ctx->in_filename || errno != ENOENT) {             /* -r option or open failed (except for non-exist) */
+        if (ctx->in_filename || errno != ENOENT) {                      /* -r option or open failed (except for non-exist) */
             error_msg(ctx, ERR_TRACE, "Can not open %s to read, %s!", ctx->mmap_filename, strerror(errno));
             die(ctx, -1);
-        } else {                                                /* file not exist, should wait */
+        } else {                                                        /* file not exist, should wait */
             log_printf(LL_DEBUG, "trace mmap file not exist, will sleep %d ms.\n", opendata_wait_interval);
             phptrace_msleep(opendata_wait_interval);
             opendata_wait_interval = grow_interval(opendata_wait_interval, MAX_OPEN_DATA_WAIT_INTERVAL);
@@ -358,12 +439,12 @@ void trace(phptrace_context_t *ctx)
 
     ctx->rotate_cnt++;
     if (!ctx->in_filename) {
-        //unlink(ctx->mmap_filename);
+        unlink(ctx->mmap_filename);
     }
     state = STATE_HEADER;
 
     if (!ctx->in_filename) {                                            /* not -r option */
-        phptrace_comm_swrite(&sock, PT_MSG_DO_TRACE, NULL, 0);
+        phptrace_comm_swrite(p_sock, PT_MSG_DO_TRACE, NULL, 0);
     }
 
     while (1) {
@@ -376,10 +457,10 @@ void trace(phptrace_context_t *ctx)
         }
 
         if (!ctx->in_filename) {
-            phptrace_comm_swrite(&sock, PT_MSG_DO_PING, NULL, 0);           /* send to do ping */
+            phptrace_comm_swrite(p_sock, PT_MSG_DO_PING, NULL, 0);           /* send to do ping */
         }
 
-        type = phptrace_comm_sread_type(sock);
+        type = phptrace_comm_sread_type(p_sock);
         log_printf (LL_DEBUG, "msg type=(%u)", type);
 
         if (type == PT_MSG_EMPTY) {                         /* wait flag */
@@ -392,258 +473,50 @@ void trace(phptrace_context_t *ctx)
             data_wait_interval = grow_interval(data_wait_interval, MAX_DATA_WAIT_INTERVAL);
             continue; 
         }
-        //else if (flag == MAGIC_NUMBER_TAILER) {       /* check tailer */
-        //   state = STATE_TAILER;
-        //}
 
         data_wait_interval = DATA_WAIT_INTERVAL;            /* reset the data wait interval */
 
-        msg = phptrace_comm_sread(&sock);
+        if ((msg = phptrace_comm_sread(p_sock)) == NULL) {
+            if (!ctx->in_filename) {
+                error_msg(ctx, ERR_TRACE, "read record failed, maybe write too fast");
+            }
+            break;
+        }
 
         switch (msg->type) {
-            case PT_MSG_RET:    /* @TODO  data type */
+            case PT_MSG_RET:
                 phptrace_type_unpack_frame(&frame, msg->data);
 
+                if (ctx->opt_flag & OPT_FLAG_COUNT) {
+                    if (frame.type == PT_FRAME_EXIT) {
+                        count_record(ctx, &(frame));
+                    }
+                } else {
+                    if ((ctx->output_flag & OUTPUT_FLAG_WRITE) && seq == 0) {           /* dump meta to out_fp */
+                        magic_number = PT_MAGIC_NUMBER;
+                        fwrite(&magic_number, sizeof(uint64_t), 1, ctx->out_fp);
+                        tmp = SIZE_MAX;
+                        fwrite(&tmp, sizeof(size_t), 1, ctx->out_fp);
+                        tmp = 0;
+                        fwrite(&tmp, sizeof(size_t), 1, ctx->out_fp);
+                        fflush(NULL);
+                    }
 
-                buf = ctx->record_transform(ctx, &(frame));
-                fwrite(buf, sizeof(char), sdslen(buf), ctx->out_fp);
-                fflush(NULL);
-                sdsfree(buf);
+                    buf = ctx->record_transform(ctx, msg, &(frame));
+                    fwrite(buf, sizeof(char), sdslen(buf), ctx->out_fp);
+                    fflush(NULL);
+                    sdsfree(buf);
+                }
 
                 seq++;
                 break;
         }
-
     }
 
+trace_end:
+    if (ctx->opt_flag & OPT_FLAG_COUNT) {
+        count_summary(ctx);
+    }
     die(ctx, 0);
-}
-
-int stack_dump_once(phptrace_context_t* ctx)
-{
-    static const int buf_size = 1024;
-    char buf[buf_size];
-    long l, execute_data;
-    pid_t pid = ctx->php_pid;
-
-    if (0 > sys_trace_get_strz(pid, buf, buf_size, (long) (ctx->addr_info.sapi_globals_addr + ctx->addr_info.sapi_globals_path_offset))) {
-        log_printf(LL_NOTICE, "sys_trace_get_strz failed");
-        return -1;
-    }
-    printf("script_filename = %s\n", buf);
-    if (0 > sys_trace_get_long(pid, ctx->addr_info.executor_globals_addr + ctx->addr_info.executor_globals_ed_offset, &l)) {
-        log_printf(LL_NOTICE, "sys_trace_get_long failed");
-        return -1;
-    }
-    ctx->addr_info.execute_data_addr = l;
-    execute_data = ctx->addr_info.execute_data_addr;
-
-    while (execute_data) {
-        printf("[0x%" PTR_FMT "lx] ", execute_data);
-
-        if (0 > sys_trace_get_long(pid, execute_data + ctx->addr_info.execute_data_f_offset, &l)) {
-            log_printf(LL_NOTICE, "sys_trace_get_long failed");
-            return -1;
-        }
-        ctx->addr_info.function_addr = l;
-
-        if (valid_ptr(ctx->addr_info.function_addr)) {
-            if (0 > sys_trace_get_strz(pid, buf, buf_size, (long) (ctx->addr_info.function_addr + ctx->addr_info.function_fn_offset))) {
-                log_printf(LL_NOTICE, "sys_trace_get_strz failed");
-                return -1;
-            }
-            printf(" %s", buf);
-        }
-
-        if (0 > sys_trace_get_long(pid, execute_data + ctx->addr_info.execute_data_oparray_offset, &l)) {
-            log_printf(LL_NOTICE, "sys_trace_get_long failed");
-            return -1;
-        }
-        ctx->addr_info.oparray_addr = l;
-
-        if (valid_ptr(ctx->addr_info.oparray_addr)) {
-            if (0 > sys_trace_get_strz(pid, buf, buf_size, (long) (ctx->addr_info.oparray_addr + ctx->addr_info.oparray_fn_offset))) {
-                log_printf(LL_NOTICE, "sys_trace_get_strz failed");
-                return -1;
-            }
-            printf(" %s", buf);
-        }
-
-        if (0 > sys_trace_get_long(pid, execute_data + ctx->addr_info.execute_data_opline_offset, &l)) {
-            log_printf(LL_NOTICE, "sys_trace_get_long failed");
-            return -1;
-        }
-        ctx->addr_info.opline_addr = l;
-        if (valid_ptr(ctx->addr_info.opline_addr)) {
-            uint *lu = (uint *) &l;
-            uint lineno;
-            if (0 > sys_trace_get_long(pid, ctx->addr_info.opline_addr + ctx->addr_info.opline_ln_offset, &l)) {
-                log_printf(LL_NOTICE, "sys_trace_get_long failed");
-                return -1;
-            }
-            lineno = *lu;
-            printf(":%d", lineno);
-        }
-
-        printf("\n");
-
-        if (0 > sys_trace_get_long(pid, execute_data + ctx->addr_info.execute_data_prev_offset, &l)) {
-            log_printf(LL_NOTICE, "sys_trace_get_long failed");
-            return -1;
-        }
-        execute_data = l;
-#if 0
-        log_printf(LL_DEBUG, "sapi_globals_addr %lld", ctx->addr_info.sapi_globals_addr);
-        log_printf(LL_DEBUG, "sapi_globals_path_offset %lld", ctx->addr_info.sapi_globals_path_offset);
-        log_printf(LL_DEBUG, "executor_globals_addr %lld", ctx->addr_info.executor_globals_addr);
-        log_printf(LL_DEBUG, "executor_globals_ed_offset %lld", ctx->addr_info.executor_globals_ed_offset);
-        log_printf(LL_DEBUG, "execute_data_addr %lld", ctx->addr_info.execute_data_addr);
-        log_printf(LL_DEBUG, "execute_data_f_offset %lld", ctx->addr_info.execute_data_f_offset);
-        log_printf(LL_DEBUG, "function_addr %lld", ctx->addr_info.function_addr);
-        log_printf(LL_DEBUG, "function_fn_offset %lld", ctx->addr_info.function_fn_offset);
-        log_printf(LL_DEBUG, "execute_data_prev_offset %lld", ctx->addr_info.execute_data_prev_offset);
-        log_printf(LL_DEBUG, "execute_data_oparray_offset %lld", ctx->addr_info.execute_data_oparray_offset);
-        log_printf(LL_DEBUG, "oparray_addr %lld", ctx->addr_info.oparray_addr);
-        log_printf(LL_DEBUG, "oparray_fn_offset %lld", ctx->addr_info.oparray_fn_offset);
-        log_printf(LL_DEBUG, "execute_data_opline_offset %lld", ctx->addr_info.execute_data_opline_offset);
-        log_printf(LL_DEBUG, "opline_addr %lld", ctx->addr_info.opline_addr);
-        log_printf(LL_DEBUG, "opline_ln_offset %lld", ctx->addr_info.opline_ln_offset);
-#endif
-        ctx->stack_deep++;
-        if (ctx->stack_deep >= MAX_STACK_DEEP) {
-            break;
-        }
-    }
-
-    return 0;
-}
-
-int stack_dump(phptrace_context_t* ctx)
-{
-    int ret;
-    ret = 0;
-    while (1) {
-        if ((ret = stack_dump_once(ctx)) >= 0) {
-            return 0;
-        }
-
-        log_printf(LL_NOTICE, "stack_dump_once failed: %d", ctx->php_pid);
-        sleep(1);
-
-        ctx->retry++;
-        if (ctx->retry >= MAX_RETRY) {
-            break;
-        }
-    }
-    return -1;
-}
-
-int check_phpext_installed(phptrace_context_t *ctx)
-{
-    if (access(PHPTRACE_LOG_DIR "/" PHPTRACE_CTRL_FILENAME, R_OK|W_OK) < 0) {
-        if(errno != ENOENT) {
-            log_printf(LL_ERROR, "check_phpext_installed: %s", strerror(errno));
-        }
-        return 0;
-    }
-    return 1;
-}
-int status_dump(phptrace_context_t *ctx, int timeout /*milliseconds*/)
-{
-    int wait;
-    FILE *fp;
-    char filename[256];
-    char buf[256];
-    int  blen = sizeof(buf);
-    int  nread;
-    wait = timeout < OPEN_DATA_WAIT_INTERVAL ? timeout : OPEN_DATA_WAIT_INTERVAL;
-    sprintf(filename, PHPTRACE_LOG_DIR "/" PHPTRACE_STATUS_FILENAME ".%d", ctx->php_pid);
-    log_printf(LL_DEBUG, "dump status %s", filename);
-    fp = NULL;
-    while (!interrupted) {
-        fp = fopen(filename, "r");
-        if (fp == NULL) {
-            if (errno != ENOENT) {
-                log_printf(LL_ERROR, "open status file %s: %s", filename, strerror(errno));
-                return -1;
-            }
-            if (timeout > 0) {
-                log_printf(LL_DEBUG, "open status file %s: %s", filename, strerror(errno));
-                timeout -= wait;
-                phptrace_msleep(wait);
-                wait = grow_interval(wait, MAX_OPEN_DATA_WAIT_INTERVAL);
-                continue;
-            }
-        }
-        break;
-    }
-    /*timedout*/
-    if (fp == NULL) {
-        if (timeout <=0 ) {
-            log_printf(LL_DEBUG, "dump status failed: timedout(%d)", timeout);
-        } else {
-            log_printf(LL_DEBUG, "dump status failed: signal interrupt");
-        }
-        return -1;
-    }
-    unlink(filename);
-    /*success*/
-    while (! feof(fp)) {
-        nread = fread(buf, 1, blen, fp);
-        fwrite(buf, nread, 1, stdout);
-    }
-    fclose(fp);
-    return 0;
-}
-
-void process_opt_s(phptrace_context_t *ctx)
-{
-    int ret;
-    int8_t num;
-
-    num = -1;
-
-    /*dump stauts from the extension*/
-    if (!ctx->addr_info.sapi_globals_addr && check_phpext_installed(ctx)) {
-        log_printf(LL_DEBUG, "phptrace extension has been installed, use extension\n");
-        if (!phptrace_ctrl_init(&(ctx->ctrl))) {
-            error_msg(ctx, ERR_CTRL, "cannot open control mmap file %s (%s)",
-                    PHPTRACE_LOG_DIR "/" PHPTRACE_CTRL_FILENAME, (errno ? strerror(errno) : "null"));
-            die(ctx, -1);
-        }
-
-        phptrace_ctrl_get(&(ctx->ctrl), &num, ctx->php_pid);
-        if (num > 0) {
-            error_msg(ctx, ERR_CTRL, "process %d is being dumped by others, please retry later", ctx->php_pid);
-            die(ctx, -1);
-        }
-        phptrace_ctrl_set(&(ctx->ctrl), 1<<2, ctx->php_pid);
-        if (status_dump(ctx, 500) == 0){
-            return;
-        }
-        /*clear the flag if dump failed*/
-        phptrace_ctrl_set(&(ctx->ctrl), 0, ctx->php_pid);
-        die(ctx, -1);
-    }
-
-    /*dump stack without extension if above failed*/
-    log_printf(LL_DEBUG, "phptrace extension was not been installed, use ptrace\n");
-    if (sys_trace_attach(ctx->php_pid)) {
-        log_printf(LL_NOTICE, "sys_trace_attach failed");
-        error_msg(ctx, ERR_STACK, "sys_trace_attach failed (%s)", (errno ? strerror(errno) : "null"));
-        return;
-    }
-
-    ret = stack_dump(ctx);
-    if (ret < 0) {
-        error_msg(ctx, ERR_STACK, "dump stack failed. maybe the process is not executing a php script");
-    }
-
-    if (sys_trace_detach(ctx->php_pid) < 0) {
-        log_printf(LL_NOTICE, "sys_trace_detach failed");
-        error_msg(ctx, ERR_STACK, "sys_trace_detach failed (%s)", (errno ? strerror(errno) : "null"));
-    }
-
-    sys_trace_kill(ctx->php_pid, SIGCONT);
 }
 

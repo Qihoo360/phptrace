@@ -2,21 +2,10 @@
  *  trace cmdtools
  */
 
+#include "phptrace.h"
 #include "phptrace_util.h"
 
-#include <stdio.h>
-#include <stdarg.h>
-#include <errno.h>
-#include <ctype.h>
-#include <getopt.h>
-#include <string.h>
-#include <limits.h>
-
-#if HAVE_INTTYPES_H
-# include <inttypes.h>
-#else
-# include <stdint.h>
-#endif
+#include "phptrace_status.h"
 
 enum {
     OPTION_STATUS = CHAR_MAX + 1,
@@ -36,12 +25,14 @@ static address_info_t address_templates[] = {
     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 };
 
-volatile int interrupted;        /* flag of interrupt (CTRL + C) */
+//volatile int interrupted;        /* flag of interrupt (CTRL + C) */
+
+//extern int interrupted;
 
 static void interrupt(int sig)
 {
-    log_printf(LL_DEBUG, "catch SIGINT signal");
     interrupted = sig;
+    log_printf(LL_DEBUG, "catch SIGINT signal interrupted=%d", interrupted);
 }
 
 static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
@@ -126,6 +117,41 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
             case 'h':
                 usage();
                 exit(0);
+            case 'c':
+                len = DEFAULT_TOP_N;
+                if (optarg) {
+                    len = string2uint(optarg);
+                    if (len < 0) {
+                        error_msg(ctx, ERR_INVALID_PARAM, " should be larger than 0");
+                        exit(-1);
+                    }
+                }
+                ctx->top_n = len;
+                ctx->opt_flag |= OPT_FLAG_COUNT;
+                log_printf (LL_DEBUG, "[top_n] len=%d\n", len);
+                break;
+            case 'S':
+                if (!set_sortby(ctx, optarg)) {
+                    error_msg(ctx, ERR_COUNT, "invalid sortby: '%s'", optarg);
+                    exit(-1);
+                }
+                break;
+            case 'n':
+                ctx->max_function = string2uint(optarg);
+                if (ctx->max_function < 0) {
+                    error_msg(ctx, ERR_INVALID_PARAM, "max function should be larger than 0");
+                    exit(-1);
+                }
+                log_printf (LL_DEBUG, "[parse arg] parse option -n=%d", ctx->max_function);
+                break;
+            case 'l':
+                len = string2uint(optarg);
+                if (len < 0) {
+                    error_msg(ctx, ERR_INVALID_PARAM, "max string length should be larger than 0");
+                    exit(-1);
+                }
+                ctx->max_print_len = len;
+                break;
             case 'p':
                 ctx->php_pid = string2uint(optarg);
                 if (ctx->php_pid <= 0 || ctx->php_pid > PID_MAX) {
@@ -137,8 +163,30 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
                     exit(-1);
                 }
                 break;
+            case 'o':
+                ctx->out_filename = sdsnew(optarg);
+                log_printf (LL_DEBUG, "[parse arg] parse option -o out_filename=(%s)", ctx->out_filename);
+                break;
+            case OPTION_FORMAT:
+                if (strcmp("json", optarg) == 0 || strcmp("JSON", optarg) == 0) {
+                    ctx->output_flag |= OUTPUT_FLAG_JSON;
+                } else {
+                    error_msg(ctx, ERR_INVALID_PARAM, "invalid format '%d'", optarg);
+                    exit(-1);
+                }
+                break;
+            case 's':
+                ctx->opt_flag |= OPT_FLAG_STATUS;
+                break;
             case 'v':
                 log_level_set(log_level_get() - 1);
+                break;
+            case 'w':
+                ctx->out_filename = sdsnew(optarg);
+                ctx->output_flag |= OUTPUT_FLAG_WRITE;
+                break;
+            case 'r':
+                ctx->in_filename = sdsnew(optarg);
                 break;
             default:
                 usage();

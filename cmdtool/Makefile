@@ -9,7 +9,7 @@ INCLUDE_FLAG = -I$(PWD)/../common -I$(PWD)/../common/sds
 DEPS_DIR   = $(PWD)/../common $(PWD)/../common/sds
 DEPS_FILES = $(foreach d, $(DEPS_DIR), $(wildcard $(d)/*.c))
 TRACE_OBJS = $(patsubst %.c, %.o, $(DEPS_FILES))
-TRACE_OBJS += phptrace_util.o log.o sys_trace.o phptrace.o
+TRACE_OBJS += phptrace_util.o phptrace_status.o phptrace_count.o log.o sys_trace.o phptrace.o
 
 all: $(TARGET)
 
