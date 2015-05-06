@@ -1,3 +1,5 @@
+#define _GNU_SOURCE /* only for strndup() */
+
 #include <stdlib.h>
 #include <string.h>
 #include "phptrace_type.h"
@@ -143,6 +145,7 @@ size_t phptrace_type_unpack_frame(phptrace_frame *frame, char *buf)
 /* phptrace_status */
 size_t phptrace_type_len_status(phptrace_status *status)
 {
+    /* FIXME support sds, str both */
     int i;
     size_t size = 0;
 
@@ -177,6 +180,7 @@ size_t phptrace_type_len_status(phptrace_status *status)
 
 size_t phptrace_type_pack_status(phptrace_status *status, char *buf)
 {
+    /* FIXME support sds, str both */
     int i;
     size_t len;
     char *ori = buf;
@@ -217,8 +221,8 @@ size_t phptrace_type_unpack_status(phptrace_status *status, char *buf)
     size_t len;
     char *ori = buf;
 
-    UNPACK_STR(buf,       status->php_version);
-    UNPACK_STR(buf,       status->sapi_name);
+    UNPACK_SDS(buf,       status->php_version);
+    UNPACK_SDS(buf,       status->sapi_name);
 
     UNPACK(buf, int64_t,  status->mem);
     UNPACK(buf, int64_t,  status->mempeak);
@@ -226,15 +230,15 @@ size_t phptrace_type_unpack_status(phptrace_status *status, char *buf)
     UNPACK(buf, int64_t,  status->mempeak_real);
 
     UNPACK(buf, double,   status->request_time);
-    UNPACK_STR(buf,       status->request_method);
-    UNPACK_STR(buf,       status->request_uri);
-    UNPACK_STR(buf,       status->request_query);
-    UNPACK_STR(buf,       status->request_script);
+    UNPACK_SDS(buf,       status->request_method);
+    UNPACK_SDS(buf,       status->request_uri);
+    UNPACK_SDS(buf,       status->request_query);
+    UNPACK_SDS(buf,       status->request_script);
 
     UNPACK(buf, uint32_t, status->argc);
     status->argv = calloc(status->argc, sizeof(char *));
     for (i = 0; i < status->argc; i++) {
-        UNPACK_STR(buf,   status->argv[i]);
+        UNPACK_SDS(buf,   status->argv[i]);
     }
 
     UNPACK(buf, uint32_t, status->proto_num);

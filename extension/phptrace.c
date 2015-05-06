@@ -57,8 +57,7 @@
 #define TRACE_TO_TOOL   (1 << 1)
 
 /**
- * Compatible with PHP 5.1
- * zend_memory_usage() in PHP 5.1
+ * Compatible with PHP 5.1, zend_memory_usage() is not available in 5.1.
  * AG(allocated_memory) is the value we want, but it available only when
  * MEMORY_LIMIT is ON during PHP compilation, so use zero instead for safe.
  */
@@ -69,21 +68,20 @@ typedef unsigned long zend_uintptr_t;
 #endif
 
 
-static sds pt_repr_zval(zval *zv, int limit TSRMLS_DC);
-static void pt_ctrl_set_inactive(void);
-
 static void pt_frame_build(phptrace_frame *frame, zend_bool internal, unsigned char type, zend_execute_data *ex, zend_op_array *op_array TSRMLS_DC);
 static void pt_frame_destroy(phptrace_frame *frame TSRMLS_DC);
 static void pt_frame_display(phptrace_frame *frame TSRMLS_DC, zend_bool indent, const char *format, ...);
 static int pt_frame_send(phptrace_frame *frame TSRMLS_DC);
 static void pt_frame_set_retval(phptrace_frame *frame, zend_bool internal, zend_execute_data *ex, zend_fcall_info *fci TSRMLS_DC);
 
-static phptrace_status *pt_status_build(phptrace_status *status, zend_bool internal, zend_execute_data *ex TSRMLS_DC);
+static void pt_status_build(phptrace_status *status, zend_bool internal, zend_execute_data *ex TSRMLS_DC);
 static void pt_status_destroy(phptrace_status *status TSRMLS_DC);
 static void pt_status_display(phptrace_status *status TSRMLS_DC);
 static int pt_status_send(phptrace_status *status TSRMLS_DC);
+PHP_FUNCTION(phptrace_dostatus); /* FIXME remove it */
 
-PHP_FUNCTION(phptrace_dostatus); /* FIXME */
+static sds pt_repr_zval(zval *zv, int limit TSRMLS_DC);
+static void pt_ctrl_set_inactive(void);
 
 #if PHP_VERSION_ID < 50500
 static void (*pt_ori_execute)(zend_op_array *op_array TSRMLS_DC);
@@ -111,9 +109,7 @@ extern sapi_module_struct sapi_module;
 /* True global resources - no need for thread safety here */
 static int le_phptrace;
 
-/**
- * Every user visible function must have an entry in phptrace_functions[].
- */
+/* Every user visible function must have an entry in phptrace_functions[]. */
 const zend_function_entry phptrace_functions[] = {
     PHP_FE(phptrace_dostatus, NULL)
 #ifdef PHP_FE_END
@@ -282,7 +278,7 @@ PHP_FUNCTION(phptrace_dostatus)
 
 
 /**
- * PHP-Trace Function
+ * PHP-Trace Manipulation of Frame
  * --------------------
  */
 static void pt_frame_build(phptrace_frame *frame, zend_bool internal, unsigned char type, zend_execute_data *ex, zend_op_array *op_array TSRMLS_DC)
@@ -509,15 +505,16 @@ static void pt_frame_set_retval(phptrace_frame *frame, zend_bool internal, zend_
 
 static int pt_frame_send(phptrace_frame *frame TSRMLS_DC)
 {
+    size_t len;
     phptrace_comm_message *msg;
 
-    msg = phptrace_comm_swrite_begin(&PTG(comm), phptrace_type_len_frame(frame));
-    if (!msg) {
-        php_error(E_WARNING, "PHPTrace comm-module write begin failed, tried to allocate %ld bytes", phptrace_type_len_frame(frame));
+    len = phptrace_type_len_frame(frame);
+    if ((msg = phptrace_comm_swrite_begin(&PTG(comm), len)) == NULL) {
+        php_error(E_WARNING, "PHPTrace comm-module write begin failed, tried to allocate %ld bytes", len);
         return -1;
     }
     phptrace_type_pack_frame(frame, msg->data);
-    phptrace_comm_swrite_end(&PTG(comm), PT_MSG_RET, msg);
+    phptrace_comm_swrite_end(&PTG(comm), PT_MSG_RET, msg); /* FIXME correct type */
 
     return 0;
 }
@@ -537,7 +534,7 @@ static void pt_frame_display(phptrace_frame *frame TSRMLS_DC, zend_bool indent, 
     /* format */
     if (format) {
         va_start(ap, format);
-        len = vspprintf(&buf, 0, format, ap); /* zend_vspprintf() is alias */
+        len = vspprintf(&buf, 0, format, ap); /* implementation of zend_vspprintf() */
         zend_write(buf, len);
         efree(buf);
         va_end(ap);
@@ -588,80 +585,18 @@ static void pt_frame_display(phptrace_frame *frame TSRMLS_DC, zend_bool indent, 
     }
 }
 
-static sds pt_repr_zval(zval *zv, int limit TSRMLS_DC)
-{
-    int tlen = 0;
-    char buf[128], *tstr = NULL;
-    sds result;
 
-    /* php_var_export_ex is a good example */
-    switch (Z_TYPE_P(zv)) {
-        case IS_BOOL:
-            if (Z_LVAL_P(zv)) {
-                return sdsnew("true");
-            } else {
-                return sdsnew("false");
-            }
-        case IS_NULL:
-            return sdsnew("NULL");
-        case IS_LONG:
-            sprintf(buf, "%ld", Z_LVAL_P(zv));
-            return sdsnew(buf);
-        case IS_DOUBLE:
-            sprintf(buf, "%f", Z_DVAL_P(zv));
-            return sdsnew(buf);
-        case IS_STRING:
-            tlen = (limit <= 0 || Z_STRLEN_P(zv) < limit) ? Z_STRLEN_P(zv) : limit;
-            result = sdscatrepr(sdsempty(), Z_STRVAL_P(zv), tlen);
-            if (limit > 0 && Z_STRLEN_P(zv) > limit) {
-                result = sdscat(result, "...");
-            }
-            return result;
-        case IS_ARRAY:
-            /* TODO more info */
-            return sdscatprintf(sdsempty(), "array(%d)", zend_hash_num_elements(Z_ARRVAL_P(zv)));
-        case IS_OBJECT:
-            if (Z_OBJ_HANDLER(*zv, get_class_name)) {
-                Z_OBJ_HANDLER(*zv, get_class_name)(zv, (const char **) &tstr, (zend_uint *) &tlen, 0 TSRMLS_CC);
-                result = sdscatprintf(sdsempty(), "object(%s)#%d", tstr, Z_OBJ_HANDLE_P(zv));
-                efree(tstr);
-            } else {
-                result = sdscatprintf(sdsempty(), "object(unknown)#%d", Z_OBJ_HANDLE_P(zv));
-            }
-            return result;
-        case IS_RESOURCE:
-            tstr = (char *) zend_rsrc_list_get_rsrc_type(Z_LVAL_P(zv) TSRMLS_CC);
-            return sdscatprintf(sdsempty(), "resource(%s)#%ld", tstr ? tstr : "Unknown", Z_LVAL_P(zv));
-        default:
-            return sdsnew("{unknown}");
-    }
-}
-
-static void pt_ctrl_set_inactive(void)
-{
-    PTD("Ctrl set inactive");
-    CTRL_SET_INACTIVE();
-
-    /* toggle trace off, close comm-module */
-    PTG(dotrace) &= ~TRACE_TO_TOOL;
-    if (PTG(comm).seg.shmaddr != MAP_FAILED) {
-        PTD("Comm socket close");
-        phptrace_comm_sclose(&PTG(comm), 1);
-    }
-}
-
-static phptrace_status *pt_status_build(phptrace_status *status, zend_bool internal, zend_execute_data *ex TSRMLS_DC)
+/**
+ * PHP-Trace Manipulation of Status
+ * --------------------
+ */
+static void pt_status_build(phptrace_status *status, zend_bool internal, zend_execute_data *ex TSRMLS_DC)
 {
     int i;
     zend_execute_data *ex_ori = ex;
 
     /* init */
-    /* TODO improve init step of *_build functions */
-    if (status == NULL) {
-        status = (phptrace_status *) calloc(1, sizeof(phptrace_status));
-    } else {
-        memset(status, 0, sizeof(phptrace_status));
-    }
+    memset(status, 0, sizeof(phptrace_status));
 
     /* common */
     status->php_version = PHP_VERSION;
@@ -697,8 +632,6 @@ static phptrace_status *pt_status_build(phptrace_status *status, zend_bool inter
     } else {
         status->frames = NULL;
     }
-
-    return status;
 }
 
 static void pt_status_destroy(phptrace_status *status TSRMLS_DC)
@@ -759,18 +692,85 @@ static void pt_status_display(phptrace_status *status TSRMLS_DC)
 
 static int pt_status_send(phptrace_status *status TSRMLS_DC)
 {
+    size_t len;
     phptrace_comm_message *msg;
 
-    msg = phptrace_comm_swrite_begin(&PTG(comm), phptrace_type_len_status(status));
-    if (!msg) {
-        /* TODO merge two send functions */
-        php_error(E_WARNING, "PHPTrace comm-module write begin failed, tried to allocate %ld bytes", phptrace_type_len_status(status));
+    len = phptrace_type_len_status(status);
+    if ((msg = phptrace_comm_swrite_begin(&PTG(comm), len)) == NULL) {
+        php_error(E_WARNING, "PHPTrace comm-module write begin failed, tried to allocate %ld bytes", len);
         return -1;
     }
     phptrace_type_pack_status(status, msg->data);
-    phptrace_comm_swrite_end(&PTG(comm), PT_MSG_RET, msg); /* TODO different type */
+    phptrace_comm_swrite_end(&PTG(comm), PT_MSG_RET, msg); /* FIXME correct type */
 
     return 0;
+}
+
+
+/**
+ * PHP-Trace Misc Function
+ * --------------------
+ */
+static sds pt_repr_zval(zval *zv, int limit TSRMLS_DC)
+{
+    int tlen = 0;
+    char buf[128], *tstr = NULL;
+    sds result;
+
+    /* php_var_export_ex is a good example */
+    switch (Z_TYPE_P(zv)) {
+        case IS_BOOL:
+            if (Z_LVAL_P(zv)) {
+                return sdsnew("true");
+            } else {
+                return sdsnew("false");
+            }
+        case IS_NULL:
+            return sdsnew("NULL");
+        case IS_LONG:
+            sprintf(buf, "%ld", Z_LVAL_P(zv));
+            return sdsnew(buf);
+        case IS_DOUBLE:
+            sprintf(buf, "%f", Z_DVAL_P(zv));
+            return sdsnew(buf);
+        case IS_STRING:
+            tlen = (limit <= 0 || Z_STRLEN_P(zv) < limit) ? Z_STRLEN_P(zv) : limit;
+            result = sdscatrepr(sdsempty(), Z_STRVAL_P(zv), tlen);
+            if (limit > 0 && Z_STRLEN_P(zv) > limit) {
+                result = sdscat(result, "...");
+            }
+            return result;
+        case IS_ARRAY:
+            /* TODO more info */
+            return sdscatprintf(sdsempty(), "array(%d)", zend_hash_num_elements(Z_ARRVAL_P(zv)));
+        case IS_OBJECT:
+            if (Z_OBJ_HANDLER(*zv, get_class_name)) {
+                Z_OBJ_HANDLER(*zv, get_class_name)(zv, (const char **) &tstr, (zend_uint *) &tlen, 0 TSRMLS_CC);
+                result = sdscatprintf(sdsempty(), "object(%s)#%d", tstr, Z_OBJ_HANDLE_P(zv));
+                efree(tstr);
+            } else {
+                result = sdscatprintf(sdsempty(), "object(unknown)#%d", Z_OBJ_HANDLE_P(zv));
+            }
+            return result;
+        case IS_RESOURCE:
+            tstr = (char *) zend_rsrc_list_get_rsrc_type(Z_LVAL_P(zv) TSRMLS_CC);
+            return sdscatprintf(sdsempty(), "resource(%s)#%ld", tstr ? tstr : "Unknown", Z_LVAL_P(zv));
+        default:
+            return sdsnew("{unknown}");
+    }
+}
+
+static void pt_ctrl_set_inactive(void)
+{
+    PTD("Ctrl set inactive");
+    CTRL_SET_INACTIVE();
+
+    /* toggle trace off, close comm-module */
+    PTG(dotrace) &= ~TRACE_TO_TOOL;
+    if (PTG(comm).seg.shmaddr != MAP_FAILED) {
+        PTD("Comm socket close");
+        phptrace_comm_sclose(&PTG(comm), 1);
+    }
 }
 
 
