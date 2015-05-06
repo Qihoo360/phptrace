@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include "sds/sds.h"
 
+/* phptrace_frame */
 #define PT_FRAME_ENTRY          1 /* function entry */
 #define PT_FRAME_EXIT           2 /* function exit */
 #define PT_FRAME_STACK          3 /* backtrace stack */
@@ -54,6 +55,36 @@ typedef struct {
 
 size_t phptrace_type_len_frame(phptrace_frame *frame);
 size_t phptrace_type_pack_frame(phptrace_frame *frame, char *buf);
-phptrace_frame *phptrace_type_unpack_frame(phptrace_frame *frame, char *buf);
+size_t phptrace_type_unpack_frame(phptrace_frame *frame, char *buf);
+
+/* phptrace_status
+ * XXX use sds to make pack, unpack reliable and uniform outside PHP */
+typedef struct {
+    sds php_version;            /* php version eg: 5.5.24 */
+    sds sapi_name;              /* sapi name eg: fpm-fcgi */
+
+    int64_t mem;                /* memory usage */
+    int64_t mempeak;            /* memory peak */
+    int64_t mem_real;           /* real memory usage */
+    int64_t mempeak_real;       /* real memory peak */
+
+    double request_time;        /* request part, available in fpm, cli-server */
+    sds request_method;         /* [optional] */
+    sds request_uri;            /* [optional] */
+    sds request_query;          /* [optional] */
+    sds request_script;         /* [optional] */
+
+    int argc;                   /* arguments part, available in cli */
+    sds *argv;
+
+    int proto_num;
+
+    uint32_t frame_count;       /* backtrace depth */
+    phptrace_frame *frames;     /* backtrace frames */
+} phptrace_status;
+
+size_t phptrace_type_len_status(phptrace_status *status);
+size_t phptrace_type_pack_status(phptrace_status *status, char *buf);
+size_t phptrace_type_unpack_status(phptrace_status *status, char *buf);
 
 #endif

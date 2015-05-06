@@ -1,9 +1,8 @@
+#define _GNU_SOURCE /* only for strndup() */
+
 #include <stdlib.h>
 #include <string.h>
 #include "phptrace_type.h"
-
-#define LEN_SDS(s) \
-    (sizeof(uint32_t) + (s == NULL ? 0 : sdslen(s)))
 
 #define PACK(buf, type, ele) \
     *(type *) buf = ele; buf += sizeof(type)
@@ -11,18 +10,34 @@
 #define UNPACK(buf, type, ele) \
     ele = *(type *) buf; buf += sizeof(type)
 
-#define PACK_SDS(buf, ele) if (ele == NULL) { \
+#define LEN_STR_EX(s, lenfunc) \
+    (sizeof(uint32_t) + (s == NULL ? 0 : lenfunc(s)))
+#define LEN_STR(s) LEN_STR_EX(s, strlen)
+#define LEN_SDS(s) LEN_STR_EX(s, sdslen)
+
+#define PACK_STR_EX(buf, ele, lenfunc) \
+if (ele == NULL) { \
     PACK(buf, uint32_t, 0); \
 } else { \
-    PACK(buf, uint32_t, sdslen(ele)); \
-    memcpy(buf, ele, sdslen(ele)); \
-    buf += sdslen(ele); \
+    PACK(buf, uint32_t, lenfunc(ele)); \
+    memcpy(buf, ele, lenfunc(ele)); \
+    buf += lenfunc(ele); \
 }
+#define PACK_STR(buf, ele) PACK_STR_EX(buf, ele, strlen)
+#define PACK_SDS(buf, ele) PACK_STR_EX(buf, ele, sdslen)
 
-#define UNPACK_SDS(buf, ele) UNPACK(buf, uint32_t, len); \
-    if (len) { ele = sdsnewlen(buf, len); buf += len; } \
-    else { ele = NULL; }
+#define UNPACK_STR_EX(buf, ele, dupfunc) \
+UNPACK(buf, uint32_t, len); \
+if (len) { \
+    ele = dupfunc(buf, len); \
+    buf += len; \
+} else { \
+    ele = NULL; \
+}
+#define UNPACK_STR(buf, ele) UNPACK_STR_EX(buf, ele, strndup)
+#define UNPACK_SDS(buf, ele) UNPACK_STR_EX(buf, ele, sdsnewlen)
 
+/* phptrace_frame */
 size_t phptrace_type_len_frame(phptrace_frame *frame)
 {
     int i;
@@ -91,9 +106,11 @@ size_t phptrace_type_pack_frame(phptrace_frame *frame, char *buf)
     return buf - ori;
 }
 
-phptrace_frame *phptrace_type_unpack_frame(phptrace_frame *frame, char *buf)
+size_t phptrace_type_unpack_frame(phptrace_frame *frame, char *buf)
 {
-    int i, len;
+    int i;
+    size_t len;
+    char *ori = buf;
 
     UNPACK(buf, uint8_t, frame->type);
     UNPACK(buf, uint8_t, frame->functype);
@@ -122,50 +139,116 @@ phptrace_frame *phptrace_type_unpack_frame(phptrace_frame *frame, char *buf)
     UNPACK(buf, int64_t,  frame->exit.mem);
     UNPACK(buf, int64_t,  frame->exit.mempeak);
 
-    return frame;
+    return buf - ori;
 }
 
-#if 0
-#include <stdio.h>
-int main(void)
+/* phptrace_status */
+size_t phptrace_type_len_status(phptrace_status *status)
 {
-    char buf[4096];
-    size_t len;
-    phptrace_frame frame;
+    /* FIXME support sds, str both */
+    int i;
+    size_t size = 0;
 
-    /* init */
-    memset(&frame, 0, sizeof(frame));
-    frame.filename = sdsnew("/tmp");
-    frame.class = sdsnew("YourHome");
-    frame.function = sdsnew("move");
-    frame.arg_count = 3;
-    frame.args = calloc(frame.arg_count, sizeof(sds));
-    frame.args[0] = sdsnew("hello");
-    frame.args[1] = sdsnew("world");
-    frame.args[2] = sdsnew("true");
-    /* frame.retval = sdsnew("false"); */
-    frame.entry.mem = 654321;
-    frame.exit.wall_time = 654321;
-    printf("frame->arg_count: %d\n", frame.arg_count);
+    size += LEN_STR(status->php_version);                     /* php_version */
+    size += LEN_STR(status->sapi_name);                       /* sapi_name */
 
-    /* len */
-    len = phptrace_type_len_frame(&frame);
-    printf("len: %ld\n", len);
+    size += sizeof(int64_t);                                  /* mem */
+    size += sizeof(int64_t);                                  /* mempeak */
+    size += sizeof(int64_t);                                  /* real mem */
+    size += sizeof(int64_t);                                  /* real mempeak */
 
-    /* pack */
-    len = phptrace_type_pack_frame(&frame, buf);
-    printf("len: %ld\n", len);
+    size += sizeof(double);                                   /* request time */
+    size += LEN_STR(status->request_method);                  /* request method */
+    size += LEN_STR(status->request_uri);                     /* request uri */
+    size += LEN_STR(status->request_query);                   /* request query */
+    size += LEN_STR(status->request_script);                  /* request script */
 
-    memset(&frame, 0, sizeof(frame));
-    printf("frame->arg_count: %d\n", frame.arg_count);
+    size += sizeof(uint32_t);                                 /* argc */
+    for (i = 0; i < status->argc; i++) {
+        size += LEN_STR(status->argv[i]);                     /* argv */
+    }
 
-    /* unpack */
-    phptrace_type_unpack_frame(&frame, buf);
-    printf("frame->arg_count: %d\n", frame.arg_count);
-    printf("frame->args[0]: %s\n", frame.args[0]);
-    printf("frame->args[1]: %s\n", frame.args[1]);
-    printf("frame->args[2]: %s\n", frame.args[2]);
-    printf("frame->entry.mem: %ld\n", frame.entry.mem);
-    printf("frame->exit.wall_time: %ld\n", frame.exit.wall_time);
+    size += sizeof(uint32_t);                                 /* proto_num */
+
+    size += sizeof(uint32_t);                                 /* frame count */
+    for (i = 0; i < status->frame_count; i++) {
+        size += phptrace_type_len_frame(status->frames + i);
+    }
+
+    return size;
 }
-#endif
+
+size_t phptrace_type_pack_status(phptrace_status *status, char *buf)
+{
+    /* FIXME support sds, str both */
+    int i;
+    size_t len;
+    char *ori = buf;
+
+    PACK_STR(buf,       status->php_version);
+    PACK_STR(buf,       status->sapi_name);
+
+    PACK(buf, int64_t,  status->mem);
+    PACK(buf, int64_t,  status->mempeak);
+    PACK(buf, int64_t,  status->mem_real);
+    PACK(buf, int64_t,  status->mempeak_real);
+
+    PACK(buf, double,   status->request_time);
+    PACK_STR(buf,       status->request_method);
+    PACK_STR(buf,       status->request_uri);
+    PACK_STR(buf,       status->request_query);
+    PACK_STR(buf,       status->request_script);
+
+    PACK(buf, uint32_t, status->argc);
+    for (i = 0; i < status->argc; i++) {
+        PACK_STR(buf,   status->argv[i]);
+    }
+
+    PACK(buf, uint32_t, status->proto_num);
+
+    PACK(buf, uint32_t, status->frame_count);
+    for (i = 0; i < status->frame_count; i++) {
+        len = phptrace_type_pack_frame(status->frames + i, buf);
+        buf += len;
+    }
+
+    return buf - ori;
+}
+
+size_t phptrace_type_unpack_status(phptrace_status *status, char *buf)
+{
+    int i;
+    size_t len;
+    char *ori = buf;
+
+    UNPACK_SDS(buf,       status->php_version);
+    UNPACK_SDS(buf,       status->sapi_name);
+
+    UNPACK(buf, int64_t,  status->mem);
+    UNPACK(buf, int64_t,  status->mempeak);
+    UNPACK(buf, int64_t,  status->mem_real);
+    UNPACK(buf, int64_t,  status->mempeak_real);
+
+    UNPACK(buf, double,   status->request_time);
+    UNPACK_SDS(buf,       status->request_method);
+    UNPACK_SDS(buf,       status->request_uri);
+    UNPACK_SDS(buf,       status->request_query);
+    UNPACK_SDS(buf,       status->request_script);
+
+    UNPACK(buf, uint32_t, status->argc);
+    status->argv = calloc(status->argc, sizeof(char *));
+    for (i = 0; i < status->argc; i++) {
+        UNPACK_SDS(buf,   status->argv[i]);
+    }
+
+    UNPACK(buf, uint32_t, status->proto_num);
+
+    UNPACK(buf, uint32_t, status->frame_count);
+    status->frames = calloc(status->frame_count, sizeof(phptrace_status));
+    for (i = 0; i < status->frame_count; i++) {
+        len = phptrace_type_unpack_frame(status->frames + i, buf);
+        buf += len;
+    }
+
+    return buf - ori;
+}

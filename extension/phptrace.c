@@ -57,8 +57,7 @@
 #define TRACE_TO_TOOL   (1 << 1)
 
 /**
- * Compatible with PHP 5.1
- * zend_memory_usage() in PHP 5.1
+ * Compatible with PHP 5.1, zend_memory_usage() is not available in 5.1.
  * AG(allocated_memory) is the value we want, but it available only when
  * MEMORY_LIMIT is ON during PHP compilation, so use zero instead for safe.
  */
@@ -71,9 +70,16 @@ typedef unsigned long zend_uintptr_t;
 
 static void pt_frame_build(phptrace_frame *frame, zend_bool internal, unsigned char type, zend_execute_data *ex, zend_op_array *op_array TSRMLS_DC);
 static void pt_frame_destroy(phptrace_frame *frame TSRMLS_DC);
-static void pt_frame_set_retval(phptrace_frame *frame, zend_bool internal, zend_execute_data *ex, zend_fcall_info *fci TSRMLS_DC);
-static int pt_frame_send(phptrace_frame *frame TSRMLS_DC);
 static void pt_frame_display(phptrace_frame *frame TSRMLS_DC, zend_bool indent, const char *format, ...);
+static int pt_frame_send(phptrace_frame *frame TSRMLS_DC);
+static void pt_frame_set_retval(phptrace_frame *frame, zend_bool internal, zend_execute_data *ex, zend_fcall_info *fci TSRMLS_DC);
+
+static void pt_status_build(phptrace_status *status, zend_bool internal, zend_execute_data *ex TSRMLS_DC);
+static void pt_status_destroy(phptrace_status *status TSRMLS_DC);
+static void pt_status_display(phptrace_status *status TSRMLS_DC);
+static int pt_status_send(phptrace_status *status TSRMLS_DC);
+PHP_FUNCTION(phptrace_dostatus); /* FIXME remove it */
+
 static sds pt_repr_zval(zval *zv, int limit TSRMLS_DC);
 static void pt_ctrl_set_inactive(void);
 
@@ -103,10 +109,9 @@ extern sapi_module_struct sapi_module;
 /* True global resources - no need for thread safety here */
 static int le_phptrace;
 
-/**
- * Every user visible function must have an entry in phptrace_functions[].
- */
+/* Every user visible function must have an entry in phptrace_functions[]. */
 const zend_function_entry phptrace_functions[] = {
+    PHP_FE(phptrace_dostatus, NULL)
 #ifdef PHP_FE_END
     PHP_FE_END  /* Must be the last line in phptrace_functions[] */
 #else
@@ -262,10 +267,18 @@ PHP_MINFO_FUNCTION(phptrace)
  * PHP-Trace Interface
  * --------------------
  */
+PHP_FUNCTION(phptrace_dostatus)
+{
+    /* FIXME test function, remove before publish */
+    phptrace_status status;
+    pt_status_build(&status, 1, EG(current_execute_data) TSRMLS_CC);
+    pt_status_display(&status TSRMLS_CC);
+    pt_status_destroy(&status TSRMLS_CC);
+}
 
 
 /**
- * PHP-Trace Function
+ * PHP-Trace Manipulation of Frame
  * --------------------
  */
 static void pt_frame_build(phptrace_frame *frame, zend_bool internal, unsigned char type, zend_execute_data *ex, zend_op_array *op_array TSRMLS_DC)
@@ -285,14 +298,6 @@ static void pt_frame_build(phptrace_frame *frame, zend_bool internal, unsigned c
         zf = (zend_function *) op_array;
     }
 #else
-    /**
-     * In PHP 5.5 and after, execute_data is the data going to be executed, not
-     * the entry point, so we switch to previous data. The internal function is
-     * a exception because it's no need to execute by op_array.
-     */
-    if (!internal && ex->prev_execute_data) {
-        ex = ex->prev_execute_data;
-    }
     zf = ex->function_state.function;
 #endif
 
@@ -342,6 +347,7 @@ static void pt_frame_build(phptrace_frame *frame, zend_bool internal, unsigned c
 
         /* args */
 #if PHP_VERSION_ID < 50300
+        /* TODO support fetching arguments in backtrace */
         if (EG(argument_stack).top >= 2) {
             frame->arg_count = (int)(zend_uintptr_t) *(EG(argument_stack).top_element - 2);
             args = (zval **)(EG(argument_stack).top_element - 2 - frame->arg_count);
@@ -499,78 +505,212 @@ static void pt_frame_set_retval(phptrace_frame *frame, zend_bool internal, zend_
 
 static int pt_frame_send(phptrace_frame *frame TSRMLS_DC)
 {
+    size_t len;
     phptrace_comm_message *msg;
 
-    msg = phptrace_comm_swrite_begin(&PTG(comm), phptrace_type_len_frame(frame));
-    if (!msg) {
-        php_error(E_WARNING, "PHPTrace comm-module write begin failed, tried to allocate %ld bytes", phptrace_type_len_frame(frame));
+    len = phptrace_type_len_frame(frame);
+    if ((msg = phptrace_comm_swrite_begin(&PTG(comm), len)) == NULL) {
+        php_error(E_WARNING, "PHPTrace comm-module write begin failed, tried to allocate %ld bytes", len);
         return -1;
     }
     phptrace_type_pack_frame(frame, msg->data);
-    phptrace_comm_swrite_end(&PTG(comm), PT_MSG_RET, msg);
+    phptrace_comm_swrite_end(&PTG(comm), PT_MSG_RET, msg); /* FIXME correct type */
 
     return 0;
 }
 
 static void pt_frame_display(phptrace_frame *frame TSRMLS_DC, zend_bool indent, const char *format, ...)
 {
-    int i;
+    int i, has_bracket = 1;
+    size_t len;
+    char *buf;
     va_list ap;
 
     /* indent */
     if (indent) {
-        fprintf(stderr, "%*s", (frame->level - 1) * 4, "");
+        zend_printf("%*s", (frame->level - 1) * 4, "");
     }
 
     /* format */
-    va_start(ap, format);
-    vfprintf(stderr, format, ap);
-    va_end(ap);
+    if (format) {
+        va_start(ap, format);
+        len = vspprintf(&buf, 0, format, ap); /* implementation of zend_vspprintf() */
+        zend_write(buf, len);
+        efree(buf);
+        va_end(ap);
+    }
 
     /* frame */
     if ((frame->functype & PT_FUNC_TYPES) == PT_FUNC_NORMAL ||
             frame->functype & PT_FUNC_TYPES & PT_FUNC_INCLUDES) {
-        fprintf(stderr, "%s(", frame->function);
+        zend_printf("%s(", frame->function);
     } else if ((frame->functype & PT_FUNC_TYPES) == PT_FUNC_MEMBER) {
-        fprintf(stderr, "%s->%s(", frame->class, frame->function);
+        zend_printf("%s->%s(", frame->class, frame->function);
     } else if ((frame->functype & PT_FUNC_TYPES) == PT_FUNC_STATIC) {
-        fprintf(stderr, "%s::%s(", frame->class, frame->function);
+        zend_printf("%s::%s(", frame->class, frame->function);
     } else if ((frame->functype & PT_FUNC_TYPES) == PT_FUNC_EVAL) {
-        fprintf(stderr, "%s", frame->function);
-        goto done;
+        zend_printf("%s", frame->function);
+        has_bracket = 0;
     } else {
-        fprintf(stderr, "unknown");
-        goto done;
+        zend_printf("unknown");
+        has_bracket = 0;
     }
 
     /* arguments */
     if (frame->arg_count) {
         for (i = 0; i < frame->arg_count; i++) {
-            fprintf(stderr, "%s", frame->args[i]);
+            zend_printf("%s", frame->args[i]);
             if (i < frame->arg_count - 1) {
-                fprintf(stderr, ", ");
+                zend_printf(", ");
             }
         }
     }
-    fprintf(stderr, ")");
+    if (has_bracket) {
+        zend_printf(")");
+    }
 
     /* return value */
     if (frame->type == PT_FRAME_EXIT && frame->retval) {
-        fprintf(stderr, " = %s", frame->retval);
+        zend_printf(" = %s", frame->retval);
     }
 
-done:
     /* TODO output relative filepath */
-    fprintf(stderr, " called at [%s:%d]", frame->filename, frame->lineno);
+    zend_printf(" called at [%s:%d]", frame->filename, frame->lineno);
     if (frame->type == PT_FRAME_EXIT) {
-        fprintf(stderr, " wt: %.3f ct: %.3f\n",
+        zend_printf(" wt: %.3f ct: %.3f\n",
                 ((frame->exit.wall_time - frame->entry.wall_time) / 1000000.0),
                 ((frame->exit.cpu_time - frame->entry.cpu_time) / 1000000.0));
     } else {
-        fprintf(stderr, "\n");
+        zend_printf("\n");
     }
 }
 
+
+/**
+ * PHP-Trace Manipulation of Status
+ * --------------------
+ */
+static void pt_status_build(phptrace_status *status, zend_bool internal, zend_execute_data *ex TSRMLS_DC)
+{
+    int i;
+    zend_execute_data *ex_ori = ex;
+
+    /* init */
+    memset(status, 0, sizeof(phptrace_status));
+
+    /* common */
+    status->php_version = PHP_VERSION;
+    status->sapi_name = sapi_module.name;
+
+    /* profile */
+    status->mem = zend_memory_usage(0 TSRMLS_CC);
+    status->mempeak = zend_memory_peak_usage(0 TSRMLS_CC);
+    status->mem_real = zend_memory_usage(1 TSRMLS_CC);
+    status->mempeak_real = zend_memory_peak_usage(1 TSRMLS_CC);
+
+    /* request */
+    status->request_method = (char *) SG(request_info).request_method;
+    status->request_uri = SG(request_info).request_uri;
+    status->request_query = SG(request_info).query_string;
+    status->request_time = SG(global_request_time);
+    status->request_script = SG(request_info).path_translated;
+    status->proto_num = SG(request_info).proto_num;
+
+    /* arguments */
+    status->argc = SG(request_info).argc;
+    status->argv = SG(request_info).argv;
+
+    /* frame */
+    for (i = 0; ex; ex = ex->prev_execute_data, i++) ; /* calculate stack depth */
+    status->frame_count = i;
+    if (status->frame_count) {
+        status->frames = calloc(status->frame_count, sizeof(phptrace_frame));
+        for (i = 0, ex = ex_ori; i < status->frame_count && ex; i++, ex = ex->prev_execute_data) {
+            pt_frame_build(status->frames + i, internal, PT_FRAME_STACK, ex, NULL TSRMLS_CC);
+            status->frames[i].level = 1;
+        }
+    } else {
+        status->frames = NULL;
+    }
+}
+
+static void pt_status_destroy(phptrace_status *status TSRMLS_DC)
+{
+    int i;
+
+    if (status->frames && status->frame_count) {
+        for (i = 0; i < status->frame_count; i++) {
+            pt_frame_destroy(status->frames + i);
+        }
+        free(status->frames);
+    }
+}
+
+static void pt_status_display(phptrace_status *status TSRMLS_DC)
+{
+    int i;
+
+    zend_printf("------------------------------- Status --------------------------------\n");
+    zend_printf("PHP Version:       %s\n", status->php_version);
+    zend_printf("SAPI:              %s\n", status->sapi_name);
+
+    zend_printf("memory:            %.2fm\n", status->mem / 1048576.0);
+    zend_printf("memory peak:       %.2fm\n", status->mempeak / 1048576.0);
+    zend_printf("real-memory:       %.2fm\n", status->mem_real / 1048576.0);
+    zend_printf("real-memory peak   %.2fm\n", status->mempeak_real / 1048576.0);
+
+    zend_printf("------------------------------- Request -------------------------------\n");
+    if (status->request_method) {
+    zend_printf("request method:    %s\n", status->request_method);
+    }
+    zend_printf("request time:      %f\n", status->request_time);
+    if (status->request_uri) {
+    zend_printf("request uri:       %s\n", status->request_uri);
+    }
+    if (status->request_query) {
+    zend_printf("request query:     %s\n", status->request_query);
+    }
+    if (status->request_script) {
+    zend_printf("request script:    %s\n", status->request_script);
+    }
+    zend_printf("proto_num:         %d\n", status->proto_num);
+
+    if (status->argc) {
+        zend_printf("------------------------------ Arguments ------------------------------\n");
+        for (i = 0; i < status->argc; i++) {
+            zend_printf("$%-10d        %s\n", i, status->argv[i]);
+        }
+    }
+
+    if (status->frame_count) {
+        zend_printf("------------------------------ Backtrace ------------------------------\n");
+        for (i = 0; i < status->frame_count; i++) {
+            pt_frame_display(status->frames + i TSRMLS_CC, 0, "#%-3d", i);
+        }
+    }
+}
+
+static int pt_status_send(phptrace_status *status TSRMLS_DC)
+{
+    size_t len;
+    phptrace_comm_message *msg;
+
+    len = phptrace_type_len_status(status);
+    if ((msg = phptrace_comm_swrite_begin(&PTG(comm), len)) == NULL) {
+        php_error(E_WARNING, "PHPTrace comm-module write begin failed, tried to allocate %ld bytes", len);
+        return -1;
+    }
+    phptrace_type_pack_status(status, msg->data);
+    phptrace_comm_swrite_end(&PTG(comm), PT_MSG_RET, msg); /* FIXME correct type */
+
+    return 0;
+}
+
+
+/**
+ * PHP-Trace Misc Function
+ * --------------------
+ */
 static sds pt_repr_zval(zval *zv, int limit TSRMLS_DC)
 {
     int tlen = 0;
@@ -633,27 +773,6 @@ static void pt_ctrl_set_inactive(void)
     }
 }
 
-#if MONQUE_0
-static void pt_display_backtrace(zend_execute_data *ex, zend_bool internal TSRMLS_DC)
-{
-    int num = 0;
-    phptrace_frame frame;
-
-    while (ex) {
-        if (!internal && !ex->prev_execute_data) {
-            break;
-        }
-
-        pt_frame_build(&frame, ex, internal TSRMLS_CC);
-        frame.level = 1;
-        pt_frame_display(&frame TSRMLS_CC, 0, "#%-3d", num++);
-        pt_frame_destroy(&frame TSRMLS_CC);
-
-        ex = ex->prev_execute_data;
-    }
-}
-#endif
-
 
 /**
  * PHP-Trace Executor Replacement
@@ -668,11 +787,22 @@ ZEND_API void phptrace_execute_core(int internal, zend_execute_data *execute_dat
 {
     zend_op_array *op_array = NULL;
 #endif
-    zend_bool dobailout = 0;
     long dotrace;
+    zend_bool dobailout = 0;
+    zend_execute_data *ex_entry = execute_data;
     zval *retval = NULL;
     phptrace_comm_message *msg;
     phptrace_frame frame;
+
+#if PHP_VERSION_ID >= 50500
+    /* Why has a ex_entry ?
+     * In PHP 5.5 and after, execute_data is the data going to be executed, not
+     * the entry point, so we switch to previous data. The internal function is
+     * a exception because it's no need to execute by op_array. */
+    if (!internal && execute_data->prev_execute_data) {
+        ex_entry = execute_data->prev_execute_data;
+    }
+#endif
 
     /* Check ctrl module */
     if (CTRL_IS_ACTIVE()) {
@@ -702,8 +832,16 @@ ZEND_API void phptrace_execute_core(int internal, zend_execute_data *execute_dat
 
             switch (msg->type) {
                 case PT_MSG_DO_TRACE:
-                    PTD("msg handle: start trace");
+                    PTD("msg handle: do trace");
                     PTG(dotrace) |= TRACE_TO_TOOL;
+                    break;
+
+                case PT_MSG_DO_STATUS:
+                    PTD("msg handle: do status");
+                    phptrace_status status;
+                    pt_status_build(&status, internal, ex_entry TSRMLS_CC);
+                    pt_status_send(&status TSRMLS_CC);
+                    pt_status_destroy(&status TSRMLS_CC);
                     break;
 
                 case PT_MSG_DO_PING:
@@ -729,7 +867,7 @@ exec:
     PTG(level)++;
 
     if (dotrace) {
-        pt_frame_build(&frame, internal, PT_FRAME_ENTRY, execute_data, op_array TSRMLS_CC);
+        pt_frame_build(&frame, internal, PT_FRAME_ENTRY, ex_entry, op_array TSRMLS_CC);
 
         /* Register reture value ptr */
         if (!internal && EG(return_value_ptr_ptr) == NULL) {
