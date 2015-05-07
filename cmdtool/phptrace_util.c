@@ -129,7 +129,6 @@ void phptrace_context_init(phptrace_context_t *ctx)
     ctx->max_level = DEFAULT_MAX_LEVEL;
 
     ctx->max_print_len = MAX_PRINT_LENGTH;
-    //ctx->seg.shmaddr = MAP_FAILED;
 
     ctx->record_transform = standard_transform;
     log_level_set(LL_ERROR + 1);
@@ -396,7 +395,6 @@ void frame_free_sds(phptrace_frame *f)
 
 void trace(phptrace_context_t *ctx)
 {
-    int state = STATE_OPEN;
     uint64_t seq = 0;
     uint64_t magic_number;
     size_t tmp;
@@ -438,7 +436,6 @@ void trace(phptrace_context_t *ctx)
     if (!ctx->in_filename) {
         unlink(ctx->mmap_filename);
     }
-    state = STATE_HEADER;
 
     if (!ctx->in_filename) {                                            /* not -r option */
         phptrace_comm_swrite(p_sock, PT_MSG_DO_TRACE, NULL, 0);
@@ -446,10 +443,6 @@ void trace(phptrace_context_t *ctx)
 
     while (1) {
         if (interrupted) {
-            break;
-        }
-
-        if (state == STATE_END) {
             break;
         }
 
@@ -509,6 +502,7 @@ void trace(phptrace_context_t *ctx)
                 seq++;
                 break;
         }
+        free(msg);
     }
 
 trace_end:

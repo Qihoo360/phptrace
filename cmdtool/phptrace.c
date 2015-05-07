@@ -25,9 +25,6 @@ static address_info_t address_templates[] = {
     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 };
 
-//volatile int interrupted;        /* flag of interrupt (CTRL + C) */
-
-//extern int interrupted;
 
 static void interrupt(int sig)
 {

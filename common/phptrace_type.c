@@ -1,4 +1,6 @@
+#ifndef _GUN_SOURCE
 #define _GNU_SOURCE /* only for strndup() */
+#endif
 
 #include <stdlib.h>
 #include <string.h>

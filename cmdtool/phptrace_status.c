@@ -130,54 +130,179 @@ int check_phpext_installed(phptrace_context_t *ctx)
     return 1;
 }
 
-//extern int interrupted;
+sds type_dump_frame(phptrace_frame *f)
+{
+    int i;
+    sds buf = sdsempty();
+
+    buf = phptrace_repr_function(buf, f);
+
+    if ((f->functype & PT_FUNC_TYPES & PT_FUNC_INCLUDES) == 0) {
+        buf = sdscatprintf (buf, "(");
+    }
+
+    if (f->arg_count) {
+        for (i = 0; i < f->arg_count; i++) {
+            buf = sdscatprintf (buf, "%s", f->args[i]);
+            if (i < f->arg_count - 1) {
+                buf = sdscatprintf (buf, ", ");
+            }
+        }
+    }
+
+    if ((f->functype & PT_FUNC_TYPES & PT_FUNC_INCLUDES) == 0) {
+        buf = sdscatprintf (buf, ")");
+    }
+    buf = sdscatprintf (buf, " at [%s:%u]\n", f->filename, f->lineno);
+    log_printf (LL_DEBUG, " record_sds[%s]", buf);
+    return buf;
+}
+
+sds type_dump_status(phptrace_status *st)
+{
+    int i;
+    sds buf = sdsempty();
+
+    buf = sdscatprintf(buf, "Memory\nusage: %"PRId64"\npeak_usage: %"PRId64"\nreal_usage: %"PRId64"\nreal_peak_usage: %"PRId64"\n\n",
+            st->mem, st->mempeak, st->mem_real, st->mempeak_real);
+
+    buf = sdscatprintf(buf, "Request\n");
+    if (st->request_method) {
+        buf = sdscatprintf (buf, "method: %s\n", st->request_method);
+    }
+    if (st->request_uri) {
+        buf = sdscatprintf (buf, "request_uri: %s\n", st->request_uri);
+    }
+    if (st->request_query) {
+        buf = sdscatprintf (buf, "request_query: %s\n", st->request_query);
+    }
+    if (st->request_script) {
+        buf = sdscatprintf (buf, "request_script: %s\n", st->request_script);
+    }
+    buf = sdscatprintf (buf, "request_time: %f\n\nStack\n", st->request_time);
+
+    for (i = 0; i < st->frame_count; i++) {
+        buf = sdscatprintf (buf, "#%-4d ", i + 1);
+        buf = sdscatsds(buf, type_dump_frame(&(st->frames[i])));
+    }
+    return buf;
+}
+
+void type_status_free(phptrace_status *st)
+{
+   // sds php_version;            /* php version eg: 5.5.24 */
+   // sds sapi_name;              /* sapi name eg: fpm-fcgi */
+   //
+  //  sds request_method;         /* [optional] */
+  //  sds request_uri;            /* [optional] */
+  //  sds request_query;          /* [optional] */
+  //  sds request_script;         /* [optional] */
+
+  //  int argc;                   /* arguments part, available in cli */
+  //  sds *argv;
+
+  //  int proto_num;
+
+  //  uint32_t frame_count;       /* backtrace depth */
+  //  phptrace_frame *frames;     /* backtrace frames */
+    int i;
+    sdsfree(st->php_version);
+    sdsfree(st->sapi_name);
+    sdsfree(st->request_method);
+    sdsfree(st->request_uri);
+    sdsfree(st->request_query);
+    sdsfree(st->request_script);
+
+    if (st->argc) {
+        for (i = 0; i < st->argc; i++) {
+            sdsfree(st->argv[i]);
+        }
+        free(st->argv);
+    }
+
+    if (st->frame_count) {
+        for (i = 0; i < st->frame_count; i++) {
+            frame_free_sds(&st->frames[i]);
+        }
+        free(st->frames);
+    }
+}
 
 int status_dump(phptrace_context_t *ctx, int timeout /*milliseconds*/)
 {
-    int wait;
-    FILE *fp;
     char filename[256];
-    char buf[256];
-    int  blen = sizeof(buf);
-    int  nread;
-    wait = timeout < OPEN_DATA_WAIT_INTERVAL ? timeout : OPEN_DATA_WAIT_INTERVAL;
-    sprintf(filename, PHPTRACE_LOG_DIR "/" PHPTRACE_STATUS_FILENAME ".%d", ctx->php_pid);
+    uint32_t type;
+    sds buf;
+    int opendata_wait_interval = OPEN_DATA_WAIT_INTERVAL;
+    int data_wait_interval = DATA_WAIT_INTERVAL;
+
+    sprintf(filename, PHPTRACE_LOG_DIR "/" PHPTRACE_COMM_FILENAME ".%d", ctx->php_pid);
     log_printf(LL_DEBUG, "dump status %s", filename);
-    fp = NULL;
-    while (!interrupted) {
-        fp = fopen(filename, "r");
-        if (fp == NULL) {
-            if (errno != ENOENT) {
-                log_printf(LL_ERROR, "open status file %s: %s", filename, strerror(errno));
-                return -1;
-            }
-            if (timeout > 0) {
-                log_printf(LL_DEBUG, "open status file %s: %s", filename, strerror(errno));
-                timeout -= wait;
-                phptrace_msleep(wait);
-                wait = grow_interval(wait, MAX_OPEN_DATA_WAIT_INTERVAL);
-                continue;
-            }
+
+    /* new protocol API */
+    phptrace_comm_message *msg;
+    phptrace_status st;
+    phptrace_comm_socket sock;
+
+    while (phptrace_comm_sopen(&sock, filename, 1) < 0) {    /* meta: recv|send  */
+        if (interrupted) {
+            goto status_end;
         }
+
+        if (timeout < 0 || errno != ENOENT) {                      /* -r option or open failed (except for non-exist) */
+            error_msg(ctx, ERR_TRACE, "Can not open %s to read, %s!", filename, strerror(errno));
+            goto status_end;
+        } else {                                                        /* file not exist, should wait */
+            log_printf(LL_DEBUG, "trace mmap file not exist, will sleep %d ms.\n", opendata_wait_interval);
+            timeout -= opendata_wait_interval;
+            phptrace_msleep(opendata_wait_interval);
+            opendata_wait_interval = grow_interval(opendata_wait_interval, MAX_OPEN_DATA_WAIT_INTERVAL);
+        }
+    }
+
+    unlink(ctx->mmap_filename);
+    phptrace_comm_swrite(&sock, PT_MSG_DO_STATUS, NULL, 0);
+
+    while (!interrupted && timeout > 0) {
+        phptrace_comm_swrite(&sock, PT_MSG_DO_PING, NULL, 0);           /* send to do ping */
+
+        type = phptrace_comm_sread_type(&sock);
+        log_printf (LL_DEBUG, "msg type=(%u)", type);
+
+        if (type == PT_MSG_EMPTY) {                         /* wait flag */
+            log_printf (LL_DEBUG, "  wait_type will wait %d ms.\n", data_wait_interval);
+            timeout -= data_wait_interval;
+            phptrace_msleep(data_wait_interval);
+            data_wait_interval = grow_interval(data_wait_interval, MAX_DATA_WAIT_INTERVAL);
+            continue;
+        }
+
+        if ((msg = phptrace_comm_sread(&sock)) == NULL) {
+            error_msg(ctx, ERR_TRACE, "read record failed, maybe write too fast");
+            break;
+        }
+
+        if (msg->type == PT_MSG_RET) {
+            phptrace_type_unpack_status(&st, msg->data);
+            buf = type_dump_status(&st);
+            fwrite(buf, sizeof(char), sdslen(buf), ctx->out_fp);
+            fflush(NULL);
+            sdsfree(buf);
+        }
+
+        type_status_free(&st);
+        //free(msg);
         break;
     }
-    /*timedout*/
-    if (fp == NULL) {
-        if (timeout <=0 ) {
-            log_printf(LL_DEBUG, "dump status failed: timedout(%d)", timeout);
-        } else {
-            log_printf(LL_DEBUG, "dump status failed: signal interrupt");
-        }
-        return -1;
-    }
-    unlink(filename);
-    /*success*/
-    while (! feof(fp)) {
-        nread = fread(buf, 1, blen, fp);
-        fwrite(buf, nread, 1, stdout);
-    }
-    fclose(fp);
     return 0;
+
+status_end:
+    /*timedout*/
+    if (timeout <=0 ) {
+        log_printf(LL_DEBUG, "dump status failed: timedout(%d)", timeout);
+    }
+    return -1;
+
 }
 
 void process_opt_s(phptrace_context_t *ctx)
@@ -201,8 +326,8 @@ void process_opt_s(phptrace_context_t *ctx)
             error_msg(ctx, ERR_CTRL, "process %d is being dumped by others, please retry later", ctx->php_pid);
             die(ctx, -1);
         }
-        phptrace_ctrl_set(&(ctx->ctrl), 1<<2, ctx->php_pid);
-        if (status_dump(ctx, 500) == 0){
+        phptrace_ctrl_set(&(ctx->ctrl), 1, ctx->php_pid);
+        if (status_dump(ctx, 3000) == 0){
             return;
         }
         /*clear the flag if dump failed*/
