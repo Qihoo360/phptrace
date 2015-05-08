@@ -78,7 +78,9 @@ static void pt_status_build(phptrace_status *status, zend_bool internal, zend_ex
 static void pt_status_destroy(phptrace_status *status TSRMLS_DC);
 static void pt_status_display(phptrace_status *status TSRMLS_DC);
 static int pt_status_send(phptrace_status *status TSRMLS_DC);
+#if MONQUE_0
 PHP_FUNCTION(phptrace_dostatus); /* FIXME remove it */
+#endif
 
 static sds pt_repr_zval(zval *zv, int limit TSRMLS_DC);
 static void pt_ctrl_set_inactive(void);
@@ -111,7 +113,9 @@ static int le_phptrace;
 
 /* Every user visible function must have an entry in phptrace_functions[]. */
 const zend_function_entry phptrace_functions[] = {
+#if MONQUE_0
     PHP_FE(phptrace_dostatus, NULL)
+#endif
 #ifdef PHP_FE_END
     PHP_FE_END  /* Must be the last line in phptrace_functions[] */
 #else
@@ -267,6 +271,7 @@ PHP_MINFO_FUNCTION(phptrace)
  * PHP-Trace Interface
  * --------------------
  */
+#if MONQUE_0
 PHP_FUNCTION(phptrace_dostatus)
 {
     /* FIXME test function, remove before publish */
@@ -275,6 +280,7 @@ PHP_FUNCTION(phptrace_dostatus)
     pt_status_display(&status TSRMLS_CC);
     pt_status_destroy(&status TSRMLS_CC);
 }
+#endif
 
 
 /**
