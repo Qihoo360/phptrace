@@ -4,9 +4,9 @@ Trace simple call with various types of argument
 phptrace.dotrace=on
 --FILE--
 <?php
-define('DUMMYCONST', 'this is a const string');
 class DummyClass {}
 function call_normal($arg = null) {}
+define('DUMMYCONST', 'this is a const string');
 
 // Call normal
 call_normal(null);
@@ -34,8 +34,8 @@ call_recursive(36);
 ?>
 --EXPECTF--
 > {main}() called at [%s:2]
-    > define("DUMMYCONST", "this is a const string") called at [%s:2]
-    < define("DUMMYCONST", "this is a const string") = true called at [%s:2] wt: %f ct: %f
+    > define("DUMMYCONST", "this is a const string") called at [%s:4]
+    < define("DUMMYCONST", "this is a const string") = true called at [%s:4] wt: %f ct: %f
     > call_normal(NULL) called at [%s:7]
     < call_normal(NULL) = NULL called at [%s:7] wt: %f ct: %f
     > call_normal(1234) called at [%s:8]
