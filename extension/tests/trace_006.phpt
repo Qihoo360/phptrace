@@ -7,20 +7,25 @@ phptrace.dotrace=on
 require 'trace_006_include.inc';
 
 \Trace\Test\call_normal();
-(new \Trace\Test\TestClass())->callNormal();
+$o = new \Trace\Test\TestClass();
+$o->callNormal();
 
 Trace\Test\call_normal();
-(new Trace\Test\TestClass())->callNormal();
+$o = new Trace\Test\TestClass();
+$o->callNormal();
 
 use Trace\Test;
 Test\call_normal();
-(new Test\TestClass())->callNormal();
+$o = new Test\TestClass();
+$o->callNormal();
 
 use Trace\Test\TestClass;
-(new TestClass())->callNormal();
+$o = new TestClass();
+$o->callNormal();
 
 use Trace\Test\TestClass as TTT;
-(new TTT())->callNormal();
+$o = new TTT();
+$o->callNormal();
 ?>
 --EXPECTF--
 > require("%s") called at [%s:2]
@@ -28,18 +33,18 @@ use Trace\Test\TestClass as TTT;
     < require("%s") = 1 called at [%s:2] wt: %f ct: %f
     > Trace\Test\call_normal() called at [%s:4]
     < Trace\Test\call_normal() = NULL called at [%s:4] wt: %f ct: %f
-    > Trace\Test\TestClass->callNormal() called at [%s:5]
-    < Trace\Test\TestClass->callNormal() = NULL called at [%s:5] wt: %f ct: %f
-    > Trace\Test\call_normal() called at [%s:7]
-    < Trace\Test\call_normal() = NULL called at [%s:7] wt: %f ct: %f
-    > Trace\Test\TestClass->callNormal() called at [%s:8]
-    < Trace\Test\TestClass->callNormal() = NULL called at [%s:8] wt: %f ct: %f
-    > Trace\Test\call_normal() called at [%s:11]
-    < Trace\Test\call_normal() = NULL called at [%s:11] wt: %f ct: %f
-    > Trace\Test\TestClass->callNormal() called at [%s:12]
-    < Trace\Test\TestClass->callNormal() = NULL called at [%s:12] wt: %f ct: %f
+    > Trace\Test\TestClass->callNormal() called at [%s:6]
+    < Trace\Test\TestClass->callNormal() = NULL called at [%s:6] wt: %f ct: %f
+    > Trace\Test\call_normal() called at [%s:8]
+    < Trace\Test\call_normal() = NULL called at [%s:8] wt: %f ct: %f
+    > Trace\Test\TestClass->callNormal() called at [%s:10]
+    < Trace\Test\TestClass->callNormal() = NULL called at [%s:10] wt: %f ct: %f
+    > Trace\Test\call_normal() called at [%s:13]
+    < Trace\Test\call_normal() = NULL called at [%s:13] wt: %f ct: %f
     > Trace\Test\TestClass->callNormal() called at [%s:15]
     < Trace\Test\TestClass->callNormal() = NULL called at [%s:15] wt: %f ct: %f
-    > Trace\Test\TestClass->callNormal() called at [%s:18]
-    < Trace\Test\TestClass->callNormal() = NULL called at [%s:18] wt: %f ct: %f
+    > Trace\Test\TestClass->callNormal() called at [%s:19]
+    < Trace\Test\TestClass->callNormal() = NULL called at [%s:19] wt: %f ct: %f
+    > Trace\Test\TestClass->callNormal() called at [%s:23]
+    < Trace\Test\TestClass->callNormal() = NULL called at [%s:23] wt: %f ct: %f
 < require("%s") = 1 called at [%s:2] wt: %f ct: %f

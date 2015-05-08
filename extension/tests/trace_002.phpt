@@ -7,10 +7,10 @@ phptrace.dotrace=on
 function call_normal($arg = null) {}
 
 // Includes
-require_once __DIR__.'/trace_002_require.inc';
-include_once __DIR__.'/trace_002_include.inc';
-require      __DIR__.'/trace_002_require.inc';
-include      __DIR__.'/trace_002_include.inc';
+require_once 'trace_002_require.inc';
+include_once 'trace_002_include.inc';
+require      'trace_002_require.inc';
+include      'trace_002_include.inc';
 
 // Call in internal
 call_user_func('call_normal');
