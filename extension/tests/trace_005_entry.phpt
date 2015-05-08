@@ -9,5 +9,5 @@ if (!function_exists('pcntl_signal')) {
 --REDIRECTTEST--
 return array(
     'ENV' => array(),
-    'TESTS' => 'tests_redirect/trace_005',
+    'TESTS' => 'tests_redirected/trace_005',
 );

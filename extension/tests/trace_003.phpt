@@ -68,8 +68,8 @@ strlen($o);
 // invode
 $o();
 
-// debugInfo
-var_dump($o);
+// debugInfo, added in PHP 5.6.0
+// var_dump($o);
 
 // get, set, isset, unset
 $o->attr = 'hello';
@@ -134,12 +134,6 @@ clone($o);
     < strlen(object(TestClass)#1) = 0 called at [%s:61] wt: %f ct: %f
     > TestClass->__invoke() called at [%s:64]
     < TestClass->__invoke() = NULL called at [%s:64] wt: %f ct: %f
-    > var_dump(object(TestClass)#1) called at [%s:67]
-        > TestClass->__debugInfo() called at [%s:67]
-        < TestClass->__debugInfo() = NULL called at [%s:67] wt: %f ct: %f
-object(TestClass)#1 (0) {
-}
-    < var_dump(object(TestClass)#1) = NULL called at [%s:67] wt: %f ct: %f
     > TestClass->__set("attr", "hello") called at [%s:70]
     < TestClass->__set("attr", "hello") = NULL called at [%s:70] wt: %f ct: %f
     > TestClass->__get("attr") called at [%s:71]

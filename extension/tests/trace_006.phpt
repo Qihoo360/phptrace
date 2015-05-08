@@ -4,7 +4,7 @@ Trace call under namespace
 phptrace.dotrace=on
 --FILE--
 <?php
-require 'trace_006_include.php';
+require 'trace_006_include.inc';
 
 \Trace\Test\call_normal();
 (new \Trace\Test\TestClass())->callNormal();
