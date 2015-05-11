@@ -29,7 +29,7 @@ function try_compile()
     mkdir -vp modules_test
     $phpize && \
     ./configure --with-php-config=$phpcfg && \
-    make && \
+    make EXTRA_CFLAGS=-DPHPTRACE_DEBUG && \
     make install && \
     cp -v modules/phptrace.so modules_test/phptrace.so.${version}
 

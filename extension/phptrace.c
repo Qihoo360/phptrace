@@ -20,7 +20,7 @@
  * --------------------
  */
 /* Debug output */
-#if PHPTRACE_DEBUG
+#if PHPTRACE_DEBUG_OUTPUT
 #define PTD(format, args...) fprintf(stderr, "[PTDebug:%d] " format "\n", __LINE__, ## args)
 #else
 #define PTD(format, args...)
@@ -67,6 +67,11 @@
 typedef unsigned long zend_uintptr_t;
 #endif
 
+#if PHPTRACE_DEBUG
+PHP_FUNCTION(phptrace_start);
+PHP_FUNCTION(phptrace_end);
+PHP_FUNCTION(phptrace_status);
+#endif
 
 static void pt_frame_build(phptrace_frame *frame, zend_bool internal, unsigned char type, zend_execute_data *ex, zend_op_array *op_array TSRMLS_DC);
 static void pt_frame_destroy(phptrace_frame *frame TSRMLS_DC);
@@ -78,9 +83,6 @@ static void pt_status_build(phptrace_status *status, zend_bool internal, zend_ex
 static void pt_status_destroy(phptrace_status *status TSRMLS_DC);
 static void pt_status_display(phptrace_status *status TSRMLS_DC);
 static int pt_status_send(phptrace_status *status TSRMLS_DC);
-#if MONQUE_0
-PHP_FUNCTION(phptrace_dostatus); /* FIXME remove it */
-#endif
 
 static sds pt_repr_zval(zval *zv, int limit TSRMLS_DC);
 static void pt_ctrl_set_inactive(void);
@@ -113,8 +115,10 @@ static int le_phptrace;
 
 /* Every user visible function must have an entry in phptrace_functions[]. */
 const zend_function_entry phptrace_functions[] = {
-#if MONQUE_0
-    PHP_FE(phptrace_dostatus, NULL)
+#if PHPTRACE_DEBUG
+    PHP_FE(phptrace_start, NULL)
+    PHP_FE(phptrace_end, NULL)
+    PHP_FE(phptrace_status, NULL)
 #endif
 #ifdef PHP_FE_END
     PHP_FE_END  /* Must be the last line in phptrace_functions[] */
@@ -271,10 +275,19 @@ PHP_MINFO_FUNCTION(phptrace)
  * PHP-Trace Interface
  * --------------------
  */
-#if MONQUE_0
-PHP_FUNCTION(phptrace_dostatus)
+#if PHPTRACE_DEBUG
+PHP_FUNCTION(phptrace_start)
 {
-    /* FIXME test function, remove before publish */
+    PTG(dotrace) |= TRACE_TO_OUTPUT;
+}
+
+PHP_FUNCTION(phptrace_end)
+{
+    PTG(dotrace) &= ~TRACE_TO_OUTPUT;
+}
+
+PHP_FUNCTION(phptrace_status)
+{
     phptrace_status status;
     pt_status_build(&status, 1, EG(current_execute_data) TSRMLS_CC);
     pt_status_display(&status TSRMLS_CC);
