@@ -502,7 +502,6 @@ void trace(phptrace_context_t *ctx)
                 seq++;
                 break;
         }
-        free(msg);
     }
 
 trace_end:

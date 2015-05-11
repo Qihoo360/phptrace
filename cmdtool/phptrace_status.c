@@ -302,7 +302,6 @@ status_end:
         log_printf(LL_DEBUG, "dump status failed: timedout(%d)", timeout);
     }
     return -1;
-
 }
 
 void process_opt_s(phptrace_context_t *ctx)
