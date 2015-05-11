@@ -85,7 +85,7 @@ static void pt_status_display(phptrace_status *status TSRMLS_DC);
 static int pt_status_send(phptrace_status *status TSRMLS_DC);
 
 static sds pt_repr_zval(zval *zv, int limit TSRMLS_DC);
-static void pt_ctrl_set_inactive(void);
+static void pt_ctrl_set_inactive(TSRMLS_D);
 
 #if PHP_VERSION_ID < 50500
 static void (*pt_ori_execute)(zend_op_array *op_array TSRMLS_DC);
@@ -663,7 +663,7 @@ static void pt_status_destroy(phptrace_status *status TSRMLS_DC)
 
     if (status->frames && status->frame_count) {
         for (i = 0; i < status->frame_count; i++) {
-            pt_frame_destroy(status->frames + i);
+            pt_frame_destroy(status->frames + i TSRMLS_CC);
         }
         free(status->frames);
     }
@@ -783,7 +783,7 @@ static sds pt_repr_zval(zval *zv, int limit TSRMLS_DC)
     }
 }
 
-static void pt_ctrl_set_inactive(void)
+static void pt_ctrl_set_inactive(TSRMLS_D)
 {
     PTD("Ctrl set inactive");
     CTRL_SET_INACTIVE();
@@ -835,7 +835,7 @@ ZEND_API void phptrace_execute_core(int internal, zend_execute_data *execute_dat
             PTD("Comm socket %s create", PTG(comm_file));
             if (phptrace_comm_screate(&PTG(comm), PTG(comm_file), 0, PTG(send_size), PTG(recv_size)) == -1) {
                 php_error(E_WARNING, "PHPTrace comm-module %s open failed", PTG(ctrl_file));
-                pt_ctrl_set_inactive();
+                pt_ctrl_set_inactive(TSRMLS_C);
                 goto exec;
             }
             PING_UPDATE();
@@ -848,7 +848,7 @@ ZEND_API void phptrace_execute_core(int internal, zend_execute_data *execute_dat
             if (msg == NULL) {
                 if (PING_TIMEOUT()) {
                     PTD("Ping timeout");
-                    pt_ctrl_set_inactive();
+                    pt_ctrl_set_inactive(TSRMLS_C);
                 }
                 break;
             }
@@ -877,7 +877,7 @@ ZEND_API void phptrace_execute_core(int internal, zend_execute_data *execute_dat
             }
         }
     } else if (PTG(comm).seg.shmaddr != MAP_FAILED) { /* comm-module still open */
-        pt_ctrl_set_inactive();
+        pt_ctrl_set_inactive(TSRMLS_C);
     }
 
 exec:
