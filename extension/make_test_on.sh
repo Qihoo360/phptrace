@@ -11,6 +11,10 @@ function try_compile()
     php="$path/bin/php"
     phpize="$path/bin/phpize"
     phpcfg="$path/bin/php-config"
+    if [ ! -f $phpcfg ]; then
+        echo -e "${BC_RED}invalid path${BC_res} $path"
+        return 1
+    fi
 
     vertext=`$php -n --version 2>/dev/null`
     if [ $? -eq 0 ]; then
@@ -32,13 +36,16 @@ function try_compile()
     make EXTRA_CFLAGS=-DPHPTRACE_DEBUG && \
     make install && \
     cp -v modules/phptrace.so modules_test/phptrace.so.${version}
+    ret=$?
 
-    if [ $? -eq 0 ]; then
+    if [ $ret -eq 0 ]; then
         echo -e "${BC_GRE}[DONE]${BC_res} \c"
     else
         echo -e "${BC_RED}[FAIL]${BC_res} \c"
     fi
     echo -e "${BC_GRE}$version${BC_res} @ ${BC_YEL}$path${BC_res}"
+
+    return $ret
 }
 
 if [ $# -lt 1 ]; then
@@ -47,6 +54,5 @@ fi
 
 # Main
 for php_path in $@; do
-    try_compile $php_path
-    make test
+    try_compile $php_path && make test
 done

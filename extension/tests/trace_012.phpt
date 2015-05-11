@@ -45,6 +45,6 @@ phptrace_end(); ?>
     < TestClassA->callNormal() = NULL called at [%s:29] wt: %f ct: %f
     > TestClassB->callNormal() called at [%s:30]
     < TestClassB->callNormal() = NULL called at [%s:30] wt: %f ct: %f
-    > TestClassC->callNormal() called at [%s:31]
-    < TestClassC->callNormal() = NULL called at [%s:31] wt: %f ct: %f
+    > TestClassC->callAlias() called at [%s:31]
+    < TestClassC->callAlias() = NULL called at [%s:31] wt: %f ct: %f
     > phptrace_end() called at [%s:33]

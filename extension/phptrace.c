@@ -356,11 +356,15 @@ static void pt_frame_build(phptrace_frame *frame, zend_bool internal, unsigned c
             frame->function = sdscatprintf(sdsempty(), "{closure:%s:%d-%d}", zf->op_array.filename, zf->op_array.line_start, zf->op_array.line_end);
         } else if (strcmp(zf->common.function_name, "__lambda_func") == 0) {
             frame->function = sdscatprintf(sdsempty(), "{lambda:%s}", zf->op_array.filename);
+#if PHP_VERSION_ID >= 50414
+        } else if (zf->common.scope && zf->common.scope->trait_aliases) {
+            /* Use trait alias instead real function name.
+             * There is also a bug "#64239 Debug backtrace changed behavior
+             * since 5.4.10 or 5.4.11" about this
+             * https://bugs.php.net/bug.php?id=64239.*/
+            frame->function = sdsnew(zend_resolve_method_name(ex->object ? Z_OBJCE_P(ex->object) : zf->common.scope, zf));
+#endif
         } else {
-            /**
-             * TODO deal trait alias better, zend has a function below:
-             * zend_resolve_method_name(ex->object ?  Z_OBJCE_P(ex->object) : zf->common.scope, zf)
-             */
             frame->function = sdsnew(zf->common.function_name);
         }
 
