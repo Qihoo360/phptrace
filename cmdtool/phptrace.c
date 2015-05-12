@@ -22,6 +22,7 @@ static address_info_t address_templates[] = {
     {0, 64, 0, 1360, 0, 8, 0, 8, 80, 40, 0, 168, 0, 0, 112},
     {0, 64, 0, 1152, 0, 8, 0, 8, 80, 40, 0, 144, 0, 0, 40},
     {0, 64, 0, 1120, 0, 8, 0, 8, 48, 24, 0, 152, 0, 0, 40},
+    {0, 40, 0, 1120, 0, 8, 0, 8, 48, 24, 0, 152, 0, 0, 40},
     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 };
 
@@ -218,7 +219,7 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
     }
 
     if (ctx->opt_flag == OPT_FLAG_STATUS) {
-        if (ctx->php_version && (ctx->php_version < PHP52 || ctx->php_version > PHP55)) {
+        if (ctx->php_version && (ctx->php_version < PHP52 || ctx->php_version > PHP56)) {
             error_msg(ctx, ERR_INVALID_PARAM, "php version is not supported\n");
             exit(-1);
         }

@@ -46,6 +46,7 @@
 #define PHP53 3
 #define PHP54 4
 #define PHP55 5
+#define PHP56 6
 
 enum {
     ERR = 1,
