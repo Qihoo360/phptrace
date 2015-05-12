@@ -64,7 +64,6 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
     };
 
     if (argc < 2) { /* no options */
-        error_msg(ctx, ERR_INVALID_PARAM, "too few arguments");
         usage();
         exit(-1);
     }
@@ -237,8 +236,6 @@ int main(int argc, char *argv[])
 {
     char buf[MAX_TEMP_LENGTH];
     phptrace_context_t context;
-
-    printf("%s %s, published by %s\n", PHPTRACE_NAME, PHPTRACE_VERSION, PHPTRACE_DEVELOPER);
 
     phptrace_context_init(&context);
 

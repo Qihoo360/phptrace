@@ -4,7 +4,7 @@
 extern zend_module_entry phptrace_module_entry;
 #define phpext_phptrace_ptr &phptrace_module_entry
 
-#define PHP_PHPTRACE_VERSION "0.3.0"
+#define PHP_PHPTRACE_VERSION "0.3.0-beta"
 
 #ifdef PHP_WIN32
 #   define PHP_PHPTRACE_API __declspec(dllexport)

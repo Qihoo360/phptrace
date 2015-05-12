@@ -205,8 +205,7 @@ void usage()
     -w outfile           -- write the trace data to file in phptrace format\n\
     -r infile            -- read the trace file of phptrace format, instead of the process\n\
     -o outfile           -- write the trace data to file in specified format\n\
-    --format format      -- specify the format when -o option is set. Legal values is json for now\n\
-    \n");
+    --format format      -- specify the format when -o option is set. Legal values is json for now\n");
 }
 
 

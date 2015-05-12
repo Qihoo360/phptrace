@@ -10,8 +10,8 @@
 #include <sys/stat.h>
 
 #define PHPTRACE_NAME "phptrace"
-#define PHPTRACE_VERSION "0.3.0 rc"
-#define PHPTRACE_DEVELOPER "360 infra webcore team"
+#define PHPTRACE_VERSION "0.3.0-beta"
+#define PHPTRACE_DEVELOPER "360 Infra Webcore Team"
 
 #define MAX_TEMP_LENGTH 100
 #define MAX_PRINT_LENGTH 600
