@@ -34,7 +34,6 @@ function try_compile()
     $phpize && \
     ./configure --with-php-config=$phpcfg && \
     make EXTRA_CFLAGS=-DPHPTRACE_DEBUG && \
-    make install && \
     cp -v modules/phptrace.so modules_test/phptrace.so.${version}
     ret=$?
 
