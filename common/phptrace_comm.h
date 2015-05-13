@@ -22,18 +22,7 @@
 #include "phptrace_type.h"
 
 #define PHPTRACE_LOG_DIR                "/tmp"
-#define PHPTRACE_TRACE_FILENAME         "phptrace.trace"
-#define PHPTRACE_CTRL_FILENAME          "phptrace.ctrl"
-#define PHPTRACE_STATUS_FILENAME        "phptrace.status"
 #define PHPTRACE_COMM_FILENAME          "phptrace.comm"
-
-/*We use PID_MAX+1 as the size of file phptrace.ctrl
- *4 million is the hard limit of linux kernel so far,
- *It is 99999 on Mac OS X which is coverd by this value.
- *So 4*1024*1024 can serve both linux and unix(include darwin)
- * */
-#define PID_MAX                         4194304             /* 4*1024*1024 */
-
 
 #define PT_MAGIC_NUMBER     0x6563617274706870 /* ascii codes of "phptrace" */
 #define PT_COMM_SEQMAX      1000

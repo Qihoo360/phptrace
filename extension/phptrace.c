@@ -42,15 +42,6 @@
 #define PTD(format, args...)
 #endif
 
-/* TODO Definitions in phptrace_protocol.h. We won't need that file, so put
- * it here temporarily. */
-/* We use PID_MAX+1 as the size of file phptrace.ctrl 4 million is the hard
- * limit of linux kernel so far, It is 99999 on Mac OS X which is coverd by
- * this value.  So 4*1024*1024 can serve both linux and unix(include darwin) */
-#define PID_MAX 4194304 /* 4*1024*1024 */
-#define PHPTRACE_CTRL_FILENAME "phptrace.ctrl"
-#define PHPTRACE_COMM_FILENAME "phptrace.comm"
-
 /* Ctrl module */
 #define CTRL ((int8_t *) (PTG(ctrl).ctrl_seg.shmaddr))[PTG(pid)]
 #define CTRL_IS_ACTIVE() (CTRL & PT_CTRL_ACTIVE)
@@ -357,7 +348,8 @@ static void pt_frame_build(phptrace_frame *frame, zend_bool internal, unsigned c
             if (zf->common.scope) {
                 frame->class = sdsnew(zf->common.scope->name);
             } else {
-                /* FIXME zend use zend_get_object_classname() */
+                /* TODO zend uses zend_get_object_classname() in
+                 * debug_print_backtrace() */
                 php_error(E_WARNING, "PHPTrace catch a entry with ex->object but without zf->common.scope");
             }
         } else if (zf->common.scope) {
@@ -463,12 +455,11 @@ static void pt_frame_build(phptrace_frame *frame, zend_bool internal, unsigned c
     if (ex && ex->opline) {
         frame->lineno = ex->opline->lineno;
     } else if (ex && ex->prev_execute_data && ex->prev_execute_data->opline) {
-        /* TODO try it in loop ? */
         frame->lineno = ex->prev_execute_data->opline->lineno; /* try using prev */
     } else if (op_array && op_array->opcodes) {
         frame->lineno = op_array->opcodes->lineno;
     /**
-     * TODO use definition lineno when entry lineno is null ?
+     * TODO Shall we use definition lineno if entry lineno is null
      * } else if (ex != EG(current_execute_data) && EG(current_execute_data)->opline) {
      *     frame->lineno = EG(current_execute_data)->opline->lineno; [> try using current <]
      */
