@@ -14,97 +14,96 @@
  * limitations under the License.
  */
 
+#include <errno.h>
+#include <fcntl.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 #include "phptrace_ctrl.h"
 
-/**
- * Public Interface
- * --------------------
- */
-int phptrace_ctrl_needcreate(const char *filename, int pid_max)
+int pt_ctrl_open(pt_ctrl_t *ctrl, const char *file)
 {
+    int fd;
     struct stat st;
 
-    if (stat(filename, &st) == -1) {
-        if (errno == ENOENT) {
-            return 1;
-        } else {
-            return -1;
-        }
-    } else if (st.st_size < pid_max + 1) {
-        return 1;
-    }
+    pt_ctrl_reset(ctrl);
 
-    return 0;
-}
-
-int phptrace_ctrl_create(phptrace_ctrl_t *c, const char *filename, int pid_max)
-{
-    c->ctrl_seg = phptrace_mmap_create(filename, pid_max + 1);
-    if (c->ctrl_seg.shmaddr == MAP_FAILED) {
+    /* file open */
+    fd = open(file, O_RDWR, DEFFILEMODE);
+    if (fd == -1) {
         return -1;
     }
 
-    memset(c->ctrl_seg.shmaddr, 0, c->ctrl_seg.size);
+    /* size */
+    if (fstat(fd, &st) == -1) {
+        return -1;
+    }
+    ctrl->size = st.st_size;
+    if (ctrl->size < PT_CTRL_SIZE) {
+        return -1; /* return here if size is too small */
+    }
+
+    /* mmap */
+    ctrl->addr = mmap(NULL, ctrl->size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_NOSYNC, fd, 0);
+    if (ctrl->addr == MAP_FAILED) {
+        pt_ctrl_reset(ctrl);
+        return -1;
+    }
+
     return 0;
 }
 
-int phptrace_ctrl_open(phptrace_ctrl_t *c, const char *filename)
+int pt_ctrl_create(pt_ctrl_t *ctrl, const char *file)
 {
-    c->ctrl_seg = phptrace_mmap_write(filename);
-    return (c->ctrl_seg.shmaddr == MAP_FAILED) ? -1 : 0;
-}
+    int fd;
 
-void phptrace_ctrl_close(phptrace_ctrl_t *c)
-{
-    phptrace_unmap(&c->ctrl_seg);
-}
+    pt_ctrl_reset(ctrl);
 
-/**
- * Old
- * --------------------
- */
-int phptrace_ctrl_init(phptrace_ctrl_t *c)
-{
-    c->ctrl_seg = phptrace_mmap_write(PHPTRACE_LOG_DIR "/" PHPTRACE_CTRL_FILENAME);
-    return (c->ctrl_seg.shmaddr != MAP_FAILED); 
-}
-
-void phptrace_ctrl_clean_all(phptrace_ctrl_t *c)
-{
-    if (c && c->ctrl_seg.shmaddr && c->ctrl_seg.shmaddr != MAP_FAILED) {
-        memset(c->ctrl_seg.shmaddr, 0, c->ctrl_seg.size);
+    /* file open */
+    fd = open(file, O_RDWR | O_CREAT, DEFFILEMODE);
+    if (fd == -1) {
+        return -1;
     }
-}
 
-void phptrace_ctrl_clean_one(phptrace_ctrl_t *c, int pid)
-{
-    if (c && c->ctrl_seg.shmaddr && c->ctrl_seg.shmaddr != MAP_FAILED) {
-        phptrace_ctrl_set(c, 0, pid); 
+    /* size */
+    if (ftruncate(fd, PT_CTRL_SIZE) == -1) {
+        close(fd);
+        unlink(file);
+        return -1;
     }
-}
+    ctrl->size = PT_CTRL_SIZE;
 
-void phptrace_ctrl_destroy(phptrace_ctrl_t *c)
-{
-    if (c && c->ctrl_seg.shmaddr && c->ctrl_seg.shmaddr != MAP_FAILED) {
-        phptrace_unmap(&(c->ctrl_seg));
+    /* mmap */
+    ctrl->addr = mmap(NULL, ctrl->size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_NOSYNC, fd, 0);
+    if (ctrl->addr == MAP_FAILED) {
+        pt_ctrl_reset(ctrl);
+        return -1;
     }
+
+    /* zero fill */
+    pt_ctrl_clean_all(ctrl);
+
+    return 0;
 }
 
-int8_t phptrace_ctrl_heartbeat_ping(phptrace_ctrl_t *c, int pid)
-{ 
-    int8_t s = -1;
-    phptrace_ctrl_get(c, &s, pid);
-    s = s | (1 << 7);
-    phptrace_ctrl_set(c, (int8_t)s, pid);
-    return s;
-}
-
-/* TODO c */
-int8_t phptrace_ctrl_heartbeat_pong(phptrace_ctrl_t *c, int pid)
+int pt_ctrl_close(pt_ctrl_t *ctrl)
 {
-    int8_t s = -1;
-    phptrace_ctrl_get(c, &s, pid);
-    s &= ~(1 << 7) & 0x00FF;
-    phptrace_ctrl_set(c, (int8_t)s, pid);
-    return s;
+    if (ctrl->addr) {
+        munmap(ctrl->addr, ctrl->size);
+    }
+    pt_ctrl_reset(ctrl);
+
+    return 0;
+}
+
+void pt_ctrl_reset(pt_ctrl_t *ctrl)
+{
+    ctrl->addr = NULL;
+    ctrl->size = 0;
+}
+
+void pt_ctrl_clean_all(pt_ctrl_t *ctrl)
+{
+    memset(ctrl->addr, 0x00, ctrl->size);
 }

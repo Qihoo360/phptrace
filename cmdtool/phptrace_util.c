@@ -70,7 +70,7 @@ void trace_cleanup(phptrace_context_t *ctx)
     log_printf (LL_DEBUG, " [trace_cleanup]");
 
     if (ctx->trace_flag) {
-        phptrace_ctrl_clean_one(&(ctx->ctrl), ctx->php_pid);
+        pt_ctrl_pid_set_inactive(&(ctx->ctrl), ctx->php_pid);
         log_printf (LL_DEBUG, " clean ctrl pid=%d~~~~~\n", ctx->php_pid);
     }
 
@@ -152,23 +152,21 @@ void phptrace_context_init(phptrace_context_t *ctx)
 
 void trace_start(phptrace_context_t *ctx)
 {
-    int8_t num = -1;
     uint8_t flag = 1;
     struct stat st;
 
-    if (!phptrace_ctrl_init(&(ctx->ctrl))) {                    
+    if (pt_ctrl_open(&(ctx->ctrl), PHPTRACE_LOG_DIR "/" PT_CTRL_FILENAME) < 0) {
         error_msg(ctx, ERR_CTRL, "cannot open control mmap file %s (%s)", 
-                PHPTRACE_LOG_DIR "/" PHPTRACE_CTRL_FILENAME, (errno ? strerror(errno) : "null"));
+                PHPTRACE_LOG_DIR "/" PT_CTRL_FILENAME, (errno ? strerror(errno) : "null"));
         die(ctx, -1);
     }
-    log_printf (LL_DEBUG, " [trace_start] ctrl_init open (%s) successful", PHPTRACE_LOG_DIR "/" PHPTRACE_CTRL_FILENAME);
+    log_printf (LL_DEBUG, " [trace_start] ctrl_init open (%s) successful", PHPTRACE_LOG_DIR "/" PT_CTRL_FILENAME);
 
-    phptrace_ctrl_get(&(ctx->ctrl), &num, ctx->php_pid);
-    if (num > 0) {
+    if (pt_ctrl_pid_is_active(&(ctx->ctrl), ctx->php_pid)) {
         error_msg(ctx, ERR_CTRL, "[trace_start] process %d has been traced", ctx->php_pid);
         die(ctx, -1);
     }
-    log_printf (LL_DEBUG, "[trace_start] read ctrl data ok: ctrl[pid=%d]=%d!", ctx->php_pid, num);
+    log_printf (LL_DEBUG, "[trace_start] read ctrl data ok: ctrl[pid=%d]=%d!", ctx->php_pid, pt_ctrl_pid(&(ctx->ctrl), ctx->php_pid));
 
     if (stat(ctx->mmap_filename, &st) == 0) {
         if (unlink(ctx->mmap_filename) < 0) {
@@ -177,27 +175,27 @@ void trace_start(phptrace_context_t *ctx)
         }
     }
     /*force to reopen when start a new trace*/
-    phptrace_ctrl_set(&(ctx->ctrl), flag, ctx->php_pid);
+    pt_ctrl_pid_set_active(&(ctx->ctrl), ctx->php_pid);
     ctx->trace_flag = flag;
     log_printf (LL_DEBUG, "[trace_start] set ctrl data ok: ctrl[pid=%d]=%u is opened!", ctx->php_pid, flag);
 }
 
 void process_opt_e(phptrace_context_t *ctx)
 {
-    if (!phptrace_ctrl_init(&(ctx->ctrl))) {
+    if (pt_ctrl_open(&(ctx->ctrl), PHPTRACE_LOG_DIR "/" PT_CTRL_FILENAME) < 0) {
         error_msg(ctx, ERR_CTRL, "cannot open control mmap file %s (%s)",
-                PHPTRACE_LOG_DIR "/" PHPTRACE_CTRL_FILENAME, (errno ? strerror(errno) : "null"));
+                PHPTRACE_LOG_DIR "/" PT_CTRL_FILENAME, (errno ? strerror(errno) : "null"));
         die(ctx, -1);
     }
-    log_printf (LL_DEBUG, " [ok] ctrl_init open (%s)", PHPTRACE_LOG_DIR "/" PHPTRACE_CTRL_FILENAME);
+    log_printf (LL_DEBUG, " [ok] ctrl_init open (%s)", PHPTRACE_LOG_DIR "/" PT_CTRL_FILENAME);
     if (ctx->php_pid >= 0) {
-        phptrace_ctrl_clean_one(&(ctx->ctrl), ctx->php_pid);
+        pt_ctrl_pid_set_inactive(&(ctx->ctrl), ctx->php_pid);
         printf ("clean process %d.\n", ctx->php_pid);
     } else {
-        phptrace_ctrl_clean_all(&(ctx->ctrl));
+        pt_ctrl_clean_all(&(ctx->ctrl));
         printf ("clean all process.\n");
     }
-    phptrace_ctrl_destroy(&(ctx->ctrl));
+    pt_ctrl_close(&(ctx->ctrl));
 }
 
 void usage()
