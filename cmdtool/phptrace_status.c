@@ -137,7 +137,7 @@ int stack_dump(phptrace_context_t* ctx)
 
 int check_phpext_installed(phptrace_context_t *ctx)
 {
-    if (access(PHPTRACE_LOG_DIR "/" PHPTRACE_CTRL_FILENAME, R_OK|W_OK) < 0) {
+    if (access(PHPTRACE_LOG_DIR "/" PT_CTRL_FILENAME, R_OK|W_OK) < 0) {
         if(errno != ENOENT) {
             log_printf(LL_ERROR, "check_phpext_installed: %s", strerror(errno));
         }
@@ -330,23 +330,22 @@ void process_opt_s(phptrace_context_t *ctx)
     /*dump stauts from the extension*/
     if (!ctx->addr_info.sapi_globals_addr && check_phpext_installed(ctx)) {
         log_printf(LL_DEBUG, "phptrace extension has been installed, use extension\n");
-        if (!phptrace_ctrl_init(&(ctx->ctrl))) {
+        if (pt_ctrl_open(&(ctx->ctrl), PHPTRACE_LOG_DIR "/" PT_CTRL_FILENAME) < 0) {
             error_msg(ctx, ERR_CTRL, "cannot open control mmap file %s (%s)",
-                    PHPTRACE_LOG_DIR "/" PHPTRACE_CTRL_FILENAME, (errno ? strerror(errno) : "null"));
+                    PHPTRACE_LOG_DIR "/" PT_CTRL_FILENAME, (errno ? strerror(errno) : "null"));
             die(ctx, -1);
         }
 
-        phptrace_ctrl_get(&(ctx->ctrl), &num, ctx->php_pid);
-        if (num > 0) {
+        if (pt_ctrl_pid_is_active(&(ctx->ctrl), ctx->php_pid)) {
             error_msg(ctx, ERR_CTRL, "process %d is being dumped by others, please retry later", ctx->php_pid);
             die(ctx, -1);
         }
-        phptrace_ctrl_set(&(ctx->ctrl), 1, ctx->php_pid);
+        pt_ctrl_pid_set_active(&(ctx->ctrl), ctx->php_pid);
         if (status_dump(ctx, 3000) == 0){
             return;
         }
         /*clear the flag if dump failed*/
-        phptrace_ctrl_set(&(ctx->ctrl), 0, ctx->php_pid);
+        pt_ctrl_pid_set_inactive(&(ctx->ctrl), ctx->php_pid);
         die(ctx, -1);
     }
 

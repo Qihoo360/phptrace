@@ -14,51 +14,52 @@
  * limitations under the License.
  */
 
-/*
- * @FILE: ctrl structs
- * @DESC:   
- */
-
 #ifndef PHPTRACE_CTRL_H
 #define PHPTRACE_CTRL_H
 
 #include <stdint.h>
-#include <inttypes.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <errno.h>
 
-#include "phptrace_comm.h"
-#include "phptrace_mmap.h"
+#if 1 /* TODO mmap */
+#include <sys/mman.h>
 
-/* We use PID_MAX+1 as the size of file phptrace.ctrl 4 million is the hard
- * limit of linux kernel so far, It is 99999 on Mac OS X which is coverd by
- * this value.  So 4*1024*1024 can serve both linux and unix(include darwin) */
-#define PID_MAX 4194304 /* 4*1024*1024 */
+/* Some operating systems (like FreeBSD) have a MAP_NOSYNC flag that
+ * tells whatever update daemons might be running to not flush dirty
+ * vm pages to disk unless absolutely necessary.  My guess is that
+ * most systems that don't have this probably default to only synching
+ * to disk when absolutely necessary. */
+#ifndef MAP_NOSYNC
+#define MAP_NOSYNC 0
+#endif
 
-#define PHPTRACE_CTRL_FILENAME          "phptrace.ctrl"
+/* support for systems where MAP_ANONYMOUS is defined but not MAP_ANON, ie:
+ * HP-UX bug #14615 */
+#if !defined(MAP_ANON) && defined(MAP_ANONYMOUS)
+# define MAP_ANON MAP_ANONYMOUS
+#endif
+#endif
 
-typedef struct phptrace_ctrl_s {
-    phptrace_segment_t ctrl_seg;
-} phptrace_ctrl_t;
+/* We use PT_PID_MAX + 1 as the size of file ctrl file. 4 million is the hard
+ * limit of linux kernel so far, and it is 99999 on Mac OS X which is coverd by
+ * this value. So 4*1024*1024 can serve both linux and unix(include darwin). */
+#define PT_PID_MAX          4194304
+#define PT_CTRL_SIZE        PT_PID_MAX + 1
+#define PT_CTRL_FILENAME    "phptrace.ctrl"
+#define PT_CTRL_ACTIVE      0x01
 
-#define PT_CTRL_ACTIVE 0x01
+typedef struct {
+    size_t size;
+    void *addr;
+} pt_ctrl_t;
 
-int phptrace_ctrl_needcreate(const char *filename, int pid_max);
-int phptrace_ctrl_create(phptrace_ctrl_t *c, const char *filename, int pid_max);
-int phptrace_ctrl_open(phptrace_ctrl_t *c, const char *filename);
-void phptrace_ctrl_close(phptrace_ctrl_t *c);
+int pt_ctrl_open(pt_ctrl_t *ctrl, const char *file);
+int pt_ctrl_create(pt_ctrl_t *ctrl, const char *file);
+int pt_ctrl_close(pt_ctrl_t *ctrl);
+void pt_ctrl_reset(pt_ctrl_t *ctrl);
+void pt_ctrl_clean_all(pt_ctrl_t *ctrl);
 
-int phptrace_ctrl_init(phptrace_ctrl_t *c);
-void phptrace_ctrl_clean_all(phptrace_ctrl_t *c);
-void phptrace_ctrl_clean_one(phptrace_ctrl_t *c, int pid);
-void phptrace_ctrl_destroy(phptrace_ctrl_t *c);
-#define phptrace_ctrl_set(c, n, pid)     \
-    do { *((int8_t *)((c)->ctrl_seg.shmaddr)+(pid)) = (n); } while(0);
-#define phptrace_ctrl_get(c, n, pid)    \
-    do { *(n) = *( (int8_t *)( (c)->ctrl_seg.shmaddr+(pid) ) ); } while  (0);
-
-int8_t phptrace_ctrl_heartbeat_ping(phptrace_ctrl_t *c, int pid);
-int8_t phptrace_ctrl_heartbeat_pong(phptrace_ctrl_t *c, int pid);
+#define pt_ctrl_pid(ctrl, pid)              (*(uint8_t *) (((ctrl)->addr) + (pid)))
+#define pt_ctrl_pid_is_active(ctrl, pid)    (pt_ctrl_pid(ctrl, pid) &   PT_CTRL_ACTIVE)
+#define pt_ctrl_pid_set_active(ctrl, pid)   (pt_ctrl_pid(ctrl, pid) |=  PT_CTRL_ACTIVE)
+#define pt_ctrl_pid_set_inactive(ctrl, pid) (pt_ctrl_pid(ctrl, pid) &= ~PT_CTRL_ACTIVE)
 
 #endif

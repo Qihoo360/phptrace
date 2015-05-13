@@ -43,9 +43,8 @@
 #endif
 
 /* Ctrl module */
-#define CTRL ((int8_t *) (PTG(ctrl).ctrl_seg.shmaddr))[PTG(pid)]
-#define CTRL_IS_ACTIVE() (CTRL & PT_CTRL_ACTIVE)
-#define CTRL_SET_INACTIVE() (CTRL &= ~PT_CTRL_ACTIVE)
+#define CTRL_IS_ACTIVE()    pt_ctrl_pid_is_active(&PTG(ctrl), PTG(pid))
+#define CTRL_SET_INACTIVE() pt_ctrl_pid_set_inactive(&PTG(ctrl), PTG(pid))
 
 /* Ping process */
 #define PING_UPDATE() PTG(ping) = pt_time_sec()
@@ -172,7 +171,8 @@ static void php_trace_init_globals(zend_trace_globals *ptg)
 
     memset(ptg->ctrl_file, 0, sizeof(ptg->ctrl_file));
     memset(ptg->comm_file, 0, sizeof(ptg->comm_file));
-    ptg->ctrl.ctrl_seg.shmaddr = ptg->comm.seg.shmaddr = MAP_FAILED; /* TODO using more intuitive element */
+    pt_ctrl_reset(&ptg->ctrl);
+    ptg->comm.seg.shmaddr = MAP_FAILED; /* TODO using more intuitive element */
     ptg->recv_size = ptg->send_size = 0;
 
     ptg->pid = ptg->level = 0;
@@ -208,15 +208,10 @@ PHP_MINIT_FUNCTION(trace)
     zend_execute_internal = pt_execute_internal;
 
     /* Open ctrl module */
-    snprintf(PTG(ctrl_file), sizeof(PTG(ctrl_file)), "%s/%s", PTG(data_dir), PHPTRACE_CTRL_FILENAME);
-    if (phptrace_ctrl_needcreate(PTG(ctrl_file), PID_MAX)) {
-        PTD("Ctrl module create %s", PTG(ctrl_file));
-        phptrace_ctrl_create(&PTG(ctrl), PTG(ctrl_file), PID_MAX);
-    } else {
-        PTD("Ctrl module open %s", PTG(ctrl_file));
-        phptrace_ctrl_open(&PTG(ctrl), PTG(ctrl_file));
-    }
-    if (PTG(ctrl).ctrl_seg.shmaddr == MAP_FAILED) {
+    snprintf(PTG(ctrl_file), sizeof(PTG(ctrl_file)), "%s/%s", PTG(data_dir), PT_CTRL_FILENAME);
+    PTD("Ctrl module open %s", PTG(ctrl_file));
+    if (pt_ctrl_open(&PTG(ctrl), PTG(ctrl_file)) < 0 &&
+            pt_ctrl_create(&PTG(ctrl), PTG(ctrl_file)) < 0) {
         php_error(E_ERROR, "Trace ctrl file %s open failed", PTG(ctrl_file));
         return FAILURE;
     }
@@ -250,7 +245,7 @@ PHP_MSHUTDOWN_FUNCTION(trace)
 
     /* Close ctrl module */
     PTD("Ctrl module close");
-    phptrace_ctrl_close(&PTG(ctrl));
+    pt_ctrl_close(&PTG(ctrl));
 
     return SUCCESS;
 }
@@ -841,7 +836,7 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zen
             snprintf(PTG(comm_file), sizeof(PTG(comm_file)), "%s/%s.%d", PTG(data_dir), PHPTRACE_COMM_FILENAME, PTG(pid));
             PTD("Comm socket %s create", PTG(comm_file));
             if (phptrace_comm_screate(&PTG(comm), PTG(comm_file), 0, PTG(send_size), PTG(recv_size)) == -1) {
-                php_error(E_WARNING, "Trace comm-module %s open failed", PTG(ctrl_file));
+                php_error(E_WARNING, "Trace comm-module %s open failed", PTG(comm_file));
                 pt_ctrl_set_inactive(TSRMLS_C);
                 goto exec;
             }

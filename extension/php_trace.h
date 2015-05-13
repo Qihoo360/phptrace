@@ -53,7 +53,7 @@ ZEND_BEGIN_MODULE_GLOBALS(trace)
 
     char                    *data_dir;      /* data path, should be writable */
 
-    phptrace_ctrl_t         ctrl;           /* ctrl module */
+    pt_ctrl_t               ctrl;           /* ctrl module */
     char                    ctrl_file[256]; /* ctrl filename */
 
     phptrace_comm_socket    comm;           /* comm module */

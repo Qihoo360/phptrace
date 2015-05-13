@@ -39,11 +39,8 @@
 #include <string.h>
 #include <errno.h>
 #include <limits.h>
-#if HAVE_INTTYPES_H
-# include <inttypes.h>
-#else
-# include <stdint.h>
-#endif
+#include <inttypes.h> /* needs PRIu64, PRId64 */
+#include <stdint.h>
 
 typedef struct record_count_s {
     sds function_name;
@@ -121,7 +118,7 @@ struct phptrace_context_s {
     */
     phptrace_comm_socket sock;
 
-    phptrace_ctrl_t ctrl;
+    pt_ctrl_t ctrl;
 
     phptrace_record_transform_t record_transform;     /* transform,  a function point32_ter */
 
