@@ -7,7 +7,7 @@ if (!function_exists('pcntl_signal')) {
 }
 ?>
 --FILE--
-<?php phptrace_start();
+<?php trace_start();
 
 function handler_for_signal($signo) {}
 pcntl_signal(SIGHUP, 'handler_for_signal');
@@ -16,7 +16,7 @@ declare (ticks = 1) {
     system($cmd);
 }
 
-phptrace_end(); ?>
+trace_end(); ?>
 --EXPECTF--
 > pcntl_signal(1, "handler_for_signal") called at [%s:4]
     < pcntl_signal(1, "handler_for_signal") = true called at [%s:4] wt: %f ct: %f
@@ -26,4 +26,4 @@ phptrace_end(); ?>
     < system("kill -HUP %d") = "" called at [%s:7] wt: %f ct: %f
     > handler_for_signal(1) called at [%s:7]
     < handler_for_signal(1) = NULL called at [%s:7] wt: %f ct: %f
-    > phptrace_end() called at [%s:10]
+    > trace_end() called at [%s:10]

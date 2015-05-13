@@ -1,7 +1,7 @@
 --TEST--
 Trace simple call with various types of argument
 --INI--
-phptrace.dotrace=on
+trace.dotrace=on
 --FILE--
 <?php
 class DummyClass {}

@@ -1,7 +1,7 @@
 --TEST--
 Trace call recursive
 --INI--
-phptrace.dotrace=on
+trace.dotrace=on
 --FILE--
 <?php
 function call_recursive($r = 0) {

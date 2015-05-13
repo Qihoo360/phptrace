@@ -7,7 +7,7 @@ if (version_compare(PHP_VERSION, '5.3', '<')) {
 }
 ?>
 --FILE--
-<?php phptrace_start();
+<?php trace_start();
 
 require 'trace_006_include.inc';
 
@@ -32,7 +32,7 @@ use Trace\Test\TestClass as TTT;
 $o = new TTT();
 $o->callNormal();
 
-phptrace_end(); ?>
+trace_end(); ?>
 --EXPECTF--
 > require(%s) called at [%s:3]
     < require(%s) = 1 called at [%s:3] wt: %f ct: %f
@@ -52,4 +52,4 @@ phptrace_end(); ?>
     < Trace\Test\TestClass->callNormal() = NULL called at [%s:20] wt: %f ct: %f
     > Trace\Test\TestClass->callNormal() called at [%s:24]
     < Trace\Test\TestClass->callNormal() = NULL called at [%s:24] wt: %f ct: %f
-    > phptrace_end() called at [%s:26]
+    > trace_end() called at [%s:26]

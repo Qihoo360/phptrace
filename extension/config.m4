@@ -1,7 +1,7 @@
-PHP_ARG_ENABLE(phptrace, whether to enable phptrace support,
-[  --enable-phptrace   Enable phptrace support])
+PHP_ARG_ENABLE(trace, whether to enable trace support,
+[  --enable-trace      Enable trace support])
 
-if test "$PHP_PHPTRACE" != "no"; then
+if test "$PHP_TRACE" != "no"; then
 
   dnl check ZTS support
   if test "$PHP_THREAD_SAFETY" == "yes"; then
@@ -18,13 +18,13 @@ if test "$PHP_PHPTRACE" != "no"; then
   dnl configure can't use ".." as a source filename, so we make a link here
   ln -sf ../common ./
 
-  PHPTRACE_SOURCES="common/phptrace_comm.c \
-                    common/phptrace_ctrl.c \
-                    common/phptrace_mmap.c \
-                    common/phptrace_type.c \
-                    common/sds/sds.c"
+  TRACE_SOURCES="common/phptrace_comm.c \
+                 common/phptrace_ctrl.c \
+                 common/phptrace_mmap.c \
+                 common/phptrace_type.c \
+                 common/sds/sds.c"
 
-  PHP_NEW_EXTENSION(phptrace, phptrace.c $PHPTRACE_SOURCES, $ext_shared)
+  PHP_NEW_EXTENSION(trace, trace.c $TRACE_SOURCES, $ext_shared)
 fi
 
 dnl vim:et:ts=2:sw=2

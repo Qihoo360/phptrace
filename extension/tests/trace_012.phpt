@@ -7,7 +7,7 @@ if (version_compare(PHP_VERSION, '5.4', '<')) {
 }
 ?>
 --FILE--
-<?php phptrace_start();
+<?php trace_start();
 
 trait TestTrait
 {
@@ -39,7 +39,7 @@ $a->callNormal();
 $b->callNormal();
 $c->callAlias();
 
-phptrace_end(); ?>
+trace_end(); ?>
 --EXPECTF--
 > TestClassA->callNormal() called at [%s:29]
     < TestClassA->callNormal() = NULL called at [%s:29] wt: %f ct: %f
@@ -47,4 +47,4 @@ phptrace_end(); ?>
     < TestClassB->callNormal() = NULL called at [%s:30] wt: %f ct: %f
     > TestClassC->callAlias() called at [%s:31]
     < TestClassC->callAlias() = NULL called at [%s:31] wt: %f ct: %f
-    > phptrace_end() called at [%s:33]
+    > trace_end() called at [%s:33]

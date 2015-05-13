@@ -33,8 +33,8 @@ function try_compile()
     mkdir -vp modules_test
     $phpize && \
     ./configure --with-php-config=$phpcfg && \
-    make EXTRA_CFLAGS=-DPHPTRACE_DEBUG && \
-    cp -v modules/phptrace.so modules_test/phptrace.so.${version}
+    make EXTRA_CFLAGS=-DTRACE_DEBUG && \
+    cp -v modules/trace.so modules_test/trace.so.${version}
     ret=$?
 
     if [ $ret -eq 0 ]; then

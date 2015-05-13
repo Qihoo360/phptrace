@@ -21,7 +21,7 @@
 #include "php.h"
 #include "php_ini.h"
 #include "ext/standard/info.h"
-#include "php_phptrace.h"
+#include "php_trace.h"
 
 #include "zend_extensions.h"
 #include "SAPI.h"
@@ -32,11 +32,11 @@
 
 
 /**
- * PHP-Trace Global
+ * Trace Global
  * --------------------
  */
 /* Debug output */
-#if PHPTRACE_DEBUG_OUTPUT
+#if TRACE_DEBUG_OUTPUT
 #define PTD(format, args...) fprintf(stderr, "[PTDebug:%d] " format "\n", __LINE__, ## args)
 #else
 #define PTD(format, args...)
@@ -74,10 +74,10 @@
 typedef unsigned long zend_uintptr_t;
 #endif
 
-#if PHPTRACE_DEBUG
-PHP_FUNCTION(phptrace_start);
-PHP_FUNCTION(phptrace_end);
-PHP_FUNCTION(phptrace_status);
+#if TRACE_DEBUG
+PHP_FUNCTION(trace_start);
+PHP_FUNCTION(trace_end);
+PHP_FUNCTION(trace_status);
 #endif
 
 static void pt_frame_build(phptrace_frame *frame, zend_bool internal, unsigned char type, zend_execute_data *ex, zend_op_array *op_array TSRMLS_DC);
@@ -97,13 +97,13 @@ static void pt_ctrl_set_inactive(TSRMLS_D);
 #if PHP_VERSION_ID < 50500
 static void (*pt_ori_execute)(zend_op_array *op_array TSRMLS_DC);
 static void (*pt_ori_execute_internal)(zend_execute_data *execute_data_ptr, int return_value_used TSRMLS_DC);
-ZEND_API void phptrace_execute(zend_op_array *op_array TSRMLS_DC);
-ZEND_API void phptrace_execute_internal(zend_execute_data *execute_data, int return_value_used TSRMLS_DC);
+ZEND_API void pt_execute(zend_op_array *op_array TSRMLS_DC);
+ZEND_API void pt_execute_internal(zend_execute_data *execute_data, int return_value_used TSRMLS_DC);
 #else
 static void (*pt_ori_execute_ex)(zend_execute_data *execute_data TSRMLS_DC);
 static void (*pt_ori_execute_internal)(zend_execute_data *execute_data_ptr, zend_fcall_info *fci, int return_value_used TSRMLS_DC);
-ZEND_API void phptrace_execute_ex(zend_execute_data *execute_data TSRMLS_DC);
-ZEND_API void phptrace_execute_internal(zend_execute_data *execute_data, zend_fcall_info *fci, int return_value_used TSRMLS_DC);
+ZEND_API void pt_execute_ex(zend_execute_data *execute_data TSRMLS_DC);
+ZEND_API void pt_execute_internal(zend_execute_data *execute_data, zend_fcall_info *fci, int return_value_used TSRMLS_DC);
 #endif
 
 
@@ -112,60 +112,60 @@ ZEND_API void phptrace_execute_internal(zend_execute_data *execute_data, zend_fc
  * --------------------
  */
 
-ZEND_DECLARE_MODULE_GLOBALS(phptrace)
+ZEND_DECLARE_MODULE_GLOBALS(trace)
 
 /* Make sapi_module accessable */
 extern sapi_module_struct sapi_module;
 
 /* True global resources - no need for thread safety here */
-static int le_phptrace;
+static int le_trace;
 
-/* Every user visible function must have an entry in phptrace_functions[]. */
-const zend_function_entry phptrace_functions[] = {
-#if PHPTRACE_DEBUG
-    PHP_FE(phptrace_start, NULL)
-    PHP_FE(phptrace_end, NULL)
-    PHP_FE(phptrace_status, NULL)
+/* Every user visible function must have an entry in trace_functions[]. */
+const zend_function_entry trace_functions[] = {
+#if TRACE_DEBUG
+    PHP_FE(trace_start, NULL)
+    PHP_FE(trace_end, NULL)
+    PHP_FE(trace_status, NULL)
 #endif
 #ifdef PHP_FE_END
-    PHP_FE_END  /* Must be the last line in phptrace_functions[] */
+    PHP_FE_END  /* Must be the last line in trace_functions[] */
 #else
     { NULL, NULL, NULL, 0, 0 }
 #endif
 };
 
-zend_module_entry phptrace_module_entry = {
+zend_module_entry trace_module_entry = {
 #if ZEND_MODULE_API_NO >= 20010901
     STANDARD_MODULE_HEADER,
 #endif
-    "phptrace",
-    phptrace_functions,
-    PHP_MINIT(phptrace),
-    PHP_MSHUTDOWN(phptrace),
-    PHP_RINIT(phptrace),        /* Replace with NULL if there's nothing to do at request start */
-    PHP_RSHUTDOWN(phptrace),    /* Replace with NULL if there's nothing to do at request end */
-    PHP_MINFO(phptrace),
+    "trace",
+    trace_functions,
+    PHP_MINIT(trace),
+    PHP_MSHUTDOWN(trace),
+    PHP_RINIT(trace),
+    PHP_RSHUTDOWN(trace),
+    PHP_MINFO(trace),
 #if ZEND_MODULE_API_NO >= 20010901
-    PHP_PHPTRACE_VERSION,
+    PHP_TRACE_VERSION,
 #endif
     STANDARD_MODULE_PROPERTIES
 };
 
-#ifdef COMPILE_DL_PHPTRACE
-ZEND_GET_MODULE(phptrace)
+#ifdef COMPILE_DL_TRACE
+ZEND_GET_MODULE(trace)
 #endif
 
 /* PHP_INI */
 PHP_INI_BEGIN()
-    STD_PHP_INI_ENTRY("phptrace.enable",    "1",    PHP_INI_SYSTEM, OnUpdateBool, enable, zend_phptrace_globals, phptrace_globals)
-    STD_PHP_INI_ENTRY("phptrace.dotrace",   "0",    PHP_INI_SYSTEM, OnUpdateLong, dotrace, zend_phptrace_globals, phptrace_globals)
-    STD_PHP_INI_ENTRY("phptrace.data_dir",  "/tmp", PHP_INI_SYSTEM, OnUpdateString, data_dir, zend_phptrace_globals, phptrace_globals)
-    STD_PHP_INI_ENTRY("phptrace.recv_size", "4m",   PHP_INI_SYSTEM, OnUpdateLong, recv_size, zend_phptrace_globals, phptrace_globals)
-    STD_PHP_INI_ENTRY("phptrace.send_size", "64m",  PHP_INI_SYSTEM, OnUpdateLong, send_size, zend_phptrace_globals, phptrace_globals)
+    STD_PHP_INI_ENTRY("trace.enable",    "1",    PHP_INI_SYSTEM, OnUpdateBool, enable, zend_trace_globals, trace_globals)
+    STD_PHP_INI_ENTRY("trace.dotrace",   "0",    PHP_INI_SYSTEM, OnUpdateLong, dotrace, zend_trace_globals, trace_globals)
+    STD_PHP_INI_ENTRY("trace.data_dir",  "/tmp", PHP_INI_SYSTEM, OnUpdateString, data_dir, zend_trace_globals, trace_globals)
+    STD_PHP_INI_ENTRY("trace.recv_size", "4m",   PHP_INI_SYSTEM, OnUpdateLong, recv_size, zend_trace_globals, trace_globals)
+    STD_PHP_INI_ENTRY("trace.send_size", "64m",  PHP_INI_SYSTEM, OnUpdateLong, send_size, zend_trace_globals, trace_globals)
 PHP_INI_END()
 
-/* php_phptrace_init_globals */
-static void php_phptrace_init_globals(zend_phptrace_globals *ptg)
+/* php_trace_init_globals */
+static void php_trace_init_globals(zend_trace_globals *ptg)
 {
     ptg->enable = ptg->dotrace = 0;
     ptg->data_dir = NULL;
@@ -187,9 +187,9 @@ static void php_phptrace_init_globals(zend_phptrace_globals *ptg)
  * --------------------
  */
 
-PHP_MINIT_FUNCTION(phptrace)
+PHP_MINIT_FUNCTION(trace)
 {
-    ZEND_INIT_MODULE_GLOBALS(phptrace, php_phptrace_init_globals, NULL);
+    ZEND_INIT_MODULE_GLOBALS(trace, php_trace_init_globals, NULL);
     REGISTER_INI_ENTRIES();
 
     if (!PTG(enable)) {
@@ -199,13 +199,13 @@ PHP_MINIT_FUNCTION(phptrace)
     /* Replace executor */
 #if PHP_VERSION_ID < 50500
     pt_ori_execute = zend_execute;
-    zend_execute = phptrace_execute;
+    zend_execute = pt_execute;
 #else
     pt_ori_execute_ex = zend_execute_ex;
-    zend_execute_ex = phptrace_execute_ex;
+    zend_execute_ex = pt_execute_ex;
 #endif
     pt_ori_execute_internal = zend_execute_internal;
-    zend_execute_internal = phptrace_execute_internal;
+    zend_execute_internal = pt_execute_internal;
 
     /* Open ctrl module */
     snprintf(PTG(ctrl_file), sizeof(PTG(ctrl_file)), "%s/%s", PTG(data_dir), PHPTRACE_CTRL_FILENAME);
@@ -217,7 +217,7 @@ PHP_MINIT_FUNCTION(phptrace)
         phptrace_ctrl_open(&PTG(ctrl), PTG(ctrl_file));
     }
     if (PTG(ctrl).ctrl_seg.shmaddr == MAP_FAILED) {
-        php_error(E_ERROR, "PHPTrace ctrl file %s open failed", PTG(ctrl_file));
+        php_error(E_ERROR, "Trace ctrl file %s open failed", PTG(ctrl_file));
         return FAILURE;
     }
 
@@ -232,7 +232,7 @@ PHP_MINIT_FUNCTION(phptrace)
     return SUCCESS;
 }
 
-PHP_MSHUTDOWN_FUNCTION(phptrace)
+PHP_MSHUTDOWN_FUNCTION(trace)
 {
     UNREGISTER_INI_ENTRIES();
 
@@ -255,7 +255,7 @@ PHP_MSHUTDOWN_FUNCTION(phptrace)
     return SUCCESS;
 }
 
-PHP_RINIT_FUNCTION(phptrace)
+PHP_RINIT_FUNCTION(trace)
 {
     PTG(pid) = getpid();
     PTG(level) = 0;
@@ -263,15 +263,15 @@ PHP_RINIT_FUNCTION(phptrace)
     return SUCCESS;
 }
 
-PHP_RSHUTDOWN_FUNCTION(phptrace)
+PHP_RSHUTDOWN_FUNCTION(trace)
 {
     return SUCCESS;
 }
 
-PHP_MINFO_FUNCTION(phptrace)
+PHP_MINFO_FUNCTION(trace)
 {
     php_info_print_table_start();
-    php_info_print_table_header(2, "phptrace support", "enabled");
+    php_info_print_table_header(2, "trace support", "enabled");
     php_info_print_table_end();
 
     DISPLAY_INI_ENTRIES();
@@ -279,21 +279,21 @@ PHP_MINFO_FUNCTION(phptrace)
 
 
 /**
- * PHP-Trace Interface
+ * Trace Interface
  * --------------------
  */
-#if PHPTRACE_DEBUG
-PHP_FUNCTION(phptrace_start)
+#if TRACE_DEBUG
+PHP_FUNCTION(trace_start)
 {
     PTG(dotrace) |= TRACE_TO_OUTPUT;
 }
 
-PHP_FUNCTION(phptrace_end)
+PHP_FUNCTION(trace_end)
 {
     PTG(dotrace) &= ~TRACE_TO_OUTPUT;
 }
 
-PHP_FUNCTION(phptrace_status)
+PHP_FUNCTION(trace_status)
 {
     phptrace_status status;
     pt_status_build(&status, 1, EG(current_execute_data) TSRMLS_CC);
@@ -304,7 +304,7 @@ PHP_FUNCTION(phptrace_status)
 
 
 /**
- * PHP-Trace Manipulation of Frame
+ * Trace Manipulation of Frame
  * --------------------
  */
 static void pt_frame_build(phptrace_frame *frame, zend_bool internal, unsigned char type, zend_execute_data *ex, zend_op_array *op_array TSRMLS_DC)
@@ -350,7 +350,7 @@ static void pt_frame_build(phptrace_frame *frame, zend_bool internal, unsigned c
             } else {
                 /* TODO zend uses zend_get_object_classname() in
                  * debug_print_backtrace() */
-                php_error(E_WARNING, "PHPTrace catch a entry with ex->object but without zf->common.scope");
+                php_error(E_WARNING, "Trace catch a entry with ex->object but without zf->common.scope");
             }
         } else if (zf->common.scope) {
             frame->functype |= PT_FUNC_STATIC;
@@ -540,7 +540,7 @@ static int pt_frame_send(phptrace_frame *frame TSRMLS_DC)
 
     len = phptrace_type_len_frame(frame);
     if ((msg = phptrace_comm_swrite_begin(&PTG(comm), len)) == NULL) {
-        php_error(E_WARNING, "PHPTrace comm-module write begin failed, tried to allocate %ld bytes", len);
+        php_error(E_WARNING, "Trace comm-module write begin failed, tried to allocate %ld bytes", len);
         return -1;
     }
     phptrace_type_pack_frame(frame, msg->data);
@@ -617,7 +617,7 @@ static void pt_frame_display(phptrace_frame *frame TSRMLS_DC, zend_bool indent, 
 
 
 /**
- * PHP-Trace Manipulation of Status
+ * Trace Manipulation of Status
  * --------------------
  */
 static void pt_status_build(phptrace_status *status, zend_bool internal, zend_execute_data *ex TSRMLS_DC)
@@ -727,7 +727,7 @@ static int pt_status_send(phptrace_status *status TSRMLS_DC)
 
     len = phptrace_type_len_status(status);
     if ((msg = phptrace_comm_swrite_begin(&PTG(comm), len)) == NULL) {
-        php_error(E_WARNING, "PHPTrace comm-module write begin failed, tried to allocate %ld bytes", len);
+        php_error(E_WARNING, "Trace comm-module write begin failed, tried to allocate %ld bytes", len);
         return -1;
     }
     phptrace_type_pack_status(status, msg->data);
@@ -738,7 +738,7 @@ static int pt_status_send(phptrace_status *status TSRMLS_DC)
 
 
 /**
- * PHP-Trace Misc Function
+ * Trace Misc Function
  * --------------------
  */
 static sds pt_repr_zval(zval *zv, int limit TSRMLS_DC)
@@ -805,15 +805,15 @@ static void pt_ctrl_set_inactive(TSRMLS_D)
 
 
 /**
- * PHP-Trace Executor Replacement
+ * Trace Executor Replacement
  * --------------------
  */
 #if PHP_VERSION_ID < 50500
-ZEND_API void phptrace_execute_core(int internal, zend_execute_data *execute_data, zend_op_array *op_array, int rvu TSRMLS_DC)
+ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zend_op_array *op_array, int rvu TSRMLS_DC)
 {
     zend_fcall_info *fci = NULL;
 #else
-ZEND_API void phptrace_execute_core(int internal, zend_execute_data *execute_data, zend_fcall_info *fci, int rvu TSRMLS_DC)
+ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zend_fcall_info *fci, int rvu TSRMLS_DC)
 {
     zend_op_array *op_array = NULL;
 #endif
@@ -841,7 +841,7 @@ ZEND_API void phptrace_execute_core(int internal, zend_execute_data *execute_dat
             snprintf(PTG(comm_file), sizeof(PTG(comm_file)), "%s/%s.%d", PTG(data_dir), PHPTRACE_COMM_FILENAME, PTG(pid));
             PTD("Comm socket %s create", PTG(comm_file));
             if (phptrace_comm_screate(&PTG(comm), PTG(comm_file), 0, PTG(send_size), PTG(recv_size)) == -1) {
-                php_error(E_WARNING, "PHPTrace comm-module %s open failed", PTG(ctrl_file));
+                php_error(E_WARNING, "Trace comm-module %s open failed", PTG(ctrl_file));
                 pt_ctrl_set_inactive(TSRMLS_C);
                 goto exec;
             }
@@ -879,7 +879,7 @@ ZEND_API void phptrace_execute_core(int internal, zend_execute_data *execute_dat
                     break;
 
                 default:
-                    php_error(E_NOTICE, "PHPTrace unknown message received with type 0x%x", msg->type);
+                    php_error(E_NOTICE, "Trace unknown message received with type 0x%x", msg->type);
                     break;
             }
         }
@@ -979,23 +979,23 @@ exec:
 }
 
 #if PHP_VERSION_ID < 50500
-ZEND_API void phptrace_execute(zend_op_array *op_array TSRMLS_DC)
+ZEND_API void pt_execute(zend_op_array *op_array TSRMLS_DC)
 {
-    phptrace_execute_core(0, EG(current_execute_data), op_array, 0 TSRMLS_CC);
+    pt_execute_core(0, EG(current_execute_data), op_array, 0 TSRMLS_CC);
 }
 
-ZEND_API void phptrace_execute_internal(zend_execute_data *execute_data, int return_value_used TSRMLS_DC)
+ZEND_API void pt_execute_internal(zend_execute_data *execute_data, int return_value_used TSRMLS_DC)
 {
-    phptrace_execute_core(1, execute_data, NULL, return_value_used TSRMLS_CC);
+    pt_execute_core(1, execute_data, NULL, return_value_used TSRMLS_CC);
 }
 #else
-ZEND_API void phptrace_execute_ex(zend_execute_data *execute_data TSRMLS_DC)
+ZEND_API void pt_execute_ex(zend_execute_data *execute_data TSRMLS_DC)
 {
-    phptrace_execute_core(0, execute_data, NULL, 0 TSRMLS_CC);
+    pt_execute_core(0, execute_data, NULL, 0 TSRMLS_CC);
 }
 
-ZEND_API void phptrace_execute_internal(zend_execute_data *execute_data, zend_fcall_info *fci, int return_value_used TSRMLS_DC)
+ZEND_API void pt_execute_internal(zend_execute_data *execute_data, zend_fcall_info *fci, int return_value_used TSRMLS_DC)
 {
-    phptrace_execute_core(1, execute_data, fci, return_value_used TSRMLS_CC);
+    pt_execute_core(1, execute_data, fci, return_value_used TSRMLS_CC);
 }
 #endif
