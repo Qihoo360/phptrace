@@ -48,13 +48,13 @@
 #define CTRL_SET_INACTIVE() (CTRL &= ~PT_CTRL_ACTIVE)
 
 /* Ping process */
-#define PING_UPDATE() PTG(ping) = phptrace_time_sec()
-#define PING_TIMEOUT() (phptrace_time_sec() > PTG(ping) + PTG(idle_timeout))
+#define PING_UPDATE() PTG(ping) = pt_time_sec()
+#define PING_TIMEOUT() (pt_time_sec() > PTG(ping) + PTG(idle_timeout))
 
 /* Profiling */
 #define PROFILING_SET(p) do { \
-    p.wall_time = phptrace_time_usec(); \
-    p.cpu_time = phptrace_time_usec(); \
+    p.wall_time = pt_time_usec(); \
+    p.cpu_time = pt_cputime_usec(); \
     p.mem = zend_memory_usage(0 TSRMLS_CC); \
     p.mempeak = zend_memory_peak_usage(0 TSRMLS_CC); \
 } while (0);
