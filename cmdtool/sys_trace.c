@@ -14,9 +14,14 @@
  * limitations under the License.
  */
 
+#include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
-#include "sys_trace.h"
+#include <string.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include "log.h"
+#include "sys_trace.h"
 
 int sys_trace_attach(pid_t pid)
 {

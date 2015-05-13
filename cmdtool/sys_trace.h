@@ -17,14 +17,9 @@
 #ifndef _SYS_TRACE_H_
 #define _SYS_TRACE_H_
 
-#include <errno.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <sys/ptrace.h>
-#include <fcntl.h>
-
 #include <signal.h>
+#include <sys/ptrace.h>
+
 #if !defined(PTRACE_ATTACH) && defined(PT_ATTACH)
 #define PTRACE_ATTACH PT_ATTACH
 #endif
