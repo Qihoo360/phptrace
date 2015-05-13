@@ -104,6 +104,6 @@ void phptrace_comm_write_end(phptrace_comm_handler *handler, unsigned int type, 
 phptrace_comm_message *phptrace_comm_write(phptrace_comm_handler *handler, unsigned int type, void *buf, size_t size);
 phptrace_comm_message *phptrace_comm_read(phptrace_comm_handler *handler, int movenext);
 
-phptrace_comm_message *phptrace_comm_write_message(uint32_t seq, uint32_t type, uint32_t len, phptrace_frame *f, void *buf);
+phptrace_comm_message *phptrace_comm_write_message(uint32_t seq, uint32_t type, uint32_t len, pt_frame_t *f, void *buf);
 
 #endif

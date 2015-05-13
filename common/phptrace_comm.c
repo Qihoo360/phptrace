@@ -209,7 +209,7 @@ phptrace_comm_message *phptrace_comm_write(phptrace_comm_handler *handler, unsig
 /**
  * dump a frame to a buffer with message header
  */
-phptrace_comm_message *phptrace_comm_write_message(uint32_t seq, uint32_t type, uint32_t len, phptrace_frame *f, void *buf)
+phptrace_comm_message *phptrace_comm_write_message(uint32_t seq, uint32_t type, uint32_t len, pt_frame_t *f, void *buf)
 {
     phptrace_comm_message *msg = (phptrace_comm_message *)buf;
 
@@ -217,7 +217,7 @@ phptrace_comm_message *phptrace_comm_write_message(uint32_t seq, uint32_t type, 
     msg->seq = seq;
     msg->type = type;
     msg->len = len;
-    phptrace_type_pack_frame(f, msg->data);
+    pt_type_pack_frame(f, msg->data);
 
     return msg;
 }

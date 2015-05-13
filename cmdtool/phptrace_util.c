@@ -259,7 +259,7 @@ sds sdscatrepr_noquto(sds s, const char *p, size_t len)
     return s;
 }
 
-sds phptrace_repr_function(sds buf, phptrace_frame *f)
+sds phptrace_repr_function(sds buf, pt_frame_t *f)
 {
     /*
     if ((f->functype & PT_FUNC_TYPES) == PT_FUNC_NORMAL ||
@@ -290,7 +290,7 @@ sds phptrace_repr_function(sds buf, phptrace_frame *f)
     return buf;
 }
 
-sds standard_transform(phptrace_context_t *ctx, phptrace_comm_message *msg, phptrace_frame *f)
+sds standard_transform(phptrace_context_t *ctx, phptrace_comm_message *msg, pt_frame_t *f)
 {
     int i;
     sds buf = sdsempty();
@@ -335,19 +335,19 @@ sds standard_transform(phptrace_context_t *ctx, phptrace_comm_message *msg, phpt
     return buf;
 }
 
-sds dump_transform(phptrace_context_t *ctx, phptrace_comm_message *msg, phptrace_frame *f)
+sds dump_transform(phptrace_context_t *ctx, phptrace_comm_message *msg, pt_frame_t *f)
 {
     sds buf;
     size_t raw_size;
 
-    raw_size = phptrace_type_len_frame(f);
+    raw_size = pt_type_len_frame(f);
     buf = sdsnewlen(NULL, raw_size + sizeof(phptrace_comm_message));
     phptrace_comm_write_message(msg->seq, msg->type, raw_size, f, buf);
     log_printf(LL_DEBUG, "[dump] record(sequence=%d) raw_size=%u", msg->seq, raw_size);
     return buf;
 }
 
-sds json_transform(phptrace_context_t *ctx, phptrace_comm_message *msg, phptrace_frame *f)
+sds json_transform(phptrace_context_t *ctx, phptrace_comm_message *msg, pt_frame_t *f)
 {
     int i;
     sds buf = sdsempty();
@@ -392,7 +392,7 @@ sds json_transform(phptrace_context_t *ctx, phptrace_comm_message *msg, phptrace
         (var) = NULL;           \
     }
 
-void frame_free_sds(phptrace_frame *f)
+void frame_free_sds(pt_frame_t *f)
 {
     int i;
     FREE_SDS(f->function)
@@ -421,7 +421,7 @@ void trace(phptrace_context_t *ctx)
 
     /* new protocol API */
     phptrace_comm_message *msg;
-    phptrace_frame frame;
+    pt_frame_t frame;
     phptrace_comm_socket *p_sock = &(ctx->sock);
 
     memset(p_sock, 0, sizeof(phptrace_comm_socket));
@@ -490,7 +490,7 @@ void trace(phptrace_context_t *ctx)
 
         switch (msg->type) {
             case PT_MSG_RET:
-                phptrace_type_unpack_frame(&frame, msg->data);
+                pt_type_unpack_frame(&frame, msg->data);
 
                 if (ctx->opt_flag & OPT_FLAG_COUNT) {
                     if (frame.type == PT_FRAME_EXIT) {

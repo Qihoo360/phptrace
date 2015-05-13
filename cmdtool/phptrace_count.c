@@ -26,7 +26,7 @@ const count_dimension_t count_dimension[] = {
     { NULL, "nothing" }
 };
 
-void count_record(phptrace_context_t *ctx, phptrace_frame *f)
+void count_record(phptrace_context_t *ctx, pt_frame_t *f)
 {
     uint64_t td;
     record_count_t *find_rc;

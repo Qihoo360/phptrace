@@ -99,17 +99,17 @@ void process_opt_e(phptrace_context_t *ctx);
 sds sdscatrepr_noquto(sds s, const char *p, size_t len);
 sds print_indent_str(sds s, char* str, int32_t size);
 sds print_time(sds s, uint64_t t);
-sds phptrace_repr_function(sds buf, phptrace_frame *f);
+sds phptrace_repr_function(sds buf, pt_frame_t *f);
 
-sds standard_transform(phptrace_context_t *ctx, phptrace_comm_message *msg, phptrace_frame *f);
-sds dump_transform(phptrace_context_t *ctx, phptrace_comm_message *msg, phptrace_frame *f);
-sds json_transform(phptrace_context_t *ctx, phptrace_comm_message *msg, phptrace_frame *f);
+sds standard_transform(phptrace_context_t *ctx, phptrace_comm_message *msg, pt_frame_t *f);
+sds dump_transform(phptrace_context_t *ctx, phptrace_comm_message *msg, pt_frame_t *f);
+sds json_transform(phptrace_context_t *ctx, phptrace_comm_message *msg, pt_frame_t *f);
 
 int update_mmap_filename(phptrace_context_t *ctx);
 void trace_start(phptrace_context_t *ctx);
 void trace(phptrace_context_t *ctx);
 void trace_cleanup(phptrace_context_t *ctx);
 
-void frame_free_sds(phptrace_frame *f);
+void frame_free_sds(pt_frame_t *f);
 
 #endif

@@ -80,16 +80,16 @@ PHP_FUNCTION(trace_end);
 PHP_FUNCTION(trace_status);
 #endif
 
-static void pt_frame_build(phptrace_frame *frame, zend_bool internal, unsigned char type, zend_execute_data *ex, zend_op_array *op_array TSRMLS_DC);
-static void pt_frame_destroy(phptrace_frame *frame TSRMLS_DC);
-static void pt_frame_display(phptrace_frame *frame TSRMLS_DC, zend_bool indent, const char *format, ...);
-static int pt_frame_send(phptrace_frame *frame TSRMLS_DC);
-static void pt_frame_set_retval(phptrace_frame *frame, zend_bool internal, zend_execute_data *ex, zend_fcall_info *fci TSRMLS_DC);
+static void pt_frame_build(pt_frame_t *frame, zend_bool internal, unsigned char type, zend_execute_data *ex, zend_op_array *op_array TSRMLS_DC);
+static void pt_frame_destroy(pt_frame_t *frame TSRMLS_DC);
+static void pt_frame_display(pt_frame_t *frame TSRMLS_DC, zend_bool indent, const char *format, ...);
+static int pt_frame_send(pt_frame_t *frame TSRMLS_DC);
+static void pt_frame_set_retval(pt_frame_t *frame, zend_bool internal, zend_execute_data *ex, zend_fcall_info *fci TSRMLS_DC);
 
-static void pt_status_build(phptrace_status *status, zend_bool internal, zend_execute_data *ex TSRMLS_DC);
-static void pt_status_destroy(phptrace_status *status TSRMLS_DC);
-static void pt_status_display(phptrace_status *status TSRMLS_DC);
-static int pt_status_send(phptrace_status *status TSRMLS_DC);
+static void pt_status_build(pt_status_t *status, zend_bool internal, zend_execute_data *ex TSRMLS_DC);
+static void pt_status_destroy(pt_status_t *status TSRMLS_DC);
+static void pt_status_display(pt_status_t *status TSRMLS_DC);
+static int pt_status_send(pt_status_t *status TSRMLS_DC);
 
 static sds pt_repr_zval(zval *zv, int limit TSRMLS_DC);
 static void pt_ctrl_set_inactive(TSRMLS_D);
@@ -295,7 +295,7 @@ PHP_FUNCTION(trace_end)
 
 PHP_FUNCTION(trace_status)
 {
-    phptrace_status status;
+    pt_status_t status;
     pt_status_build(&status, 1, EG(current_execute_data) TSRMLS_CC);
     pt_status_display(&status TSRMLS_CC);
     pt_status_destroy(&status TSRMLS_CC);
@@ -307,14 +307,14 @@ PHP_FUNCTION(trace_status)
  * Trace Manipulation of Frame
  * --------------------
  */
-static void pt_frame_build(phptrace_frame *frame, zend_bool internal, unsigned char type, zend_execute_data *ex, zend_op_array *op_array TSRMLS_DC)
+static void pt_frame_build(pt_frame_t *frame, zend_bool internal, unsigned char type, zend_execute_data *ex, zend_op_array *op_array TSRMLS_DC)
 {
     int i;
     zval **args;
     zend_function *zf;
 
     /* init */
-    memset(frame, 0, sizeof(phptrace_frame));
+    memset(frame, 0, sizeof(pt_frame_t));
 
 #if PHP_VERSION_ID < 50500
     if (internal || ex) {
@@ -483,7 +483,7 @@ static void pt_frame_build(phptrace_frame *frame, zend_bool internal, unsigned c
     }
 }
 
-static void pt_frame_destroy(phptrace_frame *frame TSRMLS_DC)
+static void pt_frame_destroy(pt_frame_t *frame TSRMLS_DC)
 {
     int i;
 
@@ -499,7 +499,7 @@ static void pt_frame_destroy(phptrace_frame *frame TSRMLS_DC)
     sdsfree(frame->retval);
 }
 
-static void pt_frame_set_retval(phptrace_frame *frame, zend_bool internal, zend_execute_data *ex, zend_fcall_info *fci TSRMLS_DC)
+static void pt_frame_set_retval(pt_frame_t *frame, zend_bool internal, zend_execute_data *ex, zend_fcall_info *fci TSRMLS_DC)
 {
     zval *retval = NULL;
 
@@ -533,23 +533,23 @@ static void pt_frame_set_retval(phptrace_frame *frame, zend_bool internal, zend_
     }
 }
 
-static int pt_frame_send(phptrace_frame *frame TSRMLS_DC)
+static int pt_frame_send(pt_frame_t *frame TSRMLS_DC)
 {
     size_t len;
     phptrace_comm_message *msg;
 
-    len = phptrace_type_len_frame(frame);
+    len = pt_type_len_frame(frame);
     if ((msg = phptrace_comm_swrite_begin(&PTG(comm), len)) == NULL) {
         php_error(E_WARNING, "Trace comm-module write begin failed, tried to allocate %ld bytes", len);
         return -1;
     }
-    phptrace_type_pack_frame(frame, msg->data);
+    pt_type_pack_frame(frame, msg->data);
     phptrace_comm_swrite_end(&PTG(comm), PT_MSG_RET, msg); /* FIXME correct type */
 
     return 0;
 }
 
-static void pt_frame_display(phptrace_frame *frame TSRMLS_DC, zend_bool indent, const char *format, ...)
+static void pt_frame_display(pt_frame_t *frame TSRMLS_DC, zend_bool indent, const char *format, ...)
 {
     int i, has_bracket = 1;
     size_t len;
@@ -620,13 +620,13 @@ static void pt_frame_display(phptrace_frame *frame TSRMLS_DC, zend_bool indent, 
  * Trace Manipulation of Status
  * --------------------
  */
-static void pt_status_build(phptrace_status *status, zend_bool internal, zend_execute_data *ex TSRMLS_DC)
+static void pt_status_build(pt_status_t *status, zend_bool internal, zend_execute_data *ex TSRMLS_DC)
 {
     int i;
     zend_execute_data *ex_ori = ex;
 
     /* init */
-    memset(status, 0, sizeof(phptrace_status));
+    memset(status, 0, sizeof(pt_status_t));
 
     /* common */
     status->php_version = PHP_VERSION;
@@ -654,7 +654,7 @@ static void pt_status_build(phptrace_status *status, zend_bool internal, zend_ex
     for (i = 0; ex; ex = ex->prev_execute_data, i++) ; /* calculate stack depth */
     status->frame_count = i;
     if (status->frame_count) {
-        status->frames = calloc(status->frame_count, sizeof(phptrace_frame));
+        status->frames = calloc(status->frame_count, sizeof(pt_frame_t));
         for (i = 0, ex = ex_ori; i < status->frame_count && ex; i++, ex = ex->prev_execute_data) {
             pt_frame_build(status->frames + i, internal, PT_FRAME_STACK, ex, NULL TSRMLS_CC);
             status->frames[i].level = 1;
@@ -664,7 +664,7 @@ static void pt_status_build(phptrace_status *status, zend_bool internal, zend_ex
     }
 }
 
-static void pt_status_destroy(phptrace_status *status TSRMLS_DC)
+static void pt_status_destroy(pt_status_t *status TSRMLS_DC)
 {
     int i;
 
@@ -676,7 +676,7 @@ static void pt_status_destroy(phptrace_status *status TSRMLS_DC)
     }
 }
 
-static void pt_status_display(phptrace_status *status TSRMLS_DC)
+static void pt_status_display(pt_status_t *status TSRMLS_DC)
 {
     int i;
 
@@ -720,17 +720,17 @@ static void pt_status_display(phptrace_status *status TSRMLS_DC)
     }
 }
 
-static int pt_status_send(phptrace_status *status TSRMLS_DC)
+static int pt_status_send(pt_status_t *status TSRMLS_DC)
 {
     size_t len;
     phptrace_comm_message *msg;
 
-    len = phptrace_type_len_status(status);
+    len = pt_type_len_status(status);
     if ((msg = phptrace_comm_swrite_begin(&PTG(comm), len)) == NULL) {
         php_error(E_WARNING, "Trace comm-module write begin failed, tried to allocate %ld bytes", len);
         return -1;
     }
-    phptrace_type_pack_status(status, msg->data);
+    pt_type_pack_status(status, msg->data);
     phptrace_comm_swrite_end(&PTG(comm), PT_MSG_RET, msg); /* FIXME correct type */
 
     return 0;
@@ -822,7 +822,7 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zen
     zend_execute_data *ex_entry = execute_data;
     zval *retval = NULL;
     phptrace_comm_message *msg;
-    phptrace_frame frame;
+    pt_frame_t frame;
 
 #if PHP_VERSION_ID >= 50500
     /* Why has a ex_entry ?
@@ -868,7 +868,7 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zen
 
                 case PT_MSG_DO_STATUS:
                     PTD("msg handle: do status");
-                    phptrace_status status;
+                    pt_status_t status;
                     pt_status_build(&status, internal, ex_entry TSRMLS_CC);
                     pt_status_send(&status TSRMLS_CC);
                     pt_status_destroy(&status TSRMLS_CC);

@@ -55,8 +55,8 @@ if (len) { \
 #define UNPACK_STR(buf, ele) UNPACK_STR_EX(buf, ele, strndup)
 #define UNPACK_SDS(buf, ele) UNPACK_STR_EX(buf, ele, sdsnewlen)
 
-/* phptrace_frame */
-size_t phptrace_type_len_frame(phptrace_frame *frame)
+/* pt_frame */
+size_t pt_type_len_frame(pt_frame_t *frame)
 {
     int i;
     size_t size = 0;
@@ -90,7 +90,7 @@ size_t phptrace_type_len_frame(phptrace_frame *frame)
     return size;
 }
 
-size_t phptrace_type_pack_frame(phptrace_frame *frame, char *buf)
+size_t pt_type_pack_frame(pt_frame_t *frame, char *buf)
 {
     int i;
     char *ori = buf;
@@ -124,7 +124,7 @@ size_t phptrace_type_pack_frame(phptrace_frame *frame, char *buf)
     return buf - ori;
 }
 
-size_t phptrace_type_unpack_frame(phptrace_frame *frame, char *buf)
+size_t pt_type_unpack_frame(pt_frame_t *frame, char *buf)
 {
     int i;
     size_t len;
@@ -160,8 +160,8 @@ size_t phptrace_type_unpack_frame(phptrace_frame *frame, char *buf)
     return buf - ori;
 }
 
-/* phptrace_status */
-size_t phptrace_type_len_status(phptrace_status *status)
+/* pt_status */
+size_t pt_type_len_status(pt_status_t *status)
 {
     /* FIXME support sds, str both */
     int i;
@@ -190,13 +190,13 @@ size_t phptrace_type_len_status(phptrace_status *status)
 
     size += sizeof(uint32_t);                                 /* frame count */
     for (i = 0; i < status->frame_count; i++) {
-        size += phptrace_type_len_frame(status->frames + i);
+        size += pt_type_len_frame(status->frames + i);
     }
 
     return size;
 }
 
-size_t phptrace_type_pack_status(phptrace_status *status, char *buf)
+size_t pt_type_pack_status(pt_status_t *status, char *buf)
 {
     /* FIXME support sds, str both */
     int i;
@@ -226,14 +226,14 @@ size_t phptrace_type_pack_status(phptrace_status *status, char *buf)
 
     PACK(buf, uint32_t, status->frame_count);
     for (i = 0; i < status->frame_count; i++) {
-        len = phptrace_type_pack_frame(status->frames + i, buf);
+        len = pt_type_pack_frame(status->frames + i, buf);
         buf += len;
     }
 
     return buf - ori;
 }
 
-size_t phptrace_type_unpack_status(phptrace_status *status, char *buf)
+size_t pt_type_unpack_status(pt_status_t *status, char *buf)
 {
     int i;
     size_t len;
@@ -262,9 +262,9 @@ size_t phptrace_type_unpack_status(phptrace_status *status, char *buf)
     UNPACK(buf, uint32_t, status->proto_num);
 
     UNPACK(buf, uint32_t, status->frame_count);
-    status->frames = calloc(status->frame_count, sizeof(phptrace_status));
+    status->frames = calloc(status->frame_count, sizeof(pt_status_t));
     for (i = 0; i < status->frame_count; i++) {
-        len = phptrace_type_unpack_frame(status->frames + i, buf);
+        len = pt_type_unpack_frame(status->frames + i, buf);
         buf += len;
     }
 

@@ -20,7 +20,7 @@
 #include <stdint.h>
 #include "sds/sds.h"
 
-/* phptrace_frame */
+/* pt_frame */
 #define PT_FRAME_ENTRY          1 /* function entry */
 #define PT_FRAME_EXIT           2 /* function exit */
 #define PT_FRAME_STACK          3 /* backtrace stack */
@@ -67,13 +67,13 @@ typedef struct {
         int64_t mem;            /* memory usage */
         int64_t mempeak;        /* memory peak */
     } exit;
-} phptrace_frame;
+} pt_frame_t;
 
-size_t phptrace_type_len_frame(phptrace_frame *frame);
-size_t phptrace_type_pack_frame(phptrace_frame *frame, char *buf);
-size_t phptrace_type_unpack_frame(phptrace_frame *frame, char *buf);
+size_t pt_type_len_frame(pt_frame_t *frame);
+size_t pt_type_pack_frame(pt_frame_t *frame, char *buf);
+size_t pt_type_unpack_frame(pt_frame_t *frame, char *buf);
 
-/* phptrace_status
+/* pt_status_t
  * XXX use sds to make pack, unpack reliable and uniform outside PHP */
 typedef struct {
     sds php_version;            /* php version eg: 5.5.24 */
@@ -96,11 +96,11 @@ typedef struct {
     int proto_num;
 
     uint32_t frame_count;       /* backtrace depth */
-    phptrace_frame *frames;     /* backtrace frames */
-} phptrace_status;
+    pt_frame_t *frames;     /* backtrace frames */
+} pt_status_t;
 
-size_t phptrace_type_len_status(phptrace_status *status);
-size_t phptrace_type_pack_status(phptrace_status *status, char *buf);
-size_t phptrace_type_unpack_status(phptrace_status *status, char *buf);
+size_t pt_type_len_status(pt_status_t *status);
+size_t pt_type_pack_status(pt_status_t *status, char *buf);
+size_t pt_type_unpack_status(pt_status_t *status, char *buf);
 
 #endif

@@ -146,7 +146,7 @@ int check_phpext_installed(phptrace_context_t *ctx)
     return 1;
 }
 
-sds type_dump_frame(phptrace_frame *f)
+sds type_dump_frame(pt_frame_t *f)
 {
     int i;
     sds buf = sdsempty();
@@ -174,7 +174,7 @@ sds type_dump_frame(phptrace_frame *f)
     return buf;
 }
 
-sds type_dump_status(phptrace_status *st)
+sds type_dump_status(pt_status_t *st)
 {
     int i;
     sds buf = sdsempty();
@@ -204,7 +204,7 @@ sds type_dump_status(phptrace_status *st)
     return buf;
 }
 
-void type_status_free(phptrace_status *st)
+void type_status_free(pt_status_t *st)
 {
    // sds php_version;            /* php version eg: 5.5.24 */
    // sds sapi_name;              /* sapi name eg: fpm-fcgi */
@@ -220,7 +220,7 @@ void type_status_free(phptrace_status *st)
   //  int proto_num;
 
   //  uint32_t frame_count;       /* backtrace depth */
-  //  phptrace_frame *frames;     /* backtrace frames */
+  //  pt_frame_t *frames;         /* backtrace frames */
     int i;
     sdsfree(st->php_version);
     sdsfree(st->sapi_name);
@@ -257,7 +257,7 @@ int status_dump(phptrace_context_t *ctx, int timeout /*milliseconds*/)
 
     /* new protocol API */
     phptrace_comm_message *msg;
-    phptrace_status st;
+    pt_status_t st;
     phptrace_comm_socket sock;
 
     while (phptrace_comm_sopen(&sock, filename, 1) < 0) {    /* meta: recv|send  */
@@ -299,7 +299,7 @@ int status_dump(phptrace_context_t *ctx, int timeout /*milliseconds*/)
         }
 
         if (msg->type == PT_MSG_RET) {
-            phptrace_type_unpack_status(&st, msg->data);
+            pt_type_unpack_status(&st, msg->data);
             buf = type_dump_status(&st);
             fwrite(buf, sizeof(char), sdslen(buf), ctx->out_fp);
             fflush(NULL);
