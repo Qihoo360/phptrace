@@ -61,6 +61,7 @@
 /* Flags of dotrace */
 #define TRACE_TO_OUTPUT (1 << 0)
 #define TRACE_TO_TOOL   (1 << 1)
+#define TRACE_TO_NULL   (1 << 2)
 
 /**
  * Compatible with PHP 5.1, zend_memory_usage() is not available in 5.1.
@@ -218,7 +219,14 @@ PHP_MINIT_FUNCTION(trace)
     /* Trace in CLI */
     if (PTG(dotrace) && sapi_module.name[0] == 'c' && sapi_module.name[1] == 'l' && sapi_module.name[2] == 'i') {
         PTG(dotrace) = TRACE_TO_OUTPUT;
+    } else {
+        PTG(dotrace) = 0;
     }
+
+#if TRACE_DEBUG
+    /* always do trace in debug mode */
+    PTG(dotrace) |= TRACE_TO_NULL;
+#endif
 
     return SUCCESS;
 }
@@ -756,7 +764,7 @@ static sds pt_repr_zval(zval *zv, int limit TSRMLS_DC)
             sprintf(buf, "%ld", Z_LVAL_P(zv));
             return sdsnew(buf);
         case IS_DOUBLE:
-            sprintf(buf, "%f", Z_DVAL_P(zv));
+            sprintf(buf, "%.*G", EG(precision), Z_DVAL_P(zv));
             return sdsnew(buf);
         case IS_STRING:
             tlen = (limit <= 0 || Z_STRLEN_P(zv) < limit) ? Z_STRLEN_P(zv) : limit;
