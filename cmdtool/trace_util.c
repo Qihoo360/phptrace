@@ -386,6 +386,7 @@ void frame_free_sds(pt_frame_t *f)
         for (i = 0; i < f->arg_count; i++) {
             sdsfree(f->args[i]);
         }
+        free(f->args);
         f->args = NULL;
         f->arg_count = 0;
     }

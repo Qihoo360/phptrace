@@ -178,6 +178,7 @@ sds type_dump_status(pt_status_t *st)
 {
     int i;
     sds buf = sdsempty();
+    sds s_f;
 
     buf = sdscatprintf(buf, "Memory\nusage: %"PRId64"\npeak_usage: %"PRId64"\nreal_usage: %"PRId64"\nreal_peak_usage: %"PRId64"\n\n",
             st->mem, st->mempeak, st->mem_real, st->mempeak_real);
@@ -199,28 +200,15 @@ sds type_dump_status(pt_status_t *st)
 
     for (i = 0; i < st->frame_count; i++) {
         buf = sdscatprintf (buf, "#%-4d ", i + 1);
-        buf = sdscatsds(buf, type_dump_frame(&(st->frames[i])));
+        s_f = type_dump_frame(&(st->frames[i]));
+        buf = sdscatsds(buf, s_f);
+        sdsfree(s_f);
     }
     return buf;
 }
 
 void type_status_free(pt_status_t *st)
 {
-   // sds php_version;            /* php version eg: 5.5.24 */
-   // sds sapi_name;              /* sapi name eg: fpm-fcgi */
-   //
-  //  sds request_method;         /* [optional] */
-  //  sds request_uri;            /* [optional] */
-  //  sds request_query;          /* [optional] */
-  //  sds request_script;         /* [optional] */
-
-  //  int argc;                   /* arguments part, available in cli */
-  //  sds *argv;
-
-  //  int proto_num;
-
-  //  uint32_t frame_count;       /* backtrace depth */
-  //  pt_frame_t *frames;         /* backtrace frames */
     int i;
     sdsfree(st->php_version);
     sdsfree(st->sapi_name);
