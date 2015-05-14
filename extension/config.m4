@@ -12,12 +12,6 @@ if test "$PHP_TRACE" != "no"; then
   AC_CHECK_FUNCS(mmap)
   AC_CHECK_FUNCS(munmap)
 
-  dnl add common include path
-  PHP_ADD_INCLUDE(../common)
-
-  dnl configure can't use ".." as a source filename, so we make a link here
-  ln -sf ../common ./
-
   TRACE_SOURCES="common/trace_comm.c \
                  common/trace_ctrl.c \
                  common/trace_mmap.c \
@@ -25,6 +19,13 @@ if test "$PHP_TRACE" != "no"; then
                  common/sds/sds.c"
 
   PHP_NEW_EXTENSION(trace, trace.c $TRACE_SOURCES, $ext_shared)
+
+  dnl configure can't use ".." as a source filename, so we make a link here
+  ln -sf $ext_srcdir/../common $ext_srcdir
+
+  dnl add common include path
+  PHP_ADD_INCLUDE([$ext_srcdir/common])
+
 fi
 
 dnl vim:et:ts=2:sw=2
