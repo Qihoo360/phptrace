@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "phptrace_status.h"
+#include "trace_status.h"
 
 int stack_dump_once(phptrace_context_t* ctx)
 {
@@ -323,9 +323,6 @@ status_end:
 void process_opt_s(phptrace_context_t *ctx)
 {
     int ret;
-    int8_t num;
-
-    num = -1;
 
     /*dump stauts from the extension*/
     if (!ctx->addr_info.sapi_globals_addr && check_phpext_installed(ctx)) {
@@ -336,13 +333,14 @@ void process_opt_s(phptrace_context_t *ctx)
             die(ctx, -1);
         }
 
+        ctx->trace_flag = 1;
         if (pt_ctrl_is_active(&(ctx->ctrl), ctx->php_pid)) {
             error_msg(ctx, ERR_CTRL, "process %d is being dumped by others, please retry later", ctx->php_pid);
             die(ctx, -1);
         }
         pt_ctrl_set_active(&(ctx->ctrl), ctx->php_pid);
         if (status_dump(ctx, 3000) == 0){
-            return;
+            die(ctx, 0);
         }
         /*clear the flag if dump failed*/
         pt_ctrl_set_inactive(&(ctx->ctrl), ctx->php_pid);

@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#ifndef PHPTRACE_COUNT_H
-#define PHPTRACE_COUNT_H
+#ifndef TRACE_COUNT_H
+#define TRACE_COUNT_H
 
-#include "phptrace.h"
-#include "phptrace_util.h"
+#include "trace.h"
+#include "trace_util.h"
 
 /* count utils */
 int wt_cmp(record_count_t *p, record_count_t *q);

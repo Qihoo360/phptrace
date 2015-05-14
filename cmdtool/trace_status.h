@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#ifndef PHPTRACE_STATUS_H
-#define PHPTRACE_STATUS_H
+#ifndef TRACE_STATUS_H
+#define TRACE_STATUS_H
 
-#include "phptrace.h"
-#include "phptrace_util.h"
+#include "trace.h"
+#include "trace_util.h"
 
 
 #define MAX_STACK_DEEP 16

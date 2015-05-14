@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef PHPTRACE_H
-#define PHPTRACE_H
+#ifndef TRACE_H
+#define TRACE_H
 
 #include "log.h"
 #include "phptrace_mmap.h"
@@ -112,10 +112,6 @@ struct phptrace_context_s {
     int64_t *sub_cpu_time;                              /* count the time of sub calls' cpu time when exclusive mode */
     int64_t max_function;
 
-    /*
-    phptrace_file_t file;
-    phptrace_segment_t seg;
-    */
     pt_comm_socket_t sock;
 
     pt_ctrl_t ctrl;

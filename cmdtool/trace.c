@@ -18,10 +18,10 @@
  *  trace cmdtools
  */
 
-#include "phptrace.h"
-#include "phptrace_util.h"
+#include "trace.h"
+#include "trace_util.h"
 
-#include "phptrace_status.h"
+#include "trace_status.h"
 
 enum {
     OPTION_STATUS = CHAR_MAX + 1,

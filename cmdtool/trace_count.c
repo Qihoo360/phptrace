@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "phptrace_count.h"
+#include "trace_count.h"
 
 const count_dimension_t count_dimension[] = {
     { wt_cmp, "wt", "wt" },

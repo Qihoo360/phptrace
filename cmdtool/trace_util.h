@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-#ifndef PHPTRACE_UTIL_H
-#define PHPTRACE_UTIL_H
+#ifndef TRACE_UTIL_H
+#define TRACE_UTIL_H
 
-#include "phptrace.h"
+#include "trace.h"
 
-#include "phptrace_count.h"
+#include "trace_count.h"
 
 #include <unistd.h>
 #include <sys/types.h>

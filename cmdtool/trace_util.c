@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "phptrace_util.h"
-#include "phptrace_count.h"
+#include "trace_util.h"
+#include "trace_count.h"
 
 static const char *ERR_MSG[] = {
     "",
