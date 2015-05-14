@@ -43,8 +43,8 @@
 #endif
 
 /* Ctrl module */
-#define CTRL_IS_ACTIVE()    pt_ctrl_pid_is_active(&PTG(ctrl), PTG(pid))
-#define CTRL_SET_INACTIVE() pt_ctrl_pid_set_inactive(&PTG(ctrl), PTG(pid))
+#define CTRL_IS_ACTIVE()    pt_ctrl_is_active(&PTG(ctrl), PTG(pid))
+#define CTRL_SET_INACTIVE() pt_ctrl_set_inactive(&PTG(ctrl), PTG(pid))
 
 /* Ping process */
 #define PING_UPDATE() PTG(ping) = pt_time_sec()
@@ -91,7 +91,7 @@ static void pt_status_display(pt_status_t *status TSRMLS_DC);
 static int pt_status_send(pt_status_t *status TSRMLS_DC);
 
 static sds pt_repr_zval(zval *zv, int limit TSRMLS_DC);
-static void pt_ctrl_set_inactive(TSRMLS_D);
+static void pt_set_inactive(TSRMLS_D);
 
 #if PHP_VERSION_ID < 50500
 static void (*pt_ori_execute)(zend_op_array *op_array TSRMLS_DC);
@@ -785,7 +785,7 @@ static sds pt_repr_zval(zval *zv, int limit TSRMLS_DC)
     }
 }
 
-static void pt_ctrl_set_inactive(TSRMLS_D)
+static void pt_set_inactive(TSRMLS_D)
 {
     PTD("Ctrl set inactive");
     CTRL_SET_INACTIVE();
@@ -837,7 +837,7 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zen
             PTD("Comm socket %s create", PTG(comm_file));
             if (phptrace_comm_screate(&PTG(comm), PTG(comm_file), 0, PTG(send_size), PTG(recv_size)) == -1) {
                 php_error(E_WARNING, "Trace comm-module %s open failed", PTG(comm_file));
-                pt_ctrl_set_inactive(TSRMLS_C);
+                pt_set_inactive(TSRMLS_C);
                 goto exec;
             }
             PING_UPDATE();
@@ -850,7 +850,7 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zen
             if (msg == NULL) {
                 if (PING_TIMEOUT()) {
                     PTD("Ping timeout");
-                    pt_ctrl_set_inactive(TSRMLS_C);
+                    pt_set_inactive(TSRMLS_C);
                 }
                 break;
             }
@@ -879,7 +879,7 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zen
             }
         }
     } else if (PTG(comm).seg.shmaddr != MAP_FAILED) { /* comm-module still open */
-        pt_ctrl_set_inactive(TSRMLS_C);
+        pt_set_inactive(TSRMLS_C);
     }
 
 exec:

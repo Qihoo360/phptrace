@@ -70,7 +70,7 @@ void trace_cleanup(phptrace_context_t *ctx)
     log_printf (LL_DEBUG, " [trace_cleanup]");
 
     if (ctx->trace_flag) {
-        pt_ctrl_pid_set_inactive(&(ctx->ctrl), ctx->php_pid);
+        pt_ctrl_set_inactive(&(ctx->ctrl), ctx->php_pid);
         log_printf (LL_DEBUG, " clean ctrl pid=%d~~~~~\n", ctx->php_pid);
     }
 
@@ -162,7 +162,7 @@ void trace_start(phptrace_context_t *ctx)
     }
     log_printf (LL_DEBUG, " [trace_start] ctrl_init open (%s) successful", PHPTRACE_LOG_DIR "/" PT_CTRL_FILENAME);
 
-    if (pt_ctrl_pid_is_active(&(ctx->ctrl), ctx->php_pid)) {
+    if (pt_ctrl_is_active(&(ctx->ctrl), ctx->php_pid)) {
         error_msg(ctx, ERR_CTRL, "[trace_start] process %d has been traced", ctx->php_pid);
         die(ctx, -1);
     }
@@ -175,7 +175,7 @@ void trace_start(phptrace_context_t *ctx)
         }
     }
     /*force to reopen when start a new trace*/
-    pt_ctrl_pid_set_active(&(ctx->ctrl), ctx->php_pid);
+    pt_ctrl_set_active(&(ctx->ctrl), ctx->php_pid);
     ctx->trace_flag = flag;
     log_printf (LL_DEBUG, "[trace_start] set ctrl data ok: ctrl[pid=%d]=%u is opened!", ctx->php_pid, flag);
 }
@@ -189,7 +189,7 @@ void process_opt_e(phptrace_context_t *ctx)
     }
     log_printf (LL_DEBUG, " [ok] ctrl_init open (%s)", PHPTRACE_LOG_DIR "/" PT_CTRL_FILENAME);
     if (ctx->php_pid >= 0) {
-        pt_ctrl_pid_set_inactive(&(ctx->ctrl), ctx->php_pid);
+        pt_ctrl_set_inactive(&(ctx->ctrl), ctx->php_pid);
         printf ("clean process %d.\n", ctx->php_pid);
     } else {
         pt_ctrl_clean_all(&(ctx->ctrl));

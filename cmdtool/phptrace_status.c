@@ -336,16 +336,16 @@ void process_opt_s(phptrace_context_t *ctx)
             die(ctx, -1);
         }
 
-        if (pt_ctrl_pid_is_active(&(ctx->ctrl), ctx->php_pid)) {
+        if (pt_ctrl_is_active(&(ctx->ctrl), ctx->php_pid)) {
             error_msg(ctx, ERR_CTRL, "process %d is being dumped by others, please retry later", ctx->php_pid);
             die(ctx, -1);
         }
-        pt_ctrl_pid_set_active(&(ctx->ctrl), ctx->php_pid);
+        pt_ctrl_set_active(&(ctx->ctrl), ctx->php_pid);
         if (status_dump(ctx, 3000) == 0){
             return;
         }
         /*clear the flag if dump failed*/
-        pt_ctrl_pid_set_inactive(&(ctx->ctrl), ctx->php_pid);
+        pt_ctrl_set_inactive(&(ctx->ctrl), ctx->php_pid);
         die(ctx, -1);
     }
 

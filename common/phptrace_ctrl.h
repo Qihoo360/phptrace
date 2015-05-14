@@ -58,8 +58,8 @@ void pt_ctrl_reset(pt_ctrl_t *ctrl);
 void pt_ctrl_clean_all(pt_ctrl_t *ctrl);
 
 #define pt_ctrl_pid(ctrl, pid)              (*(uint8_t *) (((ctrl)->addr) + (pid)))
-#define pt_ctrl_pid_is_active(ctrl, pid)    (pt_ctrl_pid(ctrl, pid) &   PT_CTRL_ACTIVE)
-#define pt_ctrl_pid_set_active(ctrl, pid)   (pt_ctrl_pid(ctrl, pid) |=  PT_CTRL_ACTIVE)
-#define pt_ctrl_pid_set_inactive(ctrl, pid) (pt_ctrl_pid(ctrl, pid) &= ~PT_CTRL_ACTIVE)
+#define pt_ctrl_is_active(ctrl, pid)        (pt_ctrl_pid(ctrl, pid) &   PT_CTRL_ACTIVE)
+#define pt_ctrl_set_active(ctrl, pid)       (pt_ctrl_pid(ctrl, pid) |=  PT_CTRL_ACTIVE)
+#define pt_ctrl_set_inactive(ctrl, pid)     (pt_ctrl_pid(ctrl, pid) &= ~PT_CTRL_ACTIVE)
 
 #endif
