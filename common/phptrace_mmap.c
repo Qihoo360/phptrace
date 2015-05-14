@@ -14,133 +14,93 @@
  * limitations under the License.
  */
 
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 #include "phptrace_mmap.h"
 
-#include <fcntl.h>
-#include <sys/types.h>
-#include <sys/mman.h>
-#include <unistd.h>
-#include <sys/stat.h>
-
-/*
- * Some operating systems (like FreeBSD) have a MAP_NOSYNC flag that
- * tells whatever update daemons might be running to not flush dirty
- * vm pages to disk unless absolutely necessary.  My guess is that
- * most systems that don't have this probably default to only synching
- * to disk when absolutely necessary.
- */
-#ifndef MAP_NOSYNC
-#define MAP_NOSYNC 0
-#endif
-
-/* support for systems where MAP_ANONYMOUS is defined but not MAP_ANON, ie: HP-UX bug #14615 */
-#if !defined(MAP_ANON) && defined(MAP_ANONYMOUS)
-# define MAP_ANON MAP_ANONYMOUS
-#endif
-
-phptrace_segment_t phptrace_mmap_fd(int fd, size_t size, int prot)
+static inline int reset_with_retval(pt_segment_t *seg, int retval)
 {
-    int flags ;
-    phptrace_segment_t segment;
+    seg->addr = NULL;
+    seg->size = 0;
+
+    return retval;
+}
+
+int pt_mmap_open_fd(pt_segment_t *seg, int fd, size_t size)
+{
     struct stat st;
-    
-    flags = MAP_SHARED | MAP_NOSYNC;
 
-    if (size == 0) {
-        fstat(fd, &st);
-        size = st.st_size;
+    /* ensure filesize is larger than size */
+    if (fd != -1 && size > 0 && (fstat(fd, &st) == -1 || st.st_size < size)) {
+        return reset_with_retval(seg, -1);
     }
-    
-    segment.shmaddr = (void *)mmap(NULL, size, prot, flags, fd, 0);
-    if (segment.shmaddr == MAP_FAILED) {
-        segment.size = 0;
-    }
-    segment.size = size;
-    if( fd != -1) {
-        close(fd);
-    }
-    return segment;
-}
+    seg->size = size;
 
-int phptrace_file_open(const char *file, int flags, int mode)
-{
-    int fd;
-    if (file == NULL) {
-        return -1;
-    }
-    fd = open(file, flags, mode);
-    return fd;
-}
-
-phptrace_segment_t phptrace_mmap_create(const char *file, size_t size)
-{
-    int fd;
-    phptrace_segment_t segment; 
-
-    /*Give all users rw permissions*/
-    umask(0);
-    fd = phptrace_file_open(file, O_RDWR|O_CREAT,
-            S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH);
-    if (fd == -1) {
-        goto error;
-    }
-    if (ftruncate(fd, size) < 0) {
-        close(fd);
-        unlink(file);
-        goto error;
-    }
-    return phptrace_mmap_fd(fd, size, PROT_READ|PROT_WRITE);
-error:
-    segment.shmaddr = MAP_FAILED;
-    segment.size = 0;
-    return segment;
-}
-
-phptrace_segment_t phptrace_mmap_write(const char *file)
-{
-    int fd;
-    phptrace_segment_t segment; 
-
-    fd = phptrace_file_open(file, O_RDWR, 
-            S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH);
-    if (fd == -1) {
-        goto error;
+    /* mmap */
+    seg->addr = mmap(NULL, seg->size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_NOSYNC, fd, 0);
+    if (seg->addr == MAP_FAILED) {
+        return reset_with_retval(seg, -1);
     }
 
-    return phptrace_mmap_fd(fd, 0, PROT_READ|PROT_WRITE);
-
-error:
-    segment.shmaddr = MAP_FAILED;
-    segment.size = 0;
-
-    return segment;
-}
-
-phptrace_segment_t phptrace_mmap_read(const char *file)
-{
-    int fd;
-    phptrace_segment_t segment; 
-
-    fd = phptrace_file_open(file, O_RDONLY, 
-            S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH|S_IWOTH);
-    if (fd == -1) {
-        goto error;
-    }
-
-    return phptrace_mmap_fd(fd, 0, PROT_READ);
-
-error:
-    segment.shmaddr = MAP_FAILED;
-    segment.size = 0;
-
-    return segment;
-}
-
-int phptrace_unmap(phptrace_segment_t *segment)
-{
-    if (munmap(segment->shmaddr, segment->size) < 0) {
-        return -1;
-    }
     return 0;
 }
 
+int pt_mmap_open(pt_segment_t *seg, const char *file, size_t size)
+{
+    int fd;
+
+    /* file open */
+    fd = open(file, O_RDWR, DEFFILEMODE);
+    if (fd == -1) {
+        return reset_with_retval(seg, -1);
+    }
+
+    /* mmap open */
+    if (pt_mmap_open_fd(seg, fd, size) < 0) {
+        close(fd);
+        return -1;
+    }
+
+    close(fd);
+    return 0;
+}
+
+int pt_mmap_create(pt_segment_t *seg, const char *file, size_t size)
+{
+    int fd;
+
+    /* file open */
+    umask(0000);
+    fd = open(file, O_RDWR | O_CREAT, DEFFILEMODE);
+    if (fd == -1) {
+        return reset_with_retval(seg, -1);
+    }
+
+    /* set size */
+    if (ftruncate(fd, size) == -1) {
+        close(fd);
+        unlink(file);
+        return reset_with_retval(seg, -1);
+    }
+
+    /* mmap open */
+    if (pt_mmap_open_fd(seg, fd, size) < 0) {
+        close(fd);
+        unlink(file);
+        return -1;
+    }
+
+    close(fd);
+    return 0;
+}
+
+int pt_mmap_close(pt_segment_t *seg)
+{
+    if (munmap(seg->addr, seg->size) == -1) {
+        return -1;
+    }
+
+    return reset_with_retval(seg, 0);
+}

@@ -56,7 +56,7 @@ ZEND_BEGIN_MODULE_GLOBALS(trace)
     pt_ctrl_t               ctrl;           /* ctrl module */
     char                    ctrl_file[256]; /* ctrl filename */
 
-    phptrace_comm_socket    comm;           /* comm module */
+    pt_comm_socket_t        comm;           /* comm module */
     char                    comm_file[256]; /* comm filename */
     long                    send_size;      /* send handler size */
     long                    recv_size;      /* recv handler size */

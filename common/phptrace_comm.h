@@ -21,18 +21,19 @@
 #include "phptrace_mmap.h"
 #include "phptrace_type.h"
 
-#define PHPTRACE_LOG_DIR                "/tmp"
-#define PHPTRACE_COMM_FILENAME          "phptrace.comm"
+#define PT_MAGIC_NUMBER                 0x6563617274706870 /* Ascii codes of "phptrace" */
 
-#define PT_MAGIC_NUMBER     0x6563617274706870 /* ascii codes of "phptrace" */
-#define PT_COMM_SEQMAX      1000
+#define PT_COMM_FILENAME                "phptrace.comm"
+#define PT_COMM_SEQMAX                  1000
 
+/* Type codes of inner message */
 #define PT_MSG_EMPTY                    0x00000000
 #define PT_MSG_ROTATE                   0x00000001
 #define PT_MSG_RESEQ                    0x00000002
-/* User defined type should not begin with 0 at left-most bit */
 #define PT_MSG_NORMAL                   0x10000000
 
+/* Type codes of user defined message
+ * Should not begins with 0 at left-most bit */
 #define PT_MSG_TYPE_BASE                0
 #define PT_MSG_DO_BASE                  (PT_MSG_TYPE_BASE + 0x00010000)
 #define PT_MSG_DO_TRACE                 (PT_MSG_DO_BASE + 1)
@@ -52,58 +53,55 @@ typedef struct {
     void *head;                 /* head of buffer */
     void *current;              /* current pointer */
     uint32_t sequence;          /* current sequence */
-} phptrace_comm_handler;
+} pt_comm_handler_t;
 
 typedef struct {
     uint32_t seq;               /* message sequence */
     uint32_t type;              /* message type */
     uint32_t len;               /* message length */
     char data[];                /* scaleable data */
-} phptrace_comm_message;
+} pt_comm_message_t;
 
 typedef struct {
-    phptrace_segment_t seg;     /* mmap segment */
+    int8_t active;              /* active status */
+    pt_segment_t seg;           /* mmap segment */
     char *filename;
-    phptrace_comm_handler send_handler;
-    phptrace_comm_handler recv_handler;
-} phptrace_comm_socket;
+    pt_comm_handler_t send_handler;
+    pt_comm_handler_t recv_handler;
+} pt_comm_socket_t;
 
 typedef struct {
     uint64_t magic;
     size_t send_size;           /* send handler size */
     size_t recv_size;           /* recv handler size */
-} phptrace_comm_socket_meta;
+} pt_comm_socket_meta_t;
 
 /* Some socket like functions */
-#define phptrace_comm_swrite_begin(socket, size) \
-    phptrace_comm_write_begin(&(socket)->send_handler, size)
-#define phptrace_comm_swrite_end(socket, type, msg) \
-    phptrace_comm_write_end(&(socket)->send_handler, type, msg)
-#define phptrace_comm_swrite(socket, type, buf, size) \
-    phptrace_comm_write(&(socket)->send_handler, type, buf, size)
-#define phptrace_comm_sread(socket) \
-    phptrace_comm_read(&(socket)->recv_handler, 1)
+#define pt_comm_swrite_begin(s, size)       pt_comm_write_begin(&(s)->send_handler, size)
+#define pt_comm_swrite_end(s, type, msg)    pt_comm_write_end(&(s)->send_handler, type, msg)
+#define pt_comm_swrite(s, type, buf, size)  pt_comm_write(&(s)->send_handler, type, buf, size)
+#define pt_comm_sread(s)                    pt_comm_read(&(s)->recv_handler, 1)
 
-#define phptrace_comm_offset(handler, msg) \
+#define pt_comm_offset(handler, msg) \
     (size_t) ((void *) msg - (handler)->head)
-#define phptrace_comm_freesize(handler) \
-    (size_t) ((handler)->size - ((handler)->current - (handler)->head)) - (size_t) sizeof(phptrace_comm_message)
+#define pt_comm_freesize(handler) \
+    (size_t) ((handler)->size - ((handler)->current - (handler)->head)) - (size_t) sizeof(pt_comm_message_t)
 
-#define phptrace_comm_sread_type(p_socket) \
-    (((phptrace_comm_message *) ((p_socket)->recv_handler.current))->type)
+#define pt_comm_sread_type(p_socket) \
+    (((pt_comm_message_t *) ((p_socket)->recv_handler.current))->type)
 
-int phptrace_comm_screate(phptrace_comm_socket *sock, const char *filename, int crossover, size_t send_size, size_t recv_size);
-int phptrace_comm_sopen(phptrace_comm_socket *sock, const char *filename, int crossover);
-void phptrace_comm_sclose(phptrace_comm_socket *sock, int delfile);
-void phptrace_comm_init(phptrace_comm_handler *handler, void *head, size_t size);
-void phptrace_comm_uninit(phptrace_comm_handler *handler);
-void phptrace_comm_clear(phptrace_comm_handler *handler);
-phptrace_comm_message *phptrace_comm_next(phptrace_comm_handler *handler);
-phptrace_comm_message *phptrace_comm_write_begin(phptrace_comm_handler *handler, size_t size);
-void phptrace_comm_write_end(phptrace_comm_handler *handler, unsigned int type, phptrace_comm_message *msg);
-phptrace_comm_message *phptrace_comm_write(phptrace_comm_handler *handler, unsigned int type, void *buf, size_t size);
-phptrace_comm_message *phptrace_comm_read(phptrace_comm_handler *handler, int movenext);
+int pt_comm_screate(pt_comm_socket_t *sock, const char *filename, int crossover, size_t send_size, size_t recv_size);
+int pt_comm_sopen(pt_comm_socket_t *sock, const char *filename, int crossover);
+void pt_comm_sclose(pt_comm_socket_t *sock, int delfile);
+void pt_comm_init(pt_comm_handler_t *handler, void *head, size_t size);
+void pt_comm_uninit(pt_comm_handler_t *handler);
+void pt_comm_clear(pt_comm_handler_t *handler);
+pt_comm_message_t *pt_comm_next(pt_comm_handler_t *handler);
+pt_comm_message_t *pt_comm_write_begin(pt_comm_handler_t *handler, size_t size);
+void pt_comm_write_end(pt_comm_handler_t *handler, unsigned int type, pt_comm_message_t *msg);
+pt_comm_message_t *pt_comm_write(pt_comm_handler_t *handler, unsigned int type, void *buf, size_t size);
+pt_comm_message_t *pt_comm_read(pt_comm_handler_t *handler, int movenext);
 
-phptrace_comm_message *phptrace_comm_write_message(uint32_t seq, uint32_t type, uint32_t len, pt_frame_t *f, void *buf);
+pt_comm_message_t *pt_comm_write_message(uint32_t seq, uint32_t type, uint32_t len, pt_frame_t *f, void *buf);
 
 #endif

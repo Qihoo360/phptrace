@@ -169,10 +169,11 @@ static void php_trace_init_globals(zend_trace_globals *ptg)
     ptg->enable = ptg->dotrace = 0;
     ptg->data_dir = NULL;
 
+    memset(&ptg->ctrl, 0, sizeof(ptg->ctrl));
     memset(ptg->ctrl_file, 0, sizeof(ptg->ctrl_file));
+
+    ptg->comm.active = 0;
     memset(ptg->comm_file, 0, sizeof(ptg->comm_file));
-    pt_ctrl_reset(&ptg->ctrl);
-    ptg->comm.seg.shmaddr = MAP_FAILED; /* TODO using more intuitive element */
     ptg->recv_size = ptg->send_size = 0;
 
     ptg->pid = ptg->level = 0;
@@ -217,8 +218,8 @@ PHP_MINIT_FUNCTION(trace)
     }
 
     /* Trace in CLI */
-    if (PTG(dotrace) && sapi_module.name[0]=='c' && sapi_module.name[1]=='l'
-            && sapi_module.name[2]=='i') {
+    if (PTG(dotrace) && sapi_module.name[0] == 'c' && sapi_module.name[1] == 'l'
+            && sapi_module.name[2] == 'i') {
         PTG(dotrace) = TRACE_TO_OUTPUT;
     } else {
         PTG(dotrace) = 0;
@@ -531,15 +532,15 @@ static void pt_frame_set_retval(pt_frame_t *frame, zend_bool internal, zend_exec
 static int pt_frame_send(pt_frame_t *frame TSRMLS_DC)
 {
     size_t len;
-    phptrace_comm_message *msg;
+    pt_comm_message_t *msg;
 
     len = pt_type_len_frame(frame);
-    if ((msg = phptrace_comm_swrite_begin(&PTG(comm), len)) == NULL) {
+    if ((msg = pt_comm_swrite_begin(&PTG(comm), len)) == NULL) {
         php_error(E_WARNING, "Trace comm-module write begin failed, tried to allocate %ld bytes", len);
         return -1;
     }
     pt_type_pack_frame(frame, msg->data);
-    phptrace_comm_swrite_end(&PTG(comm), PT_MSG_RET, msg); /* FIXME correct type */
+    pt_comm_swrite_end(&PTG(comm), PT_MSG_RET, msg); /* FIXME correct type */
 
     return 0;
 }
@@ -718,15 +719,15 @@ static void pt_status_display(pt_status_t *status TSRMLS_DC)
 static int pt_status_send(pt_status_t *status TSRMLS_DC)
 {
     size_t len;
-    phptrace_comm_message *msg;
+    pt_comm_message_t *msg;
 
     len = pt_type_len_status(status);
-    if ((msg = phptrace_comm_swrite_begin(&PTG(comm), len)) == NULL) {
+    if ((msg = pt_comm_swrite_begin(&PTG(comm), len)) == NULL) {
         php_error(E_WARNING, "Trace comm-module write begin failed, tried to allocate %ld bytes", len);
         return -1;
     }
     pt_type_pack_status(status, msg->data);
-    phptrace_comm_swrite_end(&PTG(comm), PT_MSG_RET, msg); /* FIXME correct type */
+    pt_comm_swrite_end(&PTG(comm), PT_MSG_RET, msg); /* FIXME correct type */
 
     return 0;
 }
@@ -792,9 +793,9 @@ static void pt_set_inactive(TSRMLS_D)
 
     /* toggle trace off, close comm-module */
     PTG(dotrace) &= ~TRACE_TO_TOOL;
-    if (PTG(comm).seg.shmaddr != MAP_FAILED) {
+    if (PTG(comm).active) {
         PTD("Comm socket close");
-        phptrace_comm_sclose(&PTG(comm), 1);
+        pt_comm_sclose(&PTG(comm), 1);
     }
 }
 
@@ -816,7 +817,7 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zen
     zend_bool dobailout = 0;
     zend_execute_data *ex_entry = execute_data;
     zval *retval = NULL;
-    phptrace_comm_message *msg;
+    pt_comm_message_t *msg;
     pt_frame_t frame;
 
 #if PHP_VERSION_ID >= 50500
@@ -832,10 +833,10 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zen
     /* Check ctrl module */
     if (CTRL_IS_ACTIVE()) {
         /* Open comm socket */
-        if (PTG(comm).seg.shmaddr == MAP_FAILED) {
-            snprintf(PTG(comm_file), sizeof(PTG(comm_file)), "%s/%s.%d", PTG(data_dir), PHPTRACE_COMM_FILENAME, PTG(pid));
+        if (PTG(comm).active) {
+            snprintf(PTG(comm_file), sizeof(PTG(comm_file)), "%s/%s.%d", PTG(data_dir), PT_COMM_FILENAME, PTG(pid));
             PTD("Comm socket %s create", PTG(comm_file));
-            if (phptrace_comm_screate(&PTG(comm), PTG(comm_file), 0, PTG(send_size), PTG(recv_size)) == -1) {
+            if (pt_comm_screate(&PTG(comm), PTG(comm_file), 0, PTG(send_size), PTG(recv_size)) == -1) {
                 php_error(E_WARNING, "Trace comm-module %s open failed", PTG(comm_file));
                 pt_set_inactive(TSRMLS_C);
                 goto exec;
@@ -845,7 +846,7 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zen
 
         /* Handle message */
         while (1) {
-            msg = phptrace_comm_sread(&PTG(comm));
+            msg = pt_comm_sread(&PTG(comm));
 
             if (msg == NULL) {
                 if (PING_TIMEOUT()) {
@@ -878,7 +879,7 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zen
                     break;
             }
         }
-    } else if (PTG(comm).seg.shmaddr != MAP_FAILED) { /* comm-module still open */
+    } else if (PTG(comm).active) { /* comm-module still open */
         pt_set_inactive(TSRMLS_C);
     }
 
