@@ -279,7 +279,7 @@ int main(int argc, char *argv[])
     if (context.in_filename) {
         context.mmap_filename = sdsdup(context.in_filename);
     } else {
-        snprintf(buf, MAX_TEMP_LENGTH, "%s.%d", PHPTRACE_LOG_DIR "/" PHPTRACE_COMM_FILENAME, context.php_pid);
+        snprintf(buf, MAX_TEMP_LENGTH, "%s.%d", PHPTRACE_LOG_DIR "/" PT_COMM_FILENAME, context.php_pid);
         context.mmap_filename = sdsnew(buf);
         trace_start(&context);
     }

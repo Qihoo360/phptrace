@@ -252,15 +252,15 @@ int status_dump(phptrace_context_t *ctx, int timeout /*milliseconds*/)
     int opendata_wait_interval = OPEN_DATA_WAIT_INTERVAL;
     int data_wait_interval = DATA_WAIT_INTERVAL;
 
-    sprintf(filename, PHPTRACE_LOG_DIR "/" PHPTRACE_COMM_FILENAME ".%d", ctx->php_pid);
+    sprintf(filename, PHPTRACE_LOG_DIR "/" PT_COMM_FILENAME ".%d", ctx->php_pid);
     log_printf(LL_DEBUG, "dump status %s", filename);
 
     /* new protocol API */
-    phptrace_comm_message *msg;
+    pt_comm_message_t *msg;
     pt_status_t st;
-    phptrace_comm_socket sock;
+    pt_comm_socket_t sock;
 
-    while (phptrace_comm_sopen(&sock, filename, 1) < 0) {    /* meta: recv|send  */
+    while (pt_comm_sopen(&sock, filename, 1) < 0) {    /* meta: recv|send  */
         if (interrupted) {
             goto status_end;
         }
@@ -277,12 +277,12 @@ int status_dump(phptrace_context_t *ctx, int timeout /*milliseconds*/)
     }
 
     unlink(ctx->mmap_filename);
-    phptrace_comm_swrite(&sock, PT_MSG_DO_STATUS, NULL, 0);
+    pt_comm_swrite(&sock, PT_MSG_DO_STATUS, NULL, 0);
 
     while (!interrupted && timeout > 0) {
-        phptrace_comm_swrite(&sock, PT_MSG_DO_PING, NULL, 0);           /* send to do ping */
+        pt_comm_swrite(&sock, PT_MSG_DO_PING, NULL, 0);           /* send to do ping */
 
-        type = phptrace_comm_sread_type(&sock);
+        type = pt_comm_sread_type(&sock);
         log_printf (LL_DEBUG, "msg type=(%u)", type);
 
         if (type == PT_MSG_EMPTY) {                         /* wait flag */
@@ -293,7 +293,7 @@ int status_dump(phptrace_context_t *ctx, int timeout /*milliseconds*/)
             continue;
         }
 
-        if ((msg = phptrace_comm_sread(&sock)) == NULL) {
+        if ((msg = pt_comm_sread(&sock)) == NULL) {
             error_msg(ctx, ERR_TRACE, "read record failed, maybe write too fast");
             break;
         }

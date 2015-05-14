@@ -288,7 +288,7 @@ sds phptrace_repr_function(sds buf, pt_frame_t *f)
     return buf;
 }
 
-sds standard_transform(phptrace_context_t *ctx, phptrace_comm_message *msg, pt_frame_t *f)
+sds standard_transform(phptrace_context_t *ctx, pt_comm_message_t *msg, pt_frame_t *f)
 {
     int i;
     sds buf = sdsempty();
@@ -333,19 +333,19 @@ sds standard_transform(phptrace_context_t *ctx, phptrace_comm_message *msg, pt_f
     return buf;
 }
 
-sds dump_transform(phptrace_context_t *ctx, phptrace_comm_message *msg, pt_frame_t *f)
+sds dump_transform(phptrace_context_t *ctx, pt_comm_message_t *msg, pt_frame_t *f)
 {
     sds buf;
     size_t raw_size;
 
     raw_size = pt_type_len_frame(f);
-    buf = sdsnewlen(NULL, raw_size + sizeof(phptrace_comm_message));
-    phptrace_comm_write_message(msg->seq, msg->type, raw_size, f, buf);
+    buf = sdsnewlen(NULL, raw_size + sizeof(pt_comm_message_t));
+    pt_comm_write_message(msg->seq, msg->type, raw_size, f, buf);
     log_printf(LL_DEBUG, "[dump] record(sequence=%d) raw_size=%u", msg->seq, raw_size);
     return buf;
 }
 
-sds json_transform(phptrace_context_t *ctx, phptrace_comm_message *msg, pt_frame_t *f)
+sds json_transform(phptrace_context_t *ctx, pt_comm_message_t *msg, pt_frame_t *f)
 {
     int i;
     sds buf = sdsempty();
@@ -418,11 +418,11 @@ void trace(phptrace_context_t *ctx)
     int data_wait_interval = DATA_WAIT_INTERVAL;
 
     /* new protocol API */
-    phptrace_comm_message *msg;
+    pt_comm_message_t *msg;
     pt_frame_t frame;
-    phptrace_comm_socket *p_sock = &(ctx->sock);
+    pt_comm_socket_t *p_sock = &(ctx->sock);
 
-    memset(p_sock, 0, sizeof(phptrace_comm_socket));
+    memset(p_sock, 0, sizeof(pt_comm_socket_t));
 
     /* exclusive time mode */
     if (ctx->exclusive_flag) {
@@ -430,12 +430,12 @@ void trace(phptrace_context_t *ctx)
         ctx->sub_cpu_time = calloc(ctx->max_level + 2, sizeof(int64_t));
     }
 
-    while (phptrace_comm_sopen(p_sock, ctx->mmap_filename, 1) < 0) {    /* meta: recv|send  */
+    while (pt_comm_sopen(p_sock, ctx->mmap_filename, 1) < 0) {    /* meta: recv|send  */
         if (interrupted) {
             goto trace_end;
         }
 
-        if (ctx->in_filename || errno != ENOENT) {                      /* -r option or open failed (except for non-exist) */
+        if (0) {                      /* -r option or open failed (except for non-exist) */
             error_msg(ctx, ERR_TRACE, "Can not open %s to read, %s!", ctx->mmap_filename, strerror(errno));
             die(ctx, -1);
         } else {                                                        /* file not exist, should wait */
@@ -451,7 +451,7 @@ void trace(phptrace_context_t *ctx)
     }
 
     if (!ctx->in_filename) {                                            /* not -r option */
-        phptrace_comm_swrite(p_sock, PT_MSG_DO_TRACE, NULL, 0);
+        pt_comm_swrite(p_sock, PT_MSG_DO_TRACE, NULL, 0);
     }
 
     while (1) {
@@ -460,10 +460,10 @@ void trace(phptrace_context_t *ctx)
         }
 
         if (!ctx->in_filename) {
-            phptrace_comm_swrite(p_sock, PT_MSG_DO_PING, NULL, 0);           /* send to do ping */
+            pt_comm_swrite(p_sock, PT_MSG_DO_PING, NULL, 0);           /* send to do ping */
         }
 
-        type = phptrace_comm_sread_type(p_sock);
+        type = pt_comm_sread_type(p_sock);
         log_printf (LL_DEBUG, "msg type=(%u)", type);
 
         if (type == PT_MSG_EMPTY) {                         /* wait flag */
@@ -479,7 +479,7 @@ void trace(phptrace_context_t *ctx)
 
         data_wait_interval = DATA_WAIT_INTERVAL;            /* reset the data wait interval */
 
-        if ((msg = phptrace_comm_sread(p_sock)) == NULL) {
+        if ((msg = pt_comm_sread(p_sock)) == NULL) {
             if (!ctx->in_filename) {
                 error_msg(ctx, ERR_TRACE, "read record failed, maybe write too fast");
             }

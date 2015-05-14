@@ -29,6 +29,8 @@
 #define PHPTRACE_VERSION "0.3.0-beta"
 #define PHPTRACE_DEVELOPER "360 Infra Webcore Team"
 
+#define PHPTRACE_LOG_DIR        "/tmp"
+
 #define MAX_TEMP_LENGTH 100
 #define MAX_PRINT_LENGTH 600
 
@@ -101,9 +103,9 @@ sds print_indent_str(sds s, char* str, int32_t size);
 sds print_time(sds s, uint64_t t);
 sds phptrace_repr_function(sds buf, pt_frame_t *f);
 
-sds standard_transform(phptrace_context_t *ctx, phptrace_comm_message *msg, pt_frame_t *f);
-sds dump_transform(phptrace_context_t *ctx, phptrace_comm_message *msg, pt_frame_t *f);
-sds json_transform(phptrace_context_t *ctx, phptrace_comm_message *msg, pt_frame_t *f);
+sds standard_transform(phptrace_context_t *ctx, pt_comm_message_t *msg, pt_frame_t *f);
+sds dump_transform(phptrace_context_t *ctx, pt_comm_message_t *msg, pt_frame_t *f);
+sds json_transform(phptrace_context_t *ctx, pt_comm_message_t *msg, pt_frame_t *f);
 
 int update_mmap_filename(phptrace_context_t *ctx);
 void trace_start(phptrace_context_t *ctx);

@@ -33,8 +33,15 @@ int pt_mmap_open_fd(pt_segment_t *seg, int fd, size_t size)
     struct stat st;
 
     /* ensure filesize is larger than size */
-    if (fd != -1 && size > 0 && (fstat(fd, &st) == -1 || st.st_size < size)) {
-        return reset_with_retval(seg, -1);
+    if (fd != -1) {
+        if (fstat(fd, &st) == -1) {
+            return reset_with_retval(seg, -1);
+        }
+        if (size == 0) {
+            size = st.st_size;
+        } else if (size > 0 && st.st_size < size) {
+            return reset_with_retval(seg, -1);
+        }
     }
     seg->size = size;
 
