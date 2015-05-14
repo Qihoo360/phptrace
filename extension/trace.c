@@ -187,7 +187,6 @@ static void php_trace_init_globals(zend_trace_globals *ptg)
  * PHP Extension Function
  * --------------------
  */
-
 PHP_MINIT_FUNCTION(trace)
 {
     ZEND_INIT_MODULE_GLOBALS(trace, php_trace_init_globals, NULL);
@@ -211,18 +210,14 @@ PHP_MINIT_FUNCTION(trace)
     /* Open ctrl module */
     snprintf(PTG(ctrl_file), sizeof(PTG(ctrl_file)), "%s/%s", PTG(data_dir), PT_CTRL_FILENAME);
     PTD("Ctrl module open %s", PTG(ctrl_file));
-    if (pt_ctrl_open(&PTG(ctrl), PTG(ctrl_file)) < 0 &&
-            pt_ctrl_create(&PTG(ctrl), PTG(ctrl_file)) < 0) {
+    if (pt_ctrl_create(&PTG(ctrl), PTG(ctrl_file)) < 0) {
         php_error(E_ERROR, "Trace ctrl file %s open failed", PTG(ctrl_file));
         return FAILURE;
     }
 
     /* Trace in CLI */
-    if (PTG(dotrace) && sapi_module.name[0] == 'c' && sapi_module.name[1] == 'l'
-            && sapi_module.name[2] == 'i') {
+    if (PTG(dotrace) && sapi_module.name[0] == 'c' && sapi_module.name[1] == 'l' && sapi_module.name[2] == 'i') {
         PTG(dotrace) = TRACE_TO_OUTPUT;
-    } else {
-        PTG(dotrace) = 0;
     }
 
     return SUCCESS;
@@ -253,7 +248,11 @@ PHP_MSHUTDOWN_FUNCTION(trace)
 
 PHP_RINIT_FUNCTION(trace)
 {
-    PTG(pid) = getpid();
+    /* Anything needs pid, init here */
+    if (PTG(pid) == 0) {
+        PTG(pid) = getpid();
+        snprintf(PTG(comm_file), sizeof(PTG(comm_file)), "%s/%s.%d", PTG(data_dir), PT_COMM_FILENAME, PTG(pid));
+    }
     PTG(level) = 0;
 
     return SUCCESS;
@@ -834,7 +833,6 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zen
     if (CTRL_IS_ACTIVE()) {
         /* Open comm socket */
         if (!PTG(comm).active) {
-            snprintf(PTG(comm_file), sizeof(PTG(comm_file)), "%s/%s.%d", PTG(data_dir), PT_COMM_FILENAME, PTG(pid));
             PTD("Comm socket %s create", PTG(comm_file));
             if (pt_comm_screate(&PTG(comm), PTG(comm_file), 0, PTG(send_size), PTG(recv_size)) == -1) {
                 php_error(E_WARNING, "Trace comm-module %s open failed", PTG(comm_file));
