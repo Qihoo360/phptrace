@@ -1,5 +1,5 @@
 PHP_ARG_ENABLE(trace, whether to enable trace support,
-[  --enable-trace      Enable trace support])
+[  --enable-trace          Enable trace support])
 
 if test "$PHP_TRACE" != "no"; then
 
