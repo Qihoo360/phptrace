@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#ifndef PHPTRACE_CTRL_H
-#define PHPTRACE_CTRL_H
+#ifndef TRACE_CTRL_H
+#define TRACE_CTRL_H
 
 #include <stdint.h>
-#include "phptrace_mmap.h"
+#include "trace_mmap.h"
 
 /* We use PT_PID_MAX + 1 as the size of file ctrl file. 4 million is the hard
  * limit of linux kernel so far, and it is 99999 on Mac OS X which is coverd by

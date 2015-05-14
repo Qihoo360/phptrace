@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef PHPTRACE_TYPE_H
-#define PHPTRACE_TYPE_H
+#ifndef TRACE_TYPE_H
+#define TRACE_TYPE_H
 
 #include <stdint.h>
 #include "sds/sds.h"
@@ -73,8 +73,8 @@ size_t pt_type_len_frame(pt_frame_t *frame);
 size_t pt_type_pack_frame(pt_frame_t *frame, char *buf);
 size_t pt_type_unpack_frame(pt_frame_t *frame, char *buf);
 
-/* pt_status_t
- * XXX use sds to make pack, unpack reliable and uniform outside PHP */
+/* pt_status
+ * use sds to make pack, unpack reliable and uniform outside PHP */
 typedef struct {
     sds php_version;            /* php version eg: 5.5.24 */
     sds sapi_name;              /* sapi name eg: fpm-fcgi */

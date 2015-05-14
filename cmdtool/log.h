@@ -29,4 +29,4 @@ int log_level_get();
 void log_msg(int level, const char *msg);
 void log_printf(int level, const char *fmt, ...);
 
-#endif // PHPTRACE_LOG_H
+#endif

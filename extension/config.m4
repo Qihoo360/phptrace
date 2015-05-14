@@ -1,5 +1,5 @@
 PHP_ARG_ENABLE(trace, whether to enable trace support,
-[  --enable-trace      Enable trace support])
+[  --enable-trace          Enable trace support])
 
 if test "$PHP_TRACE" != "no"; then
 
@@ -18,10 +18,10 @@ if test "$PHP_TRACE" != "no"; then
   dnl configure can't use ".." as a source filename, so we make a link here
   ln -sf ../common ./
 
-  TRACE_SOURCES="common/phptrace_comm.c \
-                 common/phptrace_ctrl.c \
-                 common/phptrace_mmap.c \
-                 common/phptrace_type.c \
+  TRACE_SOURCES="common/trace_comm.c \
+                 common/trace_ctrl.c \
+                 common/trace_mmap.c \
+                 common/trace_type.c \
                  common/sds/sds.c"
 
   PHP_NEW_EXTENSION(trace, trace.c $TRACE_SOURCES, $ext_shared)

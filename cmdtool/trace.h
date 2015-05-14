@@ -18,12 +18,12 @@
 #define TRACE_H
 
 #include "log.h"
-#include "phptrace_mmap.h"
-#include "phptrace_ctrl.h"
-#include "phptrace_time.h"
+#include "trace_mmap.h"
+#include "trace_ctrl.h"
+#include "trace_time.h"
 
-#include "phptrace_comm.h"
-#include "phptrace_type.h"
+#include "trace_comm.h"
+#include "trace_type.h"
 
 #include "sds.h"
 

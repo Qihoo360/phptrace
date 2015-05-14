@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef PHPTRACE_TIME_H
-#define PHPTRACE_TIME_H
+#ifndef TRACE_TIME_H
+#define TRACE_TIME_H
 
 #include <stdint.h>
 #include <sys/resource.h>

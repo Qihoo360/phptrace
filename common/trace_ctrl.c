@@ -15,7 +15,7 @@
  */
 
 #include <string.h>
-#include "phptrace_ctrl.h"
+#include "trace_ctrl.h"
 
 int pt_ctrl_open(pt_ctrl_t *ctrl, const char *file)
 {

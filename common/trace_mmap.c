@@ -18,7 +18,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include "phptrace_mmap.h"
+#include "trace_mmap.h"
 
 static inline int reset_with_retval(pt_segment_t *seg, int retval)
 {
@@ -32,7 +32,7 @@ int pt_mmap_open_fd(pt_segment_t *seg, int fd, size_t size)
 {
     struct stat st;
 
-    /* ensure filesize is larger than size */
+    /* ensure filesize is larger than required size */
     if (fd != -1) {
         if (fstat(fd, &st) == -1) {
             return reset_with_retval(seg, -1);

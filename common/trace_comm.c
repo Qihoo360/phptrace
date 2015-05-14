@@ -19,7 +19,7 @@
 
 #include <string.h>
 #include <unistd.h>
-#include "phptrace_comm.h"
+#include "trace_comm.h"
 
 int pt_comm_screate(pt_comm_socket_t *sock, const char *filename, int crossover, size_t send_size, size_t recv_size)
 {

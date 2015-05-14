@@ -20,7 +20,7 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include "phptrace_type.h"
+#include "trace_type.h"
 
 #define PACK(buf, type, ele) \
     *(type *) buf = ele; buf += sizeof(type)
@@ -141,7 +141,11 @@ size_t pt_type_unpack_frame(pt_frame_t *frame, char *buf)
     UNPACK(buf, uint32_t, frame->level);
 
     UNPACK(buf, uint32_t, frame->arg_count);
-    frame->args = calloc(frame->arg_count, sizeof(sds));
+    if (frame->arg_count > 0) {
+        frame->args = calloc(frame->arg_count, sizeof(sds));
+    } else {
+        frame->args = NULL;
+    }
     for (i = 0; i < frame->arg_count; i++) {
         UNPACK_SDS(buf, frame->args[i]);
     }
@@ -254,7 +258,11 @@ size_t pt_type_unpack_status(pt_status_t *status, char *buf)
     UNPACK_SDS(buf,       status->request_script);
 
     UNPACK(buf, uint32_t, status->argc);
-    status->argv = calloc(status->argc, sizeof(char *));
+    if (status->argc > 0) {
+        status->argv = calloc(status->argc, sizeof(char *));
+    } else {
+        status->argv = NULL;
+    }
     for (i = 0; i < status->argc; i++) {
         UNPACK_SDS(buf,   status->argv[i]);
     }
@@ -262,7 +270,11 @@ size_t pt_type_unpack_status(pt_status_t *status, char *buf)
     UNPACK(buf, uint32_t, status->proto_num);
 
     UNPACK(buf, uint32_t, status->frame_count);
-    status->frames = calloc(status->frame_count, sizeof(pt_status_t));
+    if (status->frame_count > 0) {
+        status->frames = calloc(status->frame_count, sizeof(pt_status_t));
+    } else {
+        status->frames = NULL;
+    }
     for (i = 0; i < status->frame_count; i++) {
         len = pt_type_unpack_frame(status->frames + i, buf);
         buf += len;
