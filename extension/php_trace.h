@@ -34,8 +34,8 @@ extern zend_module_entry trace_module_entry;
 #include "TSRM.h"
 #endif
 
-#include "phptrace_comm.h"
-#include "phptrace_ctrl.h"
+#include "trace_comm.h"
+#include "trace_ctrl.h"
 
 PHP_MINIT_FUNCTION(trace);
 PHP_MSHUTDOWN_FUNCTION(trace);

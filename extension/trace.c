@@ -26,8 +26,8 @@
 #include "zend_extensions.h"
 #include "SAPI.h"
 
-#include "phptrace_time.h"
-#include "phptrace_type.h"
+#include "trace_time.h"
+#include "trace_type.h"
 #include "sds/sds.h"
 
 

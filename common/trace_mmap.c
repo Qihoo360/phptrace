@@ -18,7 +18,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include "phptrace_mmap.h"
+#include "trace_mmap.h"
 
 static inline int reset_with_retval(pt_segment_t *seg, int retval)
 {

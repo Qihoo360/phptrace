@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef PHPTRACE_TYPE_H
-#define PHPTRACE_TYPE_H
+#ifndef TRACE_TYPE_H
+#define TRACE_TYPE_H
 
 #include <stdint.h>
 #include "sds/sds.h"

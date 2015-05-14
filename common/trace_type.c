@@ -20,7 +20,7 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include "phptrace_type.h"
+#include "trace_type.h"
 
 #define PACK(buf, type, ele) \
     *(type *) buf = ele; buf += sizeof(type)

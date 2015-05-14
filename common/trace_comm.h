@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-#ifndef PHPTRACE_COMM_H
-#define PHPTRACE_COMM_H
+#ifndef TRACE_COMM_H
+#define TRACE_COMM_H
 
 #include <stdint.h>
-#include "phptrace_mmap.h"
-#include "phptrace_type.h"
+#include "trace_mmap.h"
+#include "trace_type.h"
 
 #define PT_MAGIC_NUMBER                 0x6563617274706870 /* Ascii codes of "phptrace" */
 

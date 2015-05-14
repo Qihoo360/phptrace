@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef PHPTRACE_MMAP_H
-#define PHPTRACE_MMAP_H
+#ifndef TRACE_MMAP_H
+#define TRACE_MMAP_H
 
 #include <sys/mman.h>
 
