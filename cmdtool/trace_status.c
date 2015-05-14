@@ -16,7 +16,7 @@
 
 #include "trace_status.h"
 
-int stack_dump_once(phptrace_context_t* ctx)
+int status_dump_once(pt_context_t* ctx)
 {
     static const int buf_size = 1024;
     char buf[buf_size];
@@ -106,8 +106,8 @@ int stack_dump_once(phptrace_context_t* ctx)
         log_printf(LL_DEBUG, "opline_addr %lld", ctx->addr_info.opline_addr);
         log_printf(LL_DEBUG, "opline_ln_offset %lld", ctx->addr_info.opline_ln_offset);
 #endif
-        ctx->stack_deep++;
-        if (ctx->stack_deep >= MAX_STACK_DEEP) {
+        ctx->status_deep++;
+        if (ctx->status_deep >= MAX_STACK_DEEP) {
             break;
         }
     }
@@ -115,16 +115,16 @@ int stack_dump_once(phptrace_context_t* ctx)
     return 0;
 }
 
-int stack_dump(phptrace_context_t* ctx)
+int status_dump_ptrace(pt_context_t* ctx)
 {
     int ret;
     ret = 0;
     while (1) {
-        if ((ret = stack_dump_once(ctx)) >= 0) {
+        if ((ret = status_dump_once(ctx)) >= 0) {
             return 0;
         }
 
-        log_printf(LL_NOTICE, "stack_dump_once failed: %d", ctx->php_pid);
+        log_printf(LL_NOTICE, "status_dump_once failed: %d", ctx->php_pid);
         sleep(1);
 
         ctx->retry++;
@@ -135,7 +135,7 @@ int stack_dump(phptrace_context_t* ctx)
     return -1;
 }
 
-int check_phpext_installed(phptrace_context_t *ctx)
+int check_phpext_installed(pt_context_t *ctx)
 {
     if (access(PHPTRACE_LOG_DIR "/" PT_CTRL_FILENAME, R_OK|W_OK) < 0) {
         if(errno != ENOENT) {
@@ -151,7 +151,7 @@ sds type_dump_frame(pt_frame_t *f)
     int i;
     sds buf = sdsempty();
 
-    buf = phptrace_repr_function(buf, f);
+    buf = pt_repr_function(buf, f);
 
     if ((f->functype & PT_FUNC_TYPES & PT_FUNC_INCLUDES) == 0) {
         buf = sdscatprintf (buf, "(");
@@ -244,7 +244,7 @@ void type_status_free(pt_status_t *st)
     }
 }
 
-int status_dump(phptrace_context_t *ctx, int timeout /*milliseconds*/)
+int status_dump(pt_context_t *ctx, int timeout /*milliseconds*/)
 {
     char filename[256];
     uint32_t type;
@@ -271,7 +271,7 @@ int status_dump(phptrace_context_t *ctx, int timeout /*milliseconds*/)
         } else {                                                        /* file not exist, should wait */
             log_printf(LL_DEBUG, "trace mmap file not exist, will sleep %d ms.\n", opendata_wait_interval);
             timeout -= opendata_wait_interval;
-            phptrace_msleep(opendata_wait_interval);
+            pt_msleep(opendata_wait_interval);
             opendata_wait_interval = grow_interval(opendata_wait_interval, MAX_OPEN_DATA_WAIT_INTERVAL);
         }
     }
@@ -288,7 +288,7 @@ int status_dump(phptrace_context_t *ctx, int timeout /*milliseconds*/)
         if (type == PT_MSG_EMPTY) {                         /* wait flag */
             log_printf (LL_DEBUG, "  wait_type will wait %d ms.\n", data_wait_interval);
             timeout -= data_wait_interval;
-            phptrace_msleep(data_wait_interval);
+            pt_msleep(data_wait_interval);
             data_wait_interval = grow_interval(data_wait_interval, MAX_DATA_WAIT_INTERVAL);
             continue;
         }
@@ -307,26 +307,24 @@ int status_dump(phptrace_context_t *ctx, int timeout /*milliseconds*/)
         }
 
         type_status_free(&st);
-        //free(msg);
         break;
     }
     return 0;
 
 status_end:
-    /*timedout*/
-    if (timeout <=0 ) {
+    if (timeout <= 0) {
         log_printf(LL_DEBUG, "dump status failed: timedout(%d)", timeout);
     }
     return -1;
 }
 
-void process_opt_s(phptrace_context_t *ctx)
+void process_opt_s(pt_context_t *ctx)
 {
     int ret;
 
     /*dump stauts from the extension*/
     if (!ctx->addr_info.sapi_globals_addr && check_phpext_installed(ctx)) {
-        log_printf(LL_DEBUG, "phptrace extension has been installed, use extension\n");
+        log_printf(LL_DEBUG, "pt extension has been installed, use extension\n");
         if (pt_ctrl_open(&(ctx->ctrl), PHPTRACE_LOG_DIR "/" PT_CTRL_FILENAME) < 0) {
             error_msg(ctx, ERR_CTRL, "cannot open control mmap file %s (%s)",
                     PHPTRACE_LOG_DIR "/" PT_CTRL_FILENAME, (errno ? strerror(errno) : "null"));
@@ -347,17 +345,17 @@ void process_opt_s(phptrace_context_t *ctx)
         die(ctx, -1);
     }
 
-    /*dump stack without extension if above failed*/
-    log_printf(LL_DEBUG, "phptrace extension was not been installed, use ptrace\n");
+    /*dump status without extension if above failed*/
+    log_printf(LL_DEBUG, "pt extension was not been installed, use ptrace\n");
     if (sys_trace_attach(ctx->php_pid)) {
         log_printf(LL_NOTICE, "sys_trace_attach failed");
         error_msg(ctx, ERR_STACK, "sys_trace_attach failed (%s)", (errno ? strerror(errno) : "null"));
         return;
     }
 
-    ret = stack_dump(ctx);
+    ret = status_dump_ptrace(ctx);
     if (ret < 0) {
-        error_msg(ctx, ERR_STACK, "dump stack failed. maybe the process is not executing a php script");
+        error_msg(ctx, ERR_STACK, "dump status failed. maybe the process is not executing a php script");
     }
 
     if (sys_trace_detach(ctx->php_pid) < 0) {

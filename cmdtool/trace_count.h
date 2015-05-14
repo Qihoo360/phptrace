@@ -29,8 +29,8 @@ int name_cmp(record_count_t *p, record_count_t *q);
 int mem_cmp(record_count_t *p, record_count_t *q);
 int avgmem_cmp(record_count_t *p, record_count_t *q);
 
-void count_record(phptrace_context_t *ctx, pt_frame_t *f);
-void count_summary(phptrace_context_t *ctx);
-int set_sortby(phptrace_context_t *ctx, char *sortby);
+void count_record(pt_context_t *ctx, pt_frame_t *f);
+void count_summary(pt_context_t *ctx);
+int set_sortby(pt_context_t *ctx, char *sortby);
 
 #endif

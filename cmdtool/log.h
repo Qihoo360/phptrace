@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef PHPTRACE_LOG_H
-#define PHPTRACE_LOG_H
+#ifndef TRACE_LOG_H
+#define TRACE_LOG_H
 
 #define MAX_LOGMSG_LEN 1024
 

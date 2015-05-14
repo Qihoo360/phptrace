@@ -79,11 +79,11 @@ typedef struct address_info_s {
     long opline_ln_offset;
 } address_info_t;
 
-typedef struct phptrace_context_s phptrace_context_t;
+typedef struct pt_context_s pt_context_t;
 
-typedef sds (*phptrace_record_transform_t)(phptrace_context_t *ctx, pt_comm_message_t *msg, pt_frame_t *f);
+typedef sds (*pt_record_transform_t)(pt_context_t *ctx, pt_comm_message_t *msg, pt_frame_t *f);
 
-struct phptrace_context_s {
+struct pt_context_s {
     int32_t php_pid;                                    /* pid of the -p option, default -1 */
     uint64_t start_time;                                /* start time of cmdtool */
 
@@ -116,11 +116,11 @@ struct phptrace_context_s {
 
     pt_ctrl_t ctrl;
 
-    phptrace_record_transform_t record_transform;     /* transform,  a function point32_ter */
+    pt_record_transform_t record_transform;     /* transform,  a function point32_ter */
 
     /* stack only */
     int32_t php_version;
-    int32_t stack_deep;
+    int32_t status_deep;
     int32_t retry;
     address_info_t addr_info;
 };

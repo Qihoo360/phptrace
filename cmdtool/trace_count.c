@@ -26,7 +26,7 @@ const count_dimension_t count_dimension[] = {
     { NULL, "nothing" }
 };
 
-void count_record(phptrace_context_t *ctx, pt_frame_t *f)
+void count_record(pt_context_t *ctx, pt_frame_t *f)
 {
     uint64_t td;
     record_count_t *find_rc;
@@ -101,7 +101,7 @@ int avgmem_cmp(record_count_t *p, record_count_t *q)
     return (q->memory_usage / q->calls - p->memory_usage / p->calls);
 }
 
-int set_sortby(phptrace_context_t *ctx, char *sortby)
+int set_sortby(pt_context_t *ctx, char *sortby)
 {
     int i;
 
@@ -113,7 +113,7 @@ int set_sortby(phptrace_context_t *ctx, char *sortby)
     }
     return 0;
 }
-int64_t get_sortby_value(phptrace_context_t *ctx, record_count_t *rc)
+int64_t get_sortby_value(pt_context_t *ctx, record_count_t *rc)
 {
     switch (ctx->sortby_idx) {
         case 0: return rc->cost_time;
@@ -126,7 +126,7 @@ int64_t get_sortby_value(phptrace_context_t *ctx, record_count_t *rc)
     }
 }
 
-void count_summary(phptrace_context_t *ctx)
+void count_summary(pt_context_t *ctx)
 {
     const char *dashes = "----------------";
     uint32_t size;

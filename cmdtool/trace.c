@@ -49,7 +49,7 @@ static void interrupt(int sig)
     log_printf(LL_DEBUG, "catch SIGINT signal interrupted=%d", interrupted);
 }
 
-static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
+static void parse_args(pt_context_t *ctx, int argc, char *argv[])
 {
     int c;
     int len;
@@ -251,9 +251,9 @@ static void parse_args(phptrace_context_t *ctx, int argc, char *argv[])
 int main(int argc, char *argv[])
 {
     char buf[MAX_TEMP_LENGTH];
-    phptrace_context_t context;
+    pt_context_t context;
 
-    phptrace_context_init(&context);
+    pt_context_init(&context);
 
     parse_args(&context, argc, argv);
 

@@ -65,7 +65,7 @@ unsigned int string2uint(const char *str)
     return (unsigned int)value;
 }
 
-void trace_cleanup(phptrace_context_t *ctx)
+void trace_cleanup(pt_context_t *ctx)
 {
     log_printf (LL_DEBUG, " [trace_cleanup]");
 
@@ -99,7 +99,7 @@ void trace_cleanup(phptrace_context_t *ctx)
     }
 }
 
-void verror_msg(phptrace_context_t *ctx, int err_code, const char *fmt, va_list p)
+void verror_msg(pt_context_t *ctx, int err_code, const char *fmt, va_list p)
 {
     char msg[1024] = {0};
     int ret;
@@ -115,7 +115,7 @@ void verror_msg(phptrace_context_t *ctx, int err_code, const char *fmt, va_list 
     fprintf(ctx->log, "\n");
 }
 
-void error_msg(phptrace_context_t *ctx, int err_code, const char *fmt, ...)
+void error_msg(pt_context_t *ctx, int err_code, const char *fmt, ...)
 {
     va_list p;
     va_start(p, fmt);
@@ -123,15 +123,15 @@ void error_msg(phptrace_context_t *ctx, int err_code, const char *fmt, ...)
     va_end(p);
 }
 
-void die(phptrace_context_t *ctx, int exit_code)
+void die(pt_context_t *ctx, int exit_code)
 {
     trace_cleanup(ctx);
     exit(exit_code);
 }
 
-void phptrace_context_init(phptrace_context_t *ctx)
+void pt_context_init(pt_context_t *ctx)
 {
-    memset(ctx, 0, sizeof(phptrace_context_t));
+    memset(ctx, 0, sizeof(pt_context_t));
 
     ctx->php_pid = -1;
     ctx->start_time = pt_time_usec();
@@ -150,7 +150,7 @@ void phptrace_context_init(phptrace_context_t *ctx)
     log_level_set(LL_ERROR + 1);
 }
 
-void trace_start(phptrace_context_t *ctx)
+void trace_start(pt_context_t *ctx)
 {
     uint8_t flag = 1;
     struct stat st;
@@ -174,13 +174,13 @@ void trace_start(phptrace_context_t *ctx)
             die(ctx, -1);
         }
     }
-    /*force to reopen when start a new trace*/
+
     pt_ctrl_set_active(&(ctx->ctrl), ctx->php_pid);
     ctx->trace_flag = flag;
     log_printf (LL_DEBUG, "[trace_start] set ctrl data ok: ctrl[pid=%d]=%u is opened!", ctx->php_pid, flag);
 }
 
-void process_opt_e(phptrace_context_t *ctx)
+void process_opt_e(pt_context_t *ctx)
 {
     if (pt_ctrl_open(&(ctx->ctrl), PHPTRACE_LOG_DIR "/" PT_CTRL_FILENAME) < 0) {
         error_msg(ctx, ERR_CTRL, "cannot open control mmap file %s (%s)",
@@ -200,8 +200,8 @@ void process_opt_e(phptrace_context_t *ctx)
 
 void usage()
 {
-    printf ("usage: phptrace [-chlsnvvvvw]  [-p pid] [--cleanup]\n\
-   or: phptrace [-chlnvvvvw]  [-r infile]\n\
+    printf ("usage: pt [-chlsnvvvvw]  [-p pid] [--cleanup]\n\
+   or: pt [-chlnvvvvw]  [-r infile]\n\
     -h                   -- show this help\n\
     --cleanup            -- cleanup the trace switches of pid, or all the switches if no pid parameter\n\
     -p pid               -- access the php process pid\n\
@@ -216,8 +216,8 @@ void usage()
     -n function-count    -- specify the total function number to trace or count, there is no limit by default\n\
     -l size              -- specify the max string length to print\n\
     -v                   -- print verbose information\n\
-    -w outfile           -- write the trace data to file in phptrace format\n\
-    -r infile            -- read the trace file of phptrace format, instead of the process\n\
+    -w outfile           -- write the trace data to file in pt format\n\
+    -r infile            -- read the trace file of pt format, instead of the process\n\
     -o outfile           -- write the trace data to file in specified format\n\
     --format format      -- specify the format when -o option is set. Legal values is json for now\n");
 }
@@ -257,9 +257,8 @@ sds sdscatrepr_noquto(sds s, const char *p, size_t len)
     return s;
 }
 
-sds phptrace_repr_function(sds buf, pt_frame_t *f)
+sds pt_repr_function(sds buf, pt_frame_t *f)
 {
-    /*
     if ((f->functype & PT_FUNC_TYPES) == PT_FUNC_NORMAL ||
             f->functype & PT_FUNC_TYPES & PT_FUNC_INCLUDES) {
         buf = sdscatprintf (buf, "%s", f->function);
@@ -272,23 +271,10 @@ sds phptrace_repr_function(sds buf, pt_frame_t *f)
     } else {
         buf = sdscatprintf (buf, "unknown");
     }
-    */
-
-    if ((f->functype & PT_FUNC_TYPES) == PT_FUNC_NORMAL) {
-        buf = sdscatprintf (buf, "%s", f->function);
-    } else if ((f->functype & PT_FUNC_TYPES) == PT_FUNC_MEMBER) {
-        buf = sdscatprintf (buf, "%s->%s", f->class, f->function);
-    } else if ((f->functype & PT_FUNC_TYPES) == PT_FUNC_STATIC) {
-        buf = sdscatprintf (buf, "%s::%s", f->class, f->function);
-    } else if (f->functype & PT_FUNC_TYPES & PT_FUNC_INCLUDES) {
-        buf = sdscatprintf (buf, "%s", f->function);
-    } else {
-        buf = sdscatprintf (buf, "unknown");
-    }
     return buf;
 }
 
-sds standard_transform(phptrace_context_t *ctx, pt_comm_message_t *msg, pt_frame_t *f)
+sds standard_transform(pt_context_t *ctx, pt_comm_message_t *msg, pt_frame_t *f)
 {
     int i;
     sds buf = sdsempty();
@@ -296,7 +282,7 @@ sds standard_transform(phptrace_context_t *ctx, pt_comm_message_t *msg, pt_frame
     if (f->type == PT_FRAME_ENTRY) {
         buf = sdscatprintf (buf, "%lld.%06d", (long long)(f->entry.wall_time / 1000000), (int)(f->entry.wall_time % 1000000));   
         buf = print_indent_str (buf, "  ", f->level + 1);
-        buf = phptrace_repr_function(buf, f);
+        buf = pt_repr_function(buf, f);
 
         if ((f->functype & PT_FUNC_TYPES & PT_FUNC_INCLUDES) == 0) {
             buf = sdscatprintf (buf, "(");
@@ -318,7 +304,7 @@ sds standard_transform(phptrace_context_t *ctx, pt_comm_message_t *msg, pt_frame
     } else if (f->type == PT_FRAME_EXIT) {
         buf = sdscatprintf (buf, "%lld.%06d", (long long)(f->exit.wall_time / 1000000), (int)(f->exit.wall_time % 1000000));   
         buf = print_indent_str (buf, "  ", f->level + 1);
-        buf = phptrace_repr_function(buf, f);
+        buf = pt_repr_function(buf, f);
         buf = sdscatprintf (buf, "  =>  ");
         if (f->retval) {
             buf = sdscatprintf (buf, "%s", f->retval);
@@ -333,7 +319,7 @@ sds standard_transform(phptrace_context_t *ctx, pt_comm_message_t *msg, pt_frame
     return buf;
 }
 
-sds dump_transform(phptrace_context_t *ctx, pt_comm_message_t *msg, pt_frame_t *f)
+sds dump_transform(pt_context_t *ctx, pt_comm_message_t *msg, pt_frame_t *f)
 {
     sds buf;
     size_t raw_size;
@@ -345,14 +331,14 @@ sds dump_transform(phptrace_context_t *ctx, pt_comm_message_t *msg, pt_frame_t *
     return buf;
 }
 
-sds json_transform(phptrace_context_t *ctx, pt_comm_message_t *msg, pt_frame_t *f)
+sds json_transform(pt_context_t *ctx, pt_comm_message_t *msg, pt_frame_t *f)
 {
     int i;
     sds buf = sdsempty();
 
     buf = sdscatprintf (buf, "{\"seq\":%u, \"type\":%u, \"level\":%u, \"func\":\"",
             msg->seq, f->type, f->level);
-    buf = phptrace_repr_function(buf, f);
+    buf = pt_repr_function(buf, f);
 
     if (f->type == PT_FRAME_ENTRY) {
         buf = sdscatprintf (buf, "\", \"st\":%"PRIu64", ", f->entry.wall_time);
@@ -389,7 +375,6 @@ sds json_transform(phptrace_context_t *ctx, pt_comm_message_t *msg, pt_frame_t *
         sdsfree((var));         \
         (var) = NULL;           \
     }
-
 void frame_free_sds(pt_frame_t *f)
 {
     int i;
@@ -406,7 +391,7 @@ void frame_free_sds(pt_frame_t *f)
     }
 }
 
-void trace(phptrace_context_t *ctx)
+void trace(pt_context_t *ctx)
 {
     uint64_t seq = 0;
     uint64_t magic_number;
@@ -440,7 +425,7 @@ void trace(phptrace_context_t *ctx)
             die(ctx, -1);
         } else {                                                        /* file not exist, should wait */
             log_printf(LL_DEBUG, "trace mmap file not exist, will sleep %d ms.\n", opendata_wait_interval);
-            phptrace_msleep(opendata_wait_interval);
+            pt_msleep(opendata_wait_interval);
             opendata_wait_interval = grow_interval(opendata_wait_interval, MAX_OPEN_DATA_WAIT_INTERVAL);
         }
     }
@@ -472,7 +457,7 @@ void trace(phptrace_context_t *ctx)
             }
 
             log_printf (LL_DEBUG, "  wait_type will wait %d ms.\n", data_wait_interval);
-            phptrace_msleep(data_wait_interval);
+            pt_msleep(data_wait_interval);
             data_wait_interval = grow_interval(data_wait_interval, MAX_DATA_WAIT_INTERVAL);
             continue; 
         }
