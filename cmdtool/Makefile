@@ -1,4 +1,3 @@
-
 LIBS    = -lpthread
 CFLAGS	= -g -Wall -O0 -fno-strict-aliasing
 CC      = gcc
