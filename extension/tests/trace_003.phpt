@@ -1,7 +1,7 @@
 --TEST--
 Trace Class and Object
 --INI--
-trace.dotrace=on
+trace.dotrace=1
 --FILE--
 <?php
 class TestParent {

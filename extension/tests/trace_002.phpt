@@ -1,7 +1,7 @@
 --TEST--
 Trace include, require, lambda, eval
 --INI--
-trace.dotrace=on
+trace.dotrace=1
 --FILE--
 <?php
 function call_normal($arg = null) {}

@@ -1,7 +1,7 @@
 --TEST--
 Trace various handlers
 --INI--
-trace.dotrace=on
+trace.dotrace=1
 --FILE--
 <?php
 // Tick
