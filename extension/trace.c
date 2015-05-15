@@ -747,7 +747,7 @@ static int pt_status_send(pt_status_t *status TSRMLS_DC)
 static sds pt_repr_zval(zval *zv, int limit TSRMLS_DC)
 {
     int tlen = 0;
-    char buf[128], *tstr = NULL;
+    char buf[256], *tstr = NULL;
     sds result;
 
     /* php_var_export_ex is a good example */
@@ -761,10 +761,10 @@ static sds pt_repr_zval(zval *zv, int limit TSRMLS_DC)
         case IS_NULL:
             return sdsnew("NULL");
         case IS_LONG:
-            sprintf(buf, "%ld", Z_LVAL_P(zv));
+            snprintf(buf, sizeof(buf), "%ld", Z_LVAL_P(zv));
             return sdsnew(buf);
         case IS_DOUBLE:
-            sprintf(buf, "%.*G", EG(precision), Z_DVAL_P(zv));
+            snprintf(buf, sizeof(buf), "%.*G", (int) EG(precision), Z_DVAL_P(zv));
             return sdsnew(buf);
         case IS_STRING:
             tlen = (limit <= 0 || Z_STRLEN_P(zv) < limit) ? Z_STRLEN_P(zv) : limit;
@@ -890,10 +890,10 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zen
     }
 
 exec:
-    /* Assigning to a LOCAL VARIABLE at begining is to prevent value changed
+    /* Assigning to a LOCAL VARIABLE at begining to prevent value changed
      * during executing. And whether send frame mesage back is controlled by
-     * GLOBAL VALUE because comm-module may be closed in recursion and sending
-     * in exit point will be affected. */
+     * GLOBAL VALUE and LOCAL VALUE both because comm-module may be closed in
+     * recursion and sending on exit point will be affected. */
     dotrace = PTG(dotrace);
 
     PTG(level)++;
@@ -909,10 +909,10 @@ exec:
         PROFILING_SET(frame.entry);
 
         /* Send frame message */
-        if (PTG(dotrace) & TRACE_TO_TOOL) {
+        if (dotrace & TRACE_TO_TOOL) {
             pt_frame_send(&frame TSRMLS_CC);
         }
-        if (PTG(dotrace) & TRACE_TO_OUTPUT) {
+        if (dotrace & TRACE_TO_OUTPUT) {
             pt_frame_display(&frame TSRMLS_CC, 1, "> ");
         }
     }
@@ -957,10 +957,10 @@ exec:
         frame.type = PT_FRAME_EXIT;
 
         /* Send frame message */
-        if (PTG(dotrace) & TRACE_TO_TOOL) {
+        if (PTG(dotrace) & TRACE_TO_TOOL & dotrace) {
             pt_frame_send(&frame TSRMLS_CC);
         }
-        if (PTG(dotrace) & TRACE_TO_OUTPUT) {
+        if (PTG(dotrace) & TRACE_TO_OUTPUT & dotrace) {
             pt_frame_display(&frame TSRMLS_CC, 1, "< ");
         }
 
