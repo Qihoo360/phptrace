@@ -5,20 +5,20 @@ Version 0.3.0-beta (2015-05-14)
 
 - Added support for special function calls: `main`, `include`, `require`, `Closure`, `Labmda`, `eval()`
 - Added support for PHP 5.1
-- Keep collect and send back trace info after PHP bailout
+- Keep collecting and sending back trace information after PHP bailout
 - Added duplexing to communication module
 - Compatible with Trait Alias
 - Added checking for ZTS (Thread-safety support) during configuration
 
 ### Changed
 
-- Refactor PHP extension
+- Refactor the PHP extension
 - Unified the naming convention of Type, Function, Macro
-- License changed to Apache 2.0
-- Extension's name changed to "trace" (php is redundant for a PHP extension)
+- Change License to Apache 2.0
+- Change Extension's name to "trace" (php is redundant for a PHP extension)
 - Improve representation of `zval` and support for Array, Object
 - Improve performance when trace if off
-- Limit length of print arguments and retvalue
+- Limit the length of print arguments and retvalue
 
 ### Fixed
 
