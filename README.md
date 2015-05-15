@@ -14,7 +14,9 @@ environments, especially in production environments.
 
 Features:
 * low-overhead, when extension loaded and trace is off
-* stable, running on [Qihoo 360](http://360.cn) and tested on main-stream frameworks
+* stable, running on [Qihoo 360](http://www.360safe.com/) and tested on main-stream frameworks
+
+Download the latest version: https://pecl.php.net/package/trace
 
 
 Building
@@ -36,6 +38,7 @@ Building
     ```
 
 3. PHP extension - Add extension load directive
+
     Edit `php.ini`, add the following line. A reload is needed if PHP running
     by php-fpm.
 
@@ -55,7 +58,7 @@ Building
     ./phptrace -p $!
     ```
 
-    You should see these if everything fine
+    You should see something below if everything fine
 
     ```
     1431681727.341829      usleep  =>  NULL   wt: 0.011979 ct: 0.011980

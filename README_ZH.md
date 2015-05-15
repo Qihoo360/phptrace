@@ -14,6 +14,8 @@ phptrace是一个低开销的用于跟踪、分析PHP运行情况的工具。
 
 [介绍及使用Wiki](https://github.com/Qihoo360/phptrace/wiki)
 
+最新版本下载： https://pecl.php.net/package/trace
+
 
 编译安装
 ------------------------------
@@ -36,6 +38,7 @@ phptrace是一个低开销的用于跟踪、分析PHP运行情况的工具。
     ```
 
 3. PHP扩展 - 配置
+
     编辑配置文件`php.ini`，增加下面配置信息。如果需要的话重启PHP进程。
 
     ```
