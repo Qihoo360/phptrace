@@ -25,7 +25,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#define PHPTRACE_NAME               "pt"
+#define PHPTRACE_NAME               "phptrace"
 #define PHPTRACE_VERSION            "0.3.0-beta"
 #define PHPTRACE_DEVELOPER          "360 Infra Webcore Team"
 
