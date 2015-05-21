@@ -547,7 +547,7 @@ static int pt_frame_send(pt_frame_t *frame TSRMLS_DC)
         return -1;
     }
     pt_type_pack_frame(frame, msg->data);
-    pt_comm_swrite_end(&PTG(comm), PT_MSG_RET, msg); /* FIXME correct type */
+    pt_comm_swrite_end(&PTG(comm), PT_MSG_RET, msg);
 
     return 0;
 }
@@ -734,7 +734,7 @@ static int pt_status_send(pt_status_t *status TSRMLS_DC)
         return -1;
     }
     pt_type_pack_status(status, msg->data);
-    pt_comm_swrite_end(&PTG(comm), PT_MSG_RET, msg); /* FIXME correct type */
+    pt_comm_swrite_end(&PTG(comm), PT_MSG_RET, msg);
 
     return 0;
 }
