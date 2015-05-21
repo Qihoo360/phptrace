@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 CLEAR_FLAG=0
 STACK_FLAG=0
