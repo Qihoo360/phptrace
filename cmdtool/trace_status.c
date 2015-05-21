@@ -281,7 +281,7 @@ int status_dump(pt_context_t *ctx, int timeout /*milliseconds*/)
             continue;
         }
 
-        if ((msg = pt_comm_sread(&sock)) == NULL) {
+        if (pt_comm_sread(&sock, &msg, 1) == PT_MSG_INVALID) {
             error_msg(ctx, ERR_TRACE, "read record failed, maybe write too fast");
             break;
         }

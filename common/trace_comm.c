@@ -217,7 +217,7 @@ pt_comm_message_t *pt_comm_write_message(uint32_t seq, uint32_t type, uint32_t l
     return msg;
 }
 
-pt_comm_message_t *pt_comm_read(pt_comm_handler_t *handler, int movenext)
+unsigned int pt_comm_read(pt_comm_handler_t *handler, pt_comm_message_t **msg_ptr, int movenext)
 {
     pt_comm_message_t *msg = (pt_comm_message_t *) handler->current;
 
@@ -227,26 +227,27 @@ pt_comm_message_t *pt_comm_read(pt_comm_handler_t *handler, int movenext)
         handler->sequence = 0;
         pt_comm_next(handler);
 
-        return pt_comm_read(handler, movenext);
+        return pt_comm_read(handler, msg_ptr, movenext);
     } else if (msg->type == PT_MSG_ROTATE) {
         /* Rotate */
         handler->current = handler->head;
         msg = (pt_comm_message_t *) handler->current;
     }
 
-    /* FIXME Invalid type */
+    /* Invalid types */
     if (msg->type == PT_MSG_EMPTY) {
         /* Empty */
-        return NULL;
+        return PT_MSG_EMPTY;
     } else if (msg->seq != handler->sequence) {
         /* Sequence error */
-        return NULL;
+        return PT_MSG_INVALID;
     }
 
     if (movenext) {
         pt_comm_next(handler);
     }
 
-    return msg;
+    /* normal */
+    *msg_ptr = msg;
+    return msg->type;
 }
-

@@ -841,7 +841,7 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zen
     if (CTRL_IS_ACTIVE()) {
         /* Open comm socket */
         if (!PTG(comm).active) {
-            PTD("Comm socket %s create", PTG(comm_file));
+            PTD("Comm socket %s create, send: %ld recv: %ld", PTG(comm_file), PTG(send_size), PTG(recv_size));
             if (pt_comm_screate(&PTG(comm), PTG(comm_file), 0, PTG(send_size), PTG(recv_size)) == -1) {
                 php_error(E_WARNING, "Trace comm-module %s open failed", PTG(comm_file));
                 pt_set_inactive(TSRMLS_C);
@@ -852,24 +852,27 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zen
 
         /* Handle message */
         while (1) {
-            msg = pt_comm_sread(&PTG(comm));
-
-            if (msg == NULL) {
-                if (PING_TIMEOUT()) {
-                    PTD("Ping timeout");
+            switch (pt_comm_sread(&PTG(comm), &msg, 1)) {
+                case PT_MSG_INVALID:
+                    PTD("msg type: invalid");
                     pt_set_inactive(TSRMLS_C);
-                }
-                break;
-            }
+                    goto exec;
 
-            switch (msg->type) {
+                case PT_MSG_EMPTY:
+                    PTD("msg type: empty");
+                    if (PING_TIMEOUT()) {
+                        PTD("Ping timeout");
+                        pt_set_inactive(TSRMLS_C);
+                    }
+                    goto exec;
+
                 case PT_MSG_DO_TRACE:
-                    PTD("msg handle: do trace");
+                    PTD("msg type: do_trace");
                     PTG(dotrace) |= TRACE_TO_TOOL;
                     break;
 
                 case PT_MSG_DO_STATUS:
-                    PTD("msg handle: do status");
+                    PTD("msg type: do_status");
                     pt_status_t status;
                     pt_status_build(&status, internal, ex_entry TSRMLS_CC);
                     pt_status_send(&status TSRMLS_CC);
@@ -877,6 +880,7 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zen
                     break;
 
                 case PT_MSG_DO_PING:
+                    PTD("msg type: do_ping");
                     PING_UPDATE();
                     break;
 

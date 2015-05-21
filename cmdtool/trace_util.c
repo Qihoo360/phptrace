@@ -465,7 +465,7 @@ void trace(pt_context_t *ctx)
 
         data_wait_interval = DATA_WAIT_INTERVAL;            /* reset the data wait interval */
 
-        if ((msg = pt_comm_sread(p_sock)) == NULL) {
+        if (pt_comm_sread(p_sock, &msg, 1) == PT_MSG_INVALID) {
             if (!ctx->in_filename) {
                 error_msg(ctx, ERR_TRACE, "read record failed, maybe write too fast");
             }

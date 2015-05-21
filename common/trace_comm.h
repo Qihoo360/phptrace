@@ -30,6 +30,7 @@
 #define PT_MSG_EMPTY                    0x00000000
 #define PT_MSG_ROTATE                   0x00000001
 #define PT_MSG_RESEQ                    0x00000002
+#define PT_MSG_INVALID                  0x00000003
 #define PT_MSG_NORMAL                   0x10000000
 
 /* Type codes of user defined message
@@ -72,15 +73,13 @@ typedef struct {
 #define pt_comm_swrite_begin(s, size)       pt_comm_write_begin(&(s)->send_handler, size)
 #define pt_comm_swrite_end(s, type, msg)    pt_comm_write_end(&(s)->send_handler, type, msg)
 #define pt_comm_swrite(s, type, buf, size)  pt_comm_write(&(s)->send_handler, type, buf, size)
-#define pt_comm_sread(s)                    pt_comm_read(&(s)->recv_handler, 1)
+#define pt_comm_sread(s, msgp, next)        pt_comm_read(&(s)->recv_handler, msgp, next)
+#define pt_comm_sread_type(s)               (((pt_comm_message_t *) ((s)->recv_handler.current))->type)
 
 #define pt_comm_offset(handler, msg) \
     (size_t) ((void *) msg - (handler)->head)
 #define pt_comm_freesize(handler) \
     (size_t) ((handler)->size - ((handler)->current - (handler)->head)) - (size_t) sizeof(pt_comm_message_t)
-
-#define pt_comm_sread_type(p_socket) \
-    (((pt_comm_message_t *) ((p_socket)->recv_handler.current))->type)
 
 int pt_comm_screate(pt_comm_socket_t *sock, const char *filename, int crossover, size_t send_size, size_t recv_size);
 int pt_comm_sopen(pt_comm_socket_t *sock, const char *filename, int crossover);
@@ -92,7 +91,7 @@ pt_comm_message_t *pt_comm_next(pt_comm_handler_t *handler);
 pt_comm_message_t *pt_comm_write_begin(pt_comm_handler_t *handler, size_t size);
 void pt_comm_write_end(pt_comm_handler_t *handler, unsigned int type, pt_comm_message_t *msg);
 pt_comm_message_t *pt_comm_write(pt_comm_handler_t *handler, unsigned int type, void *buf, size_t size);
-pt_comm_message_t *pt_comm_read(pt_comm_handler_t *handler, int movenext);
+unsigned int pt_comm_read(pt_comm_handler_t *handler, pt_comm_message_t **msg_ptr, int movenext);
 
 pt_comm_message_t *pt_comm_write_message(uint32_t seq, uint32_t type, uint32_t len, pt_frame_t *f, void *buf);
 
