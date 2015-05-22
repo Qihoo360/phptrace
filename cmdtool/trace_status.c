@@ -312,7 +312,7 @@ void process_opt_s(pt_context_t *ctx)
 
     /*dump stauts from the extension*/
     if (!ctx->addr_info.sapi_globals_addr && check_phpext_installed(ctx)) {
-        log_printf(LL_DEBUG, "pt extension has been installed, use extension\n");
+        log_printf(LL_DEBUG, "phptrace extension has been installed, use extension\n");
         if (pt_ctrl_open(&(ctx->ctrl), PHPTRACE_LOG_DIR "/" PT_CTRL_FILENAME) < 0) {
             error_msg(ctx, ERR_CTRL, "cannot open control mmap file %s (%s)",
                     PHPTRACE_LOG_DIR "/" PT_CTRL_FILENAME, (errno ? strerror(errno) : "null"));
@@ -334,7 +334,7 @@ void process_opt_s(pt_context_t *ctx)
     }
 
     /*dump status without extension if above failed*/
-    log_printf(LL_DEBUG, "pt extension was not been installed, use ptrace\n");
+    log_printf(LL_DEBUG, "phptrace extension was not been installed, use ptrace\n");
     if (sys_trace_attach(ctx->php_pid)) {
         log_printf(LL_NOTICE, "sys_trace_attach failed");
         error_msg(ctx, ERR_STACK, "sys_trace_attach failed (%s)", (errno ? strerror(errno) : "null"));

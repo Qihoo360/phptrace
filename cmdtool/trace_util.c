@@ -200,8 +200,8 @@ void process_opt_e(pt_context_t *ctx)
 
 void usage()
 {
-    printf ("usage: pt [-chlsnvvvvw]  [-p pid] [--cleanup]\n\
-   or: pt [-chlnvvvvw]  [-r infile]\n\
+    printf ("usage: phptrace [-chlsnvvvvw]  [-p pid] [--cleanup]\n\
+   or: phptrace [-chlnvvvvw]  [-r infile]\n\
     -h                   -- show this help\n\
     --cleanup            -- cleanup the trace switches of pid, or all the switches if no pid parameter\n\
     -p pid               -- access the php process pid\n\
@@ -216,8 +216,8 @@ void usage()
     -n function-count    -- specify the total function number to trace or count, there is no limit by default\n\
     -l size              -- specify the max string length to print\n\
     -v                   -- print verbose information\n\
-    -w outfile           -- write the trace data to file in pt format\n\
-    -r infile            -- read the trace file of pt format, instead of the process\n\
+    -w outfile           -- write the trace data to file in trace format\n\
+    -r infile            -- read the trace file of trace format, instead of the process\n\
     -o outfile           -- write the trace data to file in specified format\n\
     --format format      -- specify the format when -o option is set. Legal values is json for now\n");
 }
