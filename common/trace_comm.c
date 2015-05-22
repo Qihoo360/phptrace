@@ -21,7 +21,7 @@
 #include <unistd.h>
 #include "trace_comm.h"
 
-int pt_comm_screate(pt_comm_socket_t *sock, const char *filename, int crossover, size_t send_size, size_t recv_size)
+int pt_comm_screate(pt_comm_socket_t *sock, const char *filename, int crossover, size_t s2c_size, size_t c2s_size)
 {
     void *p;
     pt_comm_socket_meta_t *meta;
@@ -29,24 +29,28 @@ int pt_comm_screate(pt_comm_socket_t *sock, const char *filename, int crossover,
     sock->filename = (char *) filename;
     /* TODO use zero fill this file before mmap, make sure another process has
      * a clear space after mmap immediately. */
-    if (pt_mmap_create(&sock->seg, sock->filename, sizeof(pt_comm_socket_meta_t) + send_size + recv_size) < 0) {
+    if (pt_mmap_create(&sock->seg, sock->filename, sizeof(pt_comm_socket_meta_t) + s2c_size + c2s_size) < 0) {
         return -1;
     }
 
     /* Init meta info */
     meta = (pt_comm_socket_meta_t *) sock->seg.addr;
     meta->magic = 0;
-    meta->send_size = send_size;
-    meta->recv_size = recv_size;
+    meta->s2c_size = s2c_size;
+    meta->c2s_size = c2s_size;
     p = sock->seg.addr + sizeof(pt_comm_socket_meta_t);
 
     /* Attach handler */
     if (crossover) {
-        pt_comm_init(&sock->recv_handler, p, meta->send_size);
-        pt_comm_init(&sock->send_handler, p + meta->send_size, meta->recv_size);
+        /* recv: server -> client
+         * send: server <- client */
+        pt_comm_init(&sock->recv_handler, p, meta->s2c_size);
+        pt_comm_init(&sock->send_handler, p + meta->s2c_size, meta->c2s_size);
     } else {
-        pt_comm_init(&sock->send_handler, p, meta->send_size);
-        pt_comm_init(&sock->recv_handler, p + meta->send_size, meta->recv_size);
+        /* send: server -> client
+         * recv: server <- client */
+        pt_comm_init(&sock->send_handler, p, meta->s2c_size);
+        pt_comm_init(&sock->recv_handler, p + meta->s2c_size, meta->c2s_size);
     }
     pt_comm_clear(&sock->send_handler);
     pt_comm_clear(&sock->recv_handler);
@@ -77,11 +81,15 @@ int pt_comm_sopen(pt_comm_socket_t *sock, const char *filename, int crossover)
 
     /* Attach handler */
     if (crossover) {
-        pt_comm_init(&sock->recv_handler, p, meta->send_size);
-        pt_comm_init(&sock->send_handler, p + meta->send_size, meta->recv_size);
+        /* recv: server -> client
+         * send: server <- client */
+        pt_comm_init(&sock->recv_handler, p, meta->s2c_size);
+        pt_comm_init(&sock->send_handler, p + meta->s2c_size, meta->c2s_size);
     } else {
-        pt_comm_init(&sock->send_handler, p, meta->send_size);
-        pt_comm_init(&sock->recv_handler, p + meta->send_size, meta->recv_size);
+        /* send: server -> client
+         * recv: server <- client */
+        pt_comm_init(&sock->send_handler, p, meta->s2c_size);
+        pt_comm_init(&sock->recv_handler, p + meta->s2c_size, meta->c2s_size);
     }
 
     sock->active = 1;

@@ -25,8 +25,8 @@
 
 #define PT_COMM_FILENAME                "phptrace.comm"
 #define PT_COMM_SEQMAX                  1000
-#define PT_COMM_T2E_SIZE                1048576 * 4  /* buffer size for tool -> extension */
-#define PT_COMM_E2T_SIZE                1048576 * 64 /* buffer size for extension -> tool */
+#define PT_COMM_T2E_SIZE                1048576 * 4  /* tool -> extension buffer size */
+#define PT_COMM_E2T_SIZE                1048576 * 64 /* tool <- extension buffer size */
 
 /* Type codes of inner message */
 #define PT_MSG_EMPTY                    0x00000000
@@ -67,8 +67,8 @@ typedef struct {
 
 typedef struct {
     uint64_t magic;
-    size_t send_size;           /* send handler size */
-    size_t recv_size;           /* recv handler size */
+    size_t s2c_size;            /* server -> client handler size */
+    size_t c2s_size;            /* server <- client handler size */
 } pt_comm_socket_meta_t;
 
 /* Some socket like functions */
@@ -83,7 +83,7 @@ typedef struct {
 #define pt_comm_freesize(handler) \
     (size_t) ((handler)->size - ((handler)->current - (handler)->head)) - (size_t) sizeof(pt_comm_message_t)
 
-int pt_comm_screate(pt_comm_socket_t *sock, const char *filename, int crossover, size_t send_size, size_t recv_size);
+int pt_comm_screate(pt_comm_socket_t *sock, const char *filename, int crossover, size_t s2c_size, size_t c2s_size);
 int pt_comm_sopen(pt_comm_socket_t *sock, const char *filename, int crossover);
 void pt_comm_sclose(pt_comm_socket_t *sock, int delfile);
 void pt_comm_init(pt_comm_handler_t *handler, void *head, size_t size);
