@@ -74,6 +74,14 @@ void trace_cleanup(pt_context_t *ctx)
         log_printf (LL_DEBUG, " clean ctrl pid=%d~~~~~\n", ctx->php_pid);
     }
 
+    if (ctx->sock.active) {
+        if (ctx->in_filename) {
+            pt_comm_sclose(&ctx->sock, 0);
+        } else {
+            pt_comm_sclose(&ctx->sock, 1);
+        }
+    }
+
     if (ctx->exclusive_flag) {
         if (ctx->sub_cost_time) {
             free(ctx->sub_cost_time);
@@ -146,6 +154,8 @@ void pt_context_init(pt_context_t *ctx)
 
     ctx->max_print_len = MAX_PRINT_LENGTH;
 
+    ctx->sock.active = 0; /* init comm socket */
+
     ctx->record_transform = standard_transform;
     log_level_set(LL_ERROR + 1);
 }
@@ -175,7 +185,15 @@ void trace_start(pt_context_t *ctx)
         }
     }
 
+    /* create comm socket before set active */
+    if (pt_comm_screate(&ctx->sock, ctx->mmap_filename, 1, PT_COMM_E2T_SIZE, PT_COMM_T2E_SIZE) < 0) {
+        die(ctx, -1);
+    }
+
+    /* write DO_TRACE op then set active */
+    pt_comm_swrite(&ctx->sock, PT_MSG_DO_TRACE, NULL, 0);
     pt_ctrl_set_active(&(ctx->ctrl), ctx->php_pid);
+
     ctx->trace_flag = flag;
     log_printf (LL_DEBUG, "[trace_start] set ctrl data ok: ctrl[pid=%d]=%u is opened!", ctx->php_pid, flag);
 }
@@ -400,7 +418,6 @@ void trace(pt_context_t *ctx)
 
     sds buf;
     uint32_t type;
-    int opendata_wait_interval = OPEN_DATA_WAIT_INTERVAL;
     int data_wait_interval = DATA_WAIT_INTERVAL;
 
     /* new protocol API */
@@ -408,7 +425,13 @@ void trace(pt_context_t *ctx)
     pt_frame_t frame;
     pt_comm_socket_t *p_sock = &(ctx->sock);
 
-    memset(p_sock, 0, sizeof(pt_comm_socket_t));
+    /* open comm socket here if in -r mode */
+    if (ctx->in_filename) {
+        if (pt_comm_sopen(&ctx->sock, ctx->mmap_filename, 1) < 0) {
+            error_msg(ctx, ERR_TRACE, "Can not open %s to read, %s!", ctx->mmap_filename, strerror(errno));
+            die(ctx, -1);
+        }
+    }
 
     /* exclusive time mode */
     if (ctx->exclusive_flag) {
@@ -416,29 +439,7 @@ void trace(pt_context_t *ctx)
         ctx->sub_cpu_time = calloc(ctx->max_level + 2, sizeof(int64_t));
     }
 
-    while (pt_comm_sopen(p_sock, ctx->mmap_filename, 1) < 0) {    /* meta: recv|send  */
-        if (interrupted) {
-            goto trace_end;
-        }
-
-        if (0) {                      /* -r option or open failed (except for non-exist) */
-            error_msg(ctx, ERR_TRACE, "Can not open %s to read, %s!", ctx->mmap_filename, strerror(errno));
-            die(ctx, -1);
-        } else {                                                        /* file not exist, should wait */
-            log_printf(LL_DEBUG, "trace mmap file not exist, will sleep %d ms.\n", opendata_wait_interval);
-            pt_msleep(opendata_wait_interval);
-            opendata_wait_interval = grow_interval(opendata_wait_interval, MAX_OPEN_DATA_WAIT_INTERVAL);
-        }
-    }
-
     ctx->rotate_cnt++;
-    if (!ctx->in_filename) {
-        unlink(ctx->mmap_filename);
-    }
-
-    if (!ctx->in_filename) {                                            /* not -r option */
-        pt_comm_swrite(p_sock, PT_MSG_DO_TRACE, NULL, 0);
-    }
 
     while (1) {
         if (interrupted) {
@@ -503,7 +504,6 @@ void trace(pt_context_t *ctx)
         }
     }
 
-trace_end:
     if (ctx->opt_flag & OPT_FLAG_COUNT) {
         count_summary(ctx);
     }

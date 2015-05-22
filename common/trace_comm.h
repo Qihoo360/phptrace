@@ -25,6 +25,8 @@
 
 #define PT_COMM_FILENAME                "phptrace.comm"
 #define PT_COMM_SEQMAX                  1000
+#define PT_COMM_T2E_SIZE                1048576 * 4  /* buffer size for tool -> extension */
+#define PT_COMM_E2T_SIZE                1048576 * 64 /* buffer size for extension -> tool */
 
 /* Type codes of inner message */
 #define PT_MSG_EMPTY                    0x00000000

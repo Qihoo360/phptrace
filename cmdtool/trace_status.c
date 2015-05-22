@@ -234,43 +234,18 @@ void type_status_free(pt_status_t *st)
 
 int status_dump(pt_context_t *ctx, int timeout /*milliseconds*/)
 {
-    char filename[256];
     uint32_t type;
     sds buf;
-    int opendata_wait_interval = OPEN_DATA_WAIT_INTERVAL;
     int data_wait_interval = DATA_WAIT_INTERVAL;
-
-    sprintf(filename, PHPTRACE_LOG_DIR "/" PT_COMM_FILENAME ".%d", ctx->php_pid);
-    log_printf(LL_DEBUG, "dump status %s", filename);
 
     /* new protocol API */
     pt_comm_message_t *msg;
     pt_status_t st;
-    pt_comm_socket_t sock;
-
-    while (pt_comm_sopen(&sock, filename, 1) < 0) {    /* meta: recv|send  */
-        if (interrupted) {
-            goto status_end;
-        }
-
-        if (timeout < 0 || errno != ENOENT) {                      /* -r option or open failed (except for non-exist) */
-            error_msg(ctx, ERR_TRACE, "Can not open %s to read, %s!", filename, strerror(errno));
-            goto status_end;
-        } else {                                                        /* file not exist, should wait */
-            log_printf(LL_DEBUG, "trace mmap file not exist, will sleep %d ms.\n", opendata_wait_interval);
-            timeout -= opendata_wait_interval;
-            pt_msleep(opendata_wait_interval);
-            opendata_wait_interval = grow_interval(opendata_wait_interval, MAX_OPEN_DATA_WAIT_INTERVAL);
-        }
-    }
-
-    unlink(ctx->mmap_filename);
-    pt_comm_swrite(&sock, PT_MSG_DO_STATUS, NULL, 0);
 
     while (!interrupted && timeout > 0) {
-        pt_comm_swrite(&sock, PT_MSG_DO_PING, NULL, 0);           /* send to do ping */
+        pt_comm_swrite(&ctx->sock, PT_MSG_DO_PING, NULL, 0);           /* send to do ping */
 
-        type = pt_comm_sread_type(&sock);
+        type = pt_comm_sread_type(&ctx->sock);
         log_printf (LL_DEBUG, "msg type=(%u)", type);
 
         if (type == PT_MSG_EMPTY) {                         /* wait flag */
@@ -281,7 +256,7 @@ int status_dump(pt_context_t *ctx, int timeout /*milliseconds*/)
             continue;
         }
 
-        if (pt_comm_sread(&sock, &msg, 1) == PT_MSG_INVALID) {
+        if (pt_comm_sread(&ctx->sock, &msg, 1) == PT_MSG_INVALID) {
             error_msg(ctx, ERR_TRACE, "read record failed, maybe write too fast");
             break;
         }
@@ -297,18 +272,19 @@ int status_dump(pt_context_t *ctx, int timeout /*milliseconds*/)
         type_status_free(&st);
         break;
     }
-    return 0;
 
-status_end:
     if (timeout <= 0) {
         log_printf(LL_DEBUG, "dump status failed: timedout(%d)", timeout);
+        return -1;
+    } else {
+        return 0;
     }
-    return -1;
 }
 
 void process_opt_s(pt_context_t *ctx)
 {
     int ret;
+    char filename[256];
 
     /*dump stauts from the extension*/
     if (!ctx->addr_info.sapi_globals_addr && check_phpext_installed(ctx)) {
@@ -324,12 +300,25 @@ void process_opt_s(pt_context_t *ctx)
             error_msg(ctx, ERR_CTRL, "process %d is being dumped by others, please retry later", ctx->php_pid);
             die(ctx, -1);
         }
+
+        /* create comm socket before set active */
+        sprintf(filename, PHPTRACE_LOG_DIR "/" PT_COMM_FILENAME ".%d", ctx->php_pid);
+        log_printf(LL_DEBUG, "dump status %s", filename);
+        if (pt_comm_screate(&ctx->sock, filename, 1, PT_COMM_E2T_SIZE, PT_COMM_T2E_SIZE) < 0) {
+            die(ctx, -1);
+        }
+
+        /* write DO_STATUS op then set active */
+        pt_comm_swrite(&ctx->sock, PT_MSG_DO_STATUS, NULL, 0);
         pt_ctrl_set_active(&(ctx->ctrl), ctx->php_pid);
+
         if (status_dump(ctx, 3000) == 0){
             die(ctx, 0);
         }
+
         /*clear the flag if dump failed*/
         pt_ctrl_set_inactive(&(ctx->ctrl), ctx->php_pid);
+
         die(ctx, -1);
     }
 

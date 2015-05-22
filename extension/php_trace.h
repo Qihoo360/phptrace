@@ -58,8 +58,6 @@ ZEND_BEGIN_MODULE_GLOBALS(trace)
 
     pt_comm_socket_t        comm;           /* comm module */
     char                    comm_file[256]; /* comm filename */
-    long                    send_size;      /* send handler size */
-    long                    recv_size;      /* recv handler size */
 
     pid_t                   pid;            /* process id */
     uint32_t                level;          /* nesting level */
