@@ -2,6 +2,9 @@
 Trace Trait
 --SKIPIF--
 <?php
+require 'skipif.inc';
+trace_skipif_no_trace_start();
+
 if (version_compare(PHP_VERSION, '5.4', '<')) {
     echo 'skip this test is for version >= 5.4';
 }

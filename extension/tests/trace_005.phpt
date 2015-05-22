@@ -2,6 +2,9 @@
 Trace signal handler
 --SKIPIF--
 <?php
+require 'skipif.inc';
+trace_skipif_no_trace_start();
+
 if (!function_exists('pcntl_signal')) {
     echo "skip this test is for pcntl_signal() only";
 }
