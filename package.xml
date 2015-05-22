@@ -115,6 +115,7 @@ http://pear.php.net/dtd/package-2.0.xsd">
         <file role="src" name="make_test_on.sh"/>
         <file role="src" name="php_trace.h"/>
         <dir name="tests">
+          <file role="test" name="skipif.inc"/>
           <file role="test" name="trace_001.phpt"/>
           <file role="test" name="trace_002.phpt"/>
           <file role="test" name="trace_002_include.inc"/>
