@@ -160,8 +160,6 @@ PHP_INI_BEGIN()
     STD_PHP_INI_ENTRY("trace.enable",    "1",    PHP_INI_SYSTEM, OnUpdateBool, enable, zend_trace_globals, trace_globals)
     STD_PHP_INI_ENTRY("trace.dotrace",   "0",    PHP_INI_SYSTEM, OnUpdateLong, dotrace, zend_trace_globals, trace_globals)
     STD_PHP_INI_ENTRY("trace.data_dir",  "/tmp", PHP_INI_SYSTEM, OnUpdateString, data_dir, zend_trace_globals, trace_globals)
-    STD_PHP_INI_ENTRY("trace.recv_size", "4m",   PHP_INI_SYSTEM, OnUpdateLong, recv_size, zend_trace_globals, trace_globals)
-    STD_PHP_INI_ENTRY("trace.send_size", "64m",  PHP_INI_SYSTEM, OnUpdateLong, send_size, zend_trace_globals, trace_globals)
 PHP_INI_END()
 
 /* php_trace_init_globals */
@@ -175,7 +173,6 @@ static void php_trace_init_globals(zend_trace_globals *ptg)
 
     ptg->comm.active = 0;
     memset(ptg->comm_file, 0, sizeof(ptg->comm_file));
-    ptg->recv_size = ptg->send_size = 0;
 
     ptg->pid = ptg->level = 0;
 
@@ -841,8 +838,8 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zen
     if (CTRL_IS_ACTIVE()) {
         /* Open comm socket */
         if (!PTG(comm).active) {
-            PTD("Comm socket %s create, send: %ld recv: %ld", PTG(comm_file), PTG(send_size), PTG(recv_size));
-            if (pt_comm_screate(&PTG(comm), PTG(comm_file), 0, PTG(send_size), PTG(recv_size)) == -1) {
+            PTD("Comm socket %s open", PTG(comm_file));
+            if (pt_comm_sopen(&PTG(comm), PTG(comm_file), 0) == -1) {
                 php_error(E_WARNING, "Trace comm-module %s open failed", PTG(comm_file));
                 pt_set_inactive(TSRMLS_C);
                 goto exec;
