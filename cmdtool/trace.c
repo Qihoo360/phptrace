@@ -41,7 +41,6 @@ static void parse_args(pt_context_t *ctx, int argc, char *argv[])
 {
     int c;
     int len;
-    long addr;
     int opt_index;
     static struct option long_options[] = {
         {"cleanup",  no_argument, 0, OPTION_CLEANUP},                   /* clean switches of pid | all */
@@ -131,6 +130,10 @@ static void parse_args(pt_context_t *ctx, int argc, char *argv[])
                 }
                 if (ctx->php_pid == getpid()) {
                     error_msg(ctx, ERR_INVALID_PARAM, "cannot trace the self process '%d'", ctx->php_pid);
+                    exit(-1);
+                }
+                if (kill(ctx->php_pid, 0) == -1 && errno == ESRCH) { /* test process existence */
+                    error_msg(ctx, ERR_INVALID_PARAM, "process '%d' does not exists", ctx->php_pid);
                     exit(-1);
                 }
                 break;
