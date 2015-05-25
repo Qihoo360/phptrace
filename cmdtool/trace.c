@@ -24,7 +24,7 @@
 #include "trace_status.h"
 
 enum {
-    OPTION_STATUS = CHAR_MAX + 1,
+    OPTION_STATUS = CHAR_MAX + 1, /* FIXME useless, remove later */
     OPTION_CLEANUP,
     OPTION_MAX_LEVEL,
     OPTION_EXCLUSIVE,
@@ -43,12 +43,7 @@ static void parse_args(pt_context_t *ctx, int argc, char *argv[])
     int len;
     long addr;
     int opt_index;
-    long sapi_globals_addr = 0;
-    long executor_globals_addr = 0;
     static struct option long_options[] = {
-        {"php-version", required_argument, 0, OPTION_STATUS},
-        {"sapi-globals", required_argument, 0, OPTION_STATUS},
-        {"executor-globals", required_argument, 0, OPTION_STATUS},
         {"cleanup",  no_argument, 0, OPTION_CLEANUP},                   /* clean switches of pid | all */
         {"max-level",  required_argument, 0, OPTION_MAX_LEVEL},         /* max level to trace or count */
         {"exclusive",  no_argument, 0, OPTION_EXCLUSIVE},               /* use exclusive time when count */
@@ -74,31 +69,6 @@ static void parse_args(pt_context_t *ctx, int argc, char *argv[])
 
     while ((c = getopt_long(argc, argv, "hc::S:n:l:p:o:svw:r:", long_options, &opt_index)) != -1) {
         switch (c) {
-            case OPTION_STATUS:             /* args for stack */
-                if (opt_index == 0) {
-                    if (!optarg) {
-                        error_msg(ctx, ERR_INVALID_PARAM, "php-version: null");
-                        exit(-1);
-                    }
-                    if (strlen(optarg) < 5 || optarg[0] != '5' || optarg[1] != '.') {
-                        error_msg(ctx, ERR_INVALID_PARAM, "php-version: %s", optarg);
-                        exit(-1);
-                    }
-                    ctx->php_version = optarg[2] - '0';
-                } else if (opt_index == 1) {
-                    if (!optarg || (addr = hexstring2long(optarg, strlen(optarg))) == -1) {
-                        error_msg(ctx, ERR_INVALID_PARAM, "sapi-globals: %s", (optarg ? optarg : "null"));
-                        exit(-1);
-                    }
-                    sapi_globals_addr = addr;
-                } else if (opt_index == 2) {
-                    if (!optarg || (addr = hexstring2long(optarg, strlen(optarg))) == -1) {
-                        error_msg(ctx, ERR_INVALID_PARAM, "executor-globals: %s", (optarg ? optarg : "null"));
-                        exit(-1);
-                    }
-                    executor_globals_addr = addr;
-                }
-                break;
             case OPTION_CLEANUP:
                 ctx->opt_flag |= OPT_FLAG_CLEANUP;
                 break;
