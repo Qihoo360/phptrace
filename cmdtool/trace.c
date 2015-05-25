@@ -31,18 +31,6 @@ enum {
     OPTION_FORMAT
 };
 
-static address_info_t address_templates[] = {
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-    {0, 64, 0, 968, 0, 16, 0, 8, 112, 64, 0, 168, 0, 112},
-    {0, 64, 0, 1360, 0, 8, 0, 8, 80, 40, 0, 168, 0, 0, 112},
-    {0, 64, 0, 1152, 0, 8, 0, 8, 80, 40, 0, 144, 0, 0, 40},
-    {0, 64, 0, 1120, 0, 8, 0, 8, 48, 24, 0, 152, 0, 0, 40},
-    {0, 40, 0, 1120, 0, 8, 0, 8, 48, 24, 0, 152, 0, 0, 40},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
-};
-
-
 static void interrupt(int sig)
 {
     interrupted = sig;
@@ -231,20 +219,6 @@ static void parse_args(pt_context_t *ctx, int argc, char *argv[])
         error_msg(ctx, ERR_INVALID_PARAM, "");
         usage();
         exit(-1);
-    }
-
-    if (ctx->opt_flag == OPT_FLAG_STATUS) {
-        if (ctx->php_version && (ctx->php_version < PHP52 || ctx->php_version > PHP56)) {
-            error_msg(ctx, ERR_INVALID_PARAM, "php version is not supported\n");
-            exit(-1);
-        }
-
-        memcpy(&(ctx->addr_info), &address_templates[ctx->php_version], sizeof(address_info_t));
-        ctx->addr_info.sapi_globals_addr = sapi_globals_addr;
-        ctx->addr_info.executor_globals_addr = executor_globals_addr;
-        log_printf(LL_DEBUG, "php version: %d", ctx->php_version);
-        log_printf(LL_DEBUG, "sapi_globals_addr: %d", ctx->addr_info.sapi_globals_addr);
-        log_printf(LL_DEBUG, "executor_globals_addr: %d", ctx->addr_info.executor_globals_addr);
     }
 }
 

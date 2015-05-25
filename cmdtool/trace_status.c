@@ -16,6 +16,17 @@
 
 #include "trace_status.h"
 
+static address_info_t address_templates[] = {
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {0, 64, 0, 968, 0, 16, 0, 8, 112, 64, 0, 168, 0, 112},      /* 5.2 */
+    {0, 64, 0, 1360, 0, 8, 0, 8, 80, 40, 0, 168, 0, 0, 112},    /* 5.3 */
+    {0, 64, 0, 1152, 0, 8, 0, 8, 80, 40, 0, 144, 0, 0, 40},     /* 5.4 */
+    {0, 64, 0, 1120, 0, 8, 0, 8, 48, 24, 0, 152, 0, 0, 40},     /* 5.5 */
+    {0, 40, 0, 1120, 0, 8, 0, 8, 48, 24, 0, 152, 0, 0, 40},     /* 5.6 */
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+};
+
 int status_dump_once(pt_context_t* ctx)
 {
     static const int buf_size = 1024;
@@ -137,6 +148,7 @@ int status_dump_ptrace(pt_context_t* ctx)
 
 int check_phpext_installed(pt_context_t *ctx)
 {
+    /* TODO check exactly */
     if (access(PHPTRACE_LOG_DIR "/" PT_CTRL_FILENAME, R_OK|W_OK) < 0) {
         if(errno != ENOENT) {
             log_printf(LL_ERROR, "check_phpext_installed: %s", strerror(errno));
@@ -281,64 +293,111 @@ int status_dump(pt_context_t *ctx, int timeout /*milliseconds*/)
     }
 }
 
-void process_opt_s(pt_context_t *ctx)
+int try_ext(pt_context_t *ctx)
 {
-    int ret;
     char filename[256];
 
-    /*dump stauts from the extension*/
-    if (!ctx->addr_info.sapi_globals_addr && check_phpext_installed(ctx)) {
-        log_printf(LL_DEBUG, "phptrace extension has been installed, use extension\n");
-        if (pt_ctrl_open(&(ctx->ctrl), PHPTRACE_LOG_DIR "/" PT_CTRL_FILENAME) < 0) {
-            error_msg(ctx, ERR_CTRL, "cannot open control mmap file %s (%s)",
-                    PHPTRACE_LOG_DIR "/" PT_CTRL_FILENAME, (errno ? strerror(errno) : "null"));
-            die(ctx, -1);
-        }
-
-        ctx->trace_flag = 1;
-        if (pt_ctrl_is_active(&(ctx->ctrl), ctx->php_pid)) {
-            error_msg(ctx, ERR_CTRL, "process %d is being dumped by others, please retry later", ctx->php_pid);
-            die(ctx, -1);
-        }
-
-        /* create comm socket before set active */
-        sprintf(filename, PHPTRACE_LOG_DIR "/" PT_COMM_FILENAME ".%d", ctx->php_pid);
-        log_printf(LL_DEBUG, "dump status %s", filename);
-        if (pt_comm_screate(&ctx->sock, filename, 1, PT_COMM_E2T_SIZE, PT_COMM_T2E_SIZE) < 0) {
-            die(ctx, -1);
-        }
-
-        /* write DO_STATUS op then set active */
-        pt_comm_swrite(&ctx->sock, PT_MSG_DO_STATUS, NULL, 0);
-        pt_ctrl_set_active(&(ctx->ctrl), ctx->php_pid);
-
-        if (status_dump(ctx, 3000) == 0){
-            die(ctx, 0);
-        }
-
-        /*clear the flag if dump failed*/
-        pt_ctrl_set_inactive(&(ctx->ctrl), ctx->php_pid);
-
-        die(ctx, -1);
+    if (pt_ctrl_open(&(ctx->ctrl), PHPTRACE_LOG_DIR "/" PT_CTRL_FILENAME) < 0) {
+        error_msg(ctx, ERR_CTRL, "cannot open control mmap file %s (%s)",
+                PHPTRACE_LOG_DIR "/" PT_CTRL_FILENAME, (errno ? strerror(errno) : "null"));
+        return -1;
     }
 
-    /*dump status without extension if above failed*/
-    log_printf(LL_DEBUG, "phptrace extension was not been installed, use ptrace\n");
+    ctx->trace_flag = 1;
+    if (pt_ctrl_is_active(&(ctx->ctrl), ctx->php_pid)) {
+        error_msg(ctx, ERR_CTRL, "process %d is being dumped by others, please retry later", ctx->php_pid);
+        return -1;
+    }
+
+    /* create comm socket before set active */
+    sprintf(filename, PHPTRACE_LOG_DIR "/" PT_COMM_FILENAME ".%d", ctx->php_pid);
+    log_printf(LL_DEBUG, "dump status %s", filename);
+    if (pt_comm_screate(&ctx->sock, filename, 1, PT_COMM_E2T_SIZE, PT_COMM_T2E_SIZE) < 0) {
+        return -1;
+    }
+
+    /* write DO_STATUS op then set active */
+    pt_comm_swrite(&ctx->sock, PT_MSG_DO_STATUS, NULL, 0);
+    pt_ctrl_set_active(&(ctx->ctrl), ctx->php_pid);
+
+    if (status_dump(ctx, 3000) == 0){
+        return 0;
+    }
+
+    /*clear the flag if dump failed*/
+    pt_ctrl_set_inactive(&(ctx->ctrl), ctx->php_pid);
+
+    return -1;
+}
+
+int try_ptrace(pt_context_t *ctx)
+{
+    int php_version_id;
+
+    /* Fetch PHP version */
+    php_version_id = sys_fetch_php_versionid(ctx->php_pid);
+    if (php_version_id == -1) {
+        log_printf(LL_NOTICE, "fetching PHP version failed");
+        return -1;
+    }
+    ctx->php_version = php_version_id / 100 % 10; /* extract minor version */
+    log_printf(LL_DEBUG, "PHP version: %d minor: %d", php_version_id, ctx->php_version);
+
+    /* Set address info */
+    if (ctx->php_version && (ctx->php_version < PHP52 || ctx->php_version > PHP56)) {
+        log_printf(LL_NOTICE, "php version is not supported");
+        return -1;
+    }
+    memcpy(&(ctx->addr_info), &address_templates[ctx->php_version], sizeof(address_info_t));
+
+    /* Fetch globals address */
+    if (sys_fetch_php_address(ctx->php_pid,
+                &ctx->addr_info.sapi_globals_addr,
+                &ctx->addr_info.executor_globals_addr) == -1) {
+        log_printf(LL_NOTICE, "fetching PHP globals address failed");
+        return -1;
+    }
+    log_printf(LL_DEBUG, "sapi_globals_addr: 0x%lx", ctx->addr_info.sapi_globals_addr);
+    log_printf(LL_DEBUG, "executor_globals_addr: 0x%lx\n", ctx->addr_info.executor_globals_addr);
+
     if (sys_trace_attach(ctx->php_pid)) {
         log_printf(LL_NOTICE, "sys_trace_attach failed");
         error_msg(ctx, ERR_STACK, "sys_trace_attach failed (%s)", (errno ? strerror(errno) : "null"));
-        return;
+        return -1;
     }
 
-    ret = status_dump_ptrace(ctx);
-    if (ret < 0) {
+    if (status_dump_ptrace(ctx) < 0) {
         error_msg(ctx, ERR_STACK, "dump status failed. maybe the process is not executing a php script");
+        return -1;
     }
 
     if (sys_trace_detach(ctx->php_pid) < 0) {
         log_printf(LL_NOTICE, "sys_trace_detach failed");
         error_msg(ctx, ERR_STACK, "sys_trace_detach failed (%s)", (errno ? strerror(errno) : "null"));
+        return -1;
     }
 
     sys_trace_kill(ctx->php_pid, SIGCONT);
+    return 0;
+}
+
+void process_opt_s(pt_context_t *ctx)
+{
+    /*dump stauts from the extension*/
+    if (check_phpext_installed(ctx)) {
+        log_printf(LL_DEBUG, "phptrace extension has been installed, use extension\n");
+        if (try_ext(ctx) == 0) {
+            die(ctx, 0);
+            return;
+        }
+    }
+
+    /*dump status without extension if above failed*/
+    log_printf(LL_DEBUG, "phptrace extension was not been installed, use ptrace\n");
+    if (try_ptrace(ctx) == 0) {
+        die(ctx, 0);
+        return;
+    }
+
+    die(ctx, -1);
 }

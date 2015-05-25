@@ -22,6 +22,7 @@
 #include <sys/wait.h>
 #include "log.h"
 #include "sys_trace.h"
+#include "trace_util.h" /* for hexstring2long() */
 
 int sys_trace_attach(pid_t pid)
 {
@@ -108,3 +109,71 @@ int sys_trace_kill(pid_t pid, int sig)
     return 0;
 }
 
+int sys_fetch_php_address(pid_t pid, long *addr_sg, long *addr_eg)
+{
+    FILE *fp;
+    char buf[256];
+    long addr;
+
+    /* Require gdb, grep, awk */
+    sprintf(buf, "gdb --batch -nx /proc/%d/exe %d "
+                 "-ex 'print &(sapi_globals)' "
+                 "-ex 'print &(executor_globals)' "
+                 "2>/dev/null | grep '^\\$[0-9]' | awk '{print $NF}'", pid, pid);
+    log_printf(LL_DEBUG, "popen cmd: %s", buf);
+
+    if ((fp = popen(buf, "r")) == NULL) {
+        return -1;
+    }
+
+    /* sapi_globals */
+    if (fgets(buf, sizeof(buf), fp) == NULL || (addr = hexstring2long(buf, strlen(buf) - 1)) == -1) { /* strip \n */
+        fclose(fp);
+        return -1;
+    }
+    *addr_sg = addr;
+
+    /* executor_globals */
+    /* TODO it's totally duplicated code here, refactor it if we want process
+     * more address */
+    if (fgets(buf, sizeof(buf), fp) == NULL || (addr = hexstring2long(buf, strlen(buf) - 1)) == -1) {
+        fclose(fp);
+        return -1;
+    }
+    *addr_eg = addr;
+
+    fclose(fp);
+    return 0;
+}
+
+int sys_fetch_php_versionid(pid_t pid)
+{
+    FILE *fp;
+    char buf[256];
+    int version_id;
+
+    /* Require /proc, head, awk */
+    sprintf(buf, "/proc/%d/exe --version | head -n1 | awk '{print $2}'", pid);
+    log_printf(LL_DEBUG, "popen cmd: %s", buf);
+
+    if ((fp = popen(buf, "r")) == NULL) {
+        return -1;
+    }
+
+    if (fgets(buf, sizeof(buf), fp) == NULL) {
+        fclose(fp);
+        return -1;
+    }
+    fclose(fp);
+
+    /* convert version string "5.6.3" to id 50603 */
+    if (strlen(buf) < 5 || buf[0] != '5' || buf[1] != '.' || buf[3] != '.') {
+        return -1;
+    }
+    version_id = 50000;
+    version_id += (buf[2] - '0') * 100;
+    version_id += (buf[4] - '0') * 10;
+    version_id += (buf[5] - '0') * 1;
+
+    return version_id;
+}
