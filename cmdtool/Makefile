@@ -2,7 +2,7 @@ LIBS    = -lpthread
 CFLAGS	= -g -Wall -O0 -fno-strict-aliasing
 CC      = gcc
 
-TARGET  = trace-php
+TARGET  = phptrace
 PWD := $(shell pwd)
 INCLUDE_FLAG = -I$(PWD)/../common -I$(PWD)/../common/sds
 DEPS_DIR   = $(PWD)/../common $(PWD)/../common/sds
