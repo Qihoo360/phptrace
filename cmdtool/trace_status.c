@@ -299,7 +299,7 @@ int status_dump(pt_context_t *ctx, int timeout /*milliseconds*/)
 
 int try_ext(pt_context_t *ctx)
 {
-    char filename[256];
+    char filename[PATH_MAX];
 
     if (pt_ctrl_open(&(ctx->ctrl), PHPTRACE_LOG_DIR "/" PT_CTRL_FILENAME) < 0) {
         error_msg(ctx, ERR_CTRL, "cannot open control mmap file %s (%s)",
@@ -336,22 +336,43 @@ int try_ext(pt_context_t *ctx)
 
 int fetch_php_bin(pid_t pid, char *bin, size_t bin_len)
 {
-    int rlen;
-
-#if defined(__APPLE__) && defined(__MACH__) /* darwin */
-    rlen = proc_pidpath(pid, bin, bin_len);
-    if (rlen == 0) {
+#if defined(__APPLE__) && defined(__MACH__) /* Darwin */
+    if (proc_pidpath(pid, bin, bin_len) == 0) {
         return -1;
     }
-    puts(bin);
-#else
-    char path[256];
+#elif defined(__linux__) /* Linux */
+    int rlen;
+    char path[128];
+
     sprintf(path, "/proc/%d/exe", pid);
     rlen = readlink(path, bin, bin_len);
     if (rlen == -1 || rlen >= bin_len) {
         return -1;
     }
     bin[rlen] = '\0';
+#else
+    char cmd[128];
+    FILE *fp;
+
+    /* prepare command, requirement: lsof, awk, head */
+    sprintf(cmd, "lsof -p %d | awk '$4 == \"txt\" {print $NF}' | head -n1", pid);
+
+    /* open process */
+    log_printf(LL_DEBUG, "popen cmd: %s", cmd);
+    if ((fp = popen(cmd, "r")) == NULL) {
+        log_printf(LL_DEBUG, "popen failed");
+        return -1;
+    }
+
+    /* read output */
+    if (fgets(bin, bin_len, fp) == NULL) {
+        log_printf(LL_DEBUG, "popen fgets failed");
+        pclose(fp);
+        return -1;
+    }
+    bin[strlen(bin) - 1] = '\0'; /* strip '\n' */
+    log_printf(LL_DEBUG, "popen fgets: %s", bin);
+    pclose(fp);
 #endif
 
     return 0;
@@ -453,14 +474,14 @@ int try_ptrace(pt_context_t *ctx)
 
     /* Fetch PHP bin file */
     if (fetch_php_bin(ctx->php_pid, php_bin, sizeof(php_bin)) == -1) {
-        log_printf(LL_NOTICE, "fetching PHP bin file failed");
+        error_msg(ctx, ERR_STACK, "fetch PHP bin file failed");
         return -1;
     }
 
     /* Fetch PHP version */
     php_version_id = fetch_php_versionid(php_bin);
     if (php_version_id == -1) {
-        log_printf(LL_NOTICE, "fetching PHP version failed");
+        error_msg(ctx, ERR_STACK, "fetch PHP version failed");
         return -1;
     }
     ctx->php_version = php_version_id / 100 % 10; /* extract minor version */
@@ -468,7 +489,7 @@ int try_ptrace(pt_context_t *ctx)
 
     /* Set address info */
     if (ctx->php_version && (ctx->php_version < PHP52 || ctx->php_version > PHP56)) {
-        log_printf(LL_NOTICE, "php version is not supported");
+        error_msg(ctx, ERR_STACK, "PHP version id %d not supported", php_version_id);
         return -1;
     }
     memcpy(&(ctx->addr_info), &address_templates[ctx->php_version], sizeof(address_info_t));
@@ -477,7 +498,7 @@ int try_ptrace(pt_context_t *ctx)
     if (fetch_php_address(php_bin, ctx->php_pid,
                 &ctx->addr_info.sapi_globals_addr,
                 &ctx->addr_info.executor_globals_addr) == -1) {
-        log_printf(LL_NOTICE, "fetching PHP globals address failed");
+        error_msg(ctx, ERR_STACK, "fetch PHP globals address failed");
         return -1;
     }
     log_printf(LL_DEBUG, "sapi_globals_addr: 0x%lx", ctx->addr_info.sapi_globals_addr);
