@@ -16,6 +16,10 @@
 
 #include "trace_status.h"
 
+#if defined(__APPLE__) && defined(__MACH__) /* darwin */
+#include "libproc.h"
+#endif
+
 static address_info_t address_templates[] = {
     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
@@ -333,16 +337,22 @@ int try_ext(pt_context_t *ctx)
 int fetch_php_bin(pid_t pid, char *bin, size_t bin_len)
 {
     int rlen;
-    char path[256];
 
-    /* Finding current executable's path without /proc/self/exe
-     * http://stackoverflow.com/questions/1023306/finding-current-executables-path-without-proc-self-exe */
+#if defined(__APPLE__) && defined(__MACH__) /* darwin */
+    rlen = proc_pidpath(pid, bin, bin_len);
+    if (rlen == 0) {
+        return -1;
+    }
+    puts(bin);
+#else
+    char path[256];
     sprintf(path, "/proc/%d/exe", pid);
     rlen = readlink(path, bin, bin_len);
     if (rlen == -1 || rlen >= bin_len) {
         return -1;
     }
     bin[rlen] = '\0';
+#endif
 
     return 0;
 }
