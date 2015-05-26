@@ -115,34 +115,49 @@ int sys_fetch_php_address(pid_t pid, long *addr_sg, long *addr_eg)
     char buf[256];
     long addr;
 
-    /* Require gdb, grep, awk */
+    /* prepare command, requirement: procfs, gdb, awk */
     sprintf(buf, "gdb --batch -nx /proc/%d/exe %d "
                  "-ex 'print &(sapi_globals)' "
                  "-ex 'print &(executor_globals)' "
-                 "2>/dev/null | grep '^\\$[0-9]' | awk '{print $NF}'", pid, pid);
-    log_printf(LL_DEBUG, "popen cmd: %s", buf);
+                 "2>/dev/null | awk '$1 ~ /^\\$[0-9]/ {print $NF}'", pid, pid);
 
+    /* open process */
+    log_printf(LL_DEBUG, "popen cmd: %s", buf);
     if ((fp = popen(buf, "r")) == NULL) {
+        log_printf(LL_DEBUG, "popen failed");
         return -1;
     }
 
     /* sapi_globals */
-    if (fgets(buf, sizeof(buf), fp) == NULL || (addr = hexstring2long(buf, strlen(buf) - 1)) == -1) { /* strip \n */
-        fclose(fp);
+    addr = 0;
+    if (fgets(buf, sizeof(buf), fp) == NULL || (addr = hexstring2long(buf, strlen(buf) - 1)) == -1) { /* strip '\n' */
+        if (addr != -1) {
+            log_printf(LL_DEBUG, "popen fgets failed");
+        } else {
+            log_printf(LL_DEBUG, "convert hex string to long failed \"%s\"", buf);
+        }
+        pclose(fp);
         return -1;
     }
+    log_printf(LL_DEBUG, "popen fgets: %s", buf);
     *addr_sg = addr;
 
     /* executor_globals */
-    /* TODO it's totally duplicated code here, refactor it if we want process
-     * more address */
     if (fgets(buf, sizeof(buf), fp) == NULL || (addr = hexstring2long(buf, strlen(buf) - 1)) == -1) {
-        fclose(fp);
+        /* TODO it's totally duplicated code here, refactor it if we want
+         * process more address */
+        if (addr != -1) {
+            log_printf(LL_DEBUG, "popen fgets failed");
+        } else {
+            log_printf(LL_DEBUG, "convert hex string to long failed \"%s\"", buf);
+        }
+        pclose(fp);
         return -1;
     }
+    log_printf(LL_DEBUG, "popen fgets: %s", buf);
     *addr_eg = addr;
 
-    fclose(fp);
+    pclose(fp);
     return 0;
 }
 
@@ -152,19 +167,24 @@ int sys_fetch_php_versionid(pid_t pid)
     char buf[256];
     int version_id;
 
-    /* Require /proc, head, awk */
-    sprintf(buf, "/proc/%d/exe --version | head -n1 | awk '{print $2}'", pid);
+    /* prepare command, requirement: procfs, awk */
+    sprintf(buf, "/proc/%d/exe -v | awk 'NR == 1 {print $2}'", pid);
+
+    /* open process */
     log_printf(LL_DEBUG, "popen cmd: %s", buf);
-
     if ((fp = popen(buf, "r")) == NULL) {
+        log_printf(LL_DEBUG, "popen failed");
         return -1;
     }
 
+    /* read output */
     if (fgets(buf, sizeof(buf), fp) == NULL) {
-        fclose(fp);
+        log_printf(LL_DEBUG, "popen fgets failed");
+        pclose(fp);
         return -1;
     }
-    fclose(fp);
+    log_printf(LL_DEBUG, "popen fgets: %s", buf);
+    pclose(fp);
 
     /* convert version string "5.6.3" to id 50603 */
     if (strlen(buf) < 5 || buf[0] != '5' || buf[1] != '.' || buf[3] != '.') {

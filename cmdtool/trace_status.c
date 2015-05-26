@@ -368,6 +368,11 @@ int try_ptrace(pt_context_t *ctx)
 
     if (status_dump_ptrace(ctx) < 0) {
         error_msg(ctx, ERR_STACK, "dump status failed. maybe the process is not executing a php script");
+
+        /* detach after ptrace failed, the process may be killed if we won't
+         * detach in OS X */
+        sys_trace_detach(ctx->php_pid);
+
         return -1;
     }
 
