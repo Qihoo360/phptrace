@@ -28,6 +28,9 @@
 *.x86_64
 *.hex
 
+# Cmdtool
+cmdtool/phptrace
+
 # Extension
 extension/.deps
 extension/.libs
