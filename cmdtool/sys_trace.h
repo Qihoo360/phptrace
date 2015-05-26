@@ -46,8 +46,4 @@ int sys_trace_get_long(pid_t pid, long addr, long *data);
 int sys_trace_get_strz(pid_t pid, char *buf, size_t sz, long addr);
 int sys_trace_kill(pid_t pid, int how);
 
-/* TODO move to a PHP related file */
-int sys_fetch_php_address(pid_t pid, long *sapi_globals_addr, long *executor_globals_addr);
-int sys_fetch_php_versionid(pid_t pid);
-
 #endif // _SYS_TRACE_H_

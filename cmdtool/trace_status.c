@@ -330,12 +330,125 @@ int try_ext(pt_context_t *ctx)
     return -1;
 }
 
+int fetch_php_bin(pid_t pid, char *bin, size_t bin_len)
+{
+    int rlen;
+    char path[256];
+
+    /* Finding current executable's path without /proc/self/exe
+     * http://stackoverflow.com/questions/1023306/finding-current-executables-path-without-proc-self-exe */
+    sprintf(path, "/proc/%d/exe", pid);
+    rlen = readlink(path, bin, bin_len);
+    if (rlen == -1 || rlen >= bin_len) {
+        return -1;
+    }
+    bin[rlen] = '\0';
+
+    return 0;
+}
+
+int fetch_php_versionid(const char *bin)
+{
+    FILE *fp;
+    char buf[PATH_MAX];
+    int version_id;
+
+    /* prepare command, requirement: awk */
+    sprintf(buf, "%s -v | awk 'NR == 1 {print $2}'", bin);
+
+    /* open process */
+    log_printf(LL_DEBUG, "popen cmd: %s", buf);
+    if ((fp = popen(buf, "r")) == NULL) {
+        log_printf(LL_DEBUG, "popen failed");
+        return -1;
+    }
+
+    /* read output */
+    if (fgets(buf, sizeof(buf), fp) == NULL) {
+        log_printf(LL_DEBUG, "popen fgets failed");
+        pclose(fp);
+        return -1;
+    }
+    log_printf(LL_DEBUG, "popen fgets: %s", buf);
+    pclose(fp);
+
+    /* convert version string "5.6.3" to id 50603 */
+    if (strlen(buf) < 5 || buf[0] != '5' || buf[1] != '.' || buf[3] != '.') {
+        return -1;
+    }
+    version_id = 50000;
+    version_id += (buf[2] - '0') * 100;
+    version_id += (buf[4] - '0') * 10;
+    version_id += (buf[5] - '0') * 1;
+
+    return version_id;
+}
+
+int fetch_php_address(const char *bin, pid_t pid, long *addr_sg, long *addr_eg)
+{
+    FILE *fp;
+    char buf[PATH_MAX];
+    long addr;
+
+    /* prepare command, requirement: gdb, awk */
+    sprintf(buf, "gdb --batch -nx %s %d "
+                 "-ex 'print &(sapi_globals)' "
+                 "-ex 'print &(executor_globals)' "
+                 "2>/dev/null | awk '$1 ~ /^\\$[0-9]/ {print $NF}'", bin, pid);
+
+    /* open process */
+    log_printf(LL_DEBUG, "popen cmd: %s", buf);
+    if ((fp = popen(buf, "r")) == NULL) {
+        log_printf(LL_DEBUG, "popen failed");
+        return -1;
+    }
+
+    /* sapi_globals */
+    addr = 0;
+    if (fgets(buf, sizeof(buf), fp) == NULL || (addr = hexstring2long(buf, strlen(buf) - 1)) == -1) { /* strip '\n' */
+        if (addr != -1) {
+            log_printf(LL_DEBUG, "popen fgets failed");
+        } else {
+            log_printf(LL_DEBUG, "convert hex string to long failed \"%s\"", buf);
+        }
+        pclose(fp);
+        return -1;
+    }
+    log_printf(LL_DEBUG, "popen fgets: %s", buf);
+    *addr_sg = addr;
+
+    /* executor_globals */
+    if (fgets(buf, sizeof(buf), fp) == NULL || (addr = hexstring2long(buf, strlen(buf) - 1)) == -1) {
+        /* TODO it's totally duplicated code here, refactor it if we want
+         * process more address */
+        if (addr != -1) {
+            log_printf(LL_DEBUG, "popen fgets failed");
+        } else {
+            log_printf(LL_DEBUG, "convert hex string to long failed \"%s\"", buf);
+        }
+        pclose(fp);
+        return -1;
+    }
+    log_printf(LL_DEBUG, "popen fgets: %s", buf);
+    *addr_eg = addr;
+
+    pclose(fp);
+    return 0;
+}
+
 int try_ptrace(pt_context_t *ctx)
 {
+    char php_bin[PATH_MAX];
     int php_version_id;
 
+    /* Fetch PHP bin file */
+    if (fetch_php_bin(ctx->php_pid, php_bin, sizeof(php_bin)) == -1) {
+        log_printf(LL_NOTICE, "fetching PHP bin file failed");
+        return -1;
+    }
+
     /* Fetch PHP version */
-    php_version_id = sys_fetch_php_versionid(ctx->php_pid);
+    php_version_id = fetch_php_versionid(php_bin);
     if (php_version_id == -1) {
         log_printf(LL_NOTICE, "fetching PHP version failed");
         return -1;
@@ -351,7 +464,7 @@ int try_ptrace(pt_context_t *ctx)
     memcpy(&(ctx->addr_info), &address_templates[ctx->php_version], sizeof(address_info_t));
 
     /* Fetch globals address */
-    if (sys_fetch_php_address(ctx->php_pid,
+    if (fetch_php_address(php_bin, ctx->php_pid,
                 &ctx->addr_info.sapi_globals_addr,
                 &ctx->addr_info.executor_globals_addr) == -1) {
         log_printf(LL_NOTICE, "fetching PHP globals address failed");
