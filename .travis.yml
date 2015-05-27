@@ -1,0 +1,25 @@
+language: php
+
+php:
+  - 5.2
+  - 5.3
+  - 5.4
+  - 5.5
+  - 5.6
+
+before_install:
+    # build PHP without ZTS by ourselves...
+    - PT_PHP_VERSION=`php --version | awk 'NR == 1 {print $2}'`
+    - ./.travis/php_get.sh ${PT_PHP_VERSION}
+    - ./.travis/php_build.sh `pwd` php-${PT_PHP_VERSION}.tar.bz2
+    - PT_PHP_PATH=`pwd`/php-${PT_PHP_VERSION}
+    - PT_PHP_BIN=${PT_PHP_PATH}/bin/php
+
+before_script:
+    - cd ${TRAVIS_BUILD_DIR}/cmdtool && make
+    - cd ${TRAVIS_BUILD_DIR} && ./.travis/ext_build.sh extension ${PT_PHP_PATH}
+
+script:
+    - cd ${TRAVIS_BUILD_DIR}/extension
+    - TEST_PHP_EXECUTABLE=${PT_PHP_BIN} ${PT_PHP_BIN} -n run-tests.php -q -n -d extension_dir=`pwd`/modules -d extension=trace.so --show-diff --set-timeout 120 ${PT_PHP_PATH}/tests ${PT_PHP_PATH}/Zend/tests; true
+    - REPORT_EXIT_STATUS=1 TEST_PHP_EXECUTABLE=${PT_PHP_BIN} ${PT_PHP_BIN} -n run-tests.php -q -n -d extension_dir=`pwd`/modules -d extension=trace.so --show-diff
