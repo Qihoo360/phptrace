@@ -20,6 +20,5 @@ before_script:
     - cd ${TRAVIS_BUILD_DIR} && ./.travis/ext_build.sh extension ${PT_PHP_PATH}
 
 script:
-    - cd ${TRAVIS_BUILD_DIR}/extension
-    - TEST_PHP_EXECUTABLE=${PT_PHP_BIN} ${PT_PHP_BIN} -n run-tests.php -q -n -d extension_dir=`pwd`/modules -d extension=trace.so --show-diff --set-timeout 120 ${PT_PHP_PATH}/tests ${PT_PHP_PATH}/Zend/tests; true
-    - REPORT_EXIT_STATUS=1 TEST_PHP_EXECUTABLE=${PT_PHP_BIN} ${PT_PHP_BIN} -n run-tests.php -q -n -d extension_dir=`pwd`/modules -d extension=trace.so --show-diff
+    - cd ${PT_PHP_PATH} && TEST_PHP_EXECUTABLE=${PT_PHP_BIN} ${PT_PHP_BIN} -n run-tests.php -q -n -d extension=trace.so --show-diff --set-timeout 120 tests Zend/tests; true
+    - cd ${TRAVIS_BUILD_DIR}/extension && REPORT_EXIT_STATUS=1 TEST_PHP_EXECUTABLE=${PT_PHP_BIN} ${PT_PHP_BIN} -n run-tests.php -q -n -d extension=trace.so --show-diff

@@ -24,7 +24,8 @@ function build()
     # configure, make
     $phpize &&
     ./configure --with-php-config=$phpcfg && \
-    make EXTRA_CFLAGS=-DTRACE_DEBUG
+    make EXTRA_CFLAGS=-DTRACE_DEBUG && \
+    make install
     ret=$?
 
     if [ $ret -eq 0 ]; then
