@@ -1,6 +1,8 @@
 phptrace
 ==============================
 
+[![Build Status](https://travis-ci.org/Qihoo360/phptrace.svg)](https://travis-ci.org/Qihoo360/phptrace)
+
 phptrace是一个低开销的用于跟踪、分析PHP运行情况的工具。
 
 它可以跟踪PHP在运行时的函数调用、请求信息、执行流程，并且提供有过滤器、统计信息
