@@ -333,6 +333,7 @@ static void pt_frame_build(pt_frame_t *frame, zend_bool internal, unsigned char 
     frame->level = PTG(level);
 
     /* args init */
+    args = NULL;
     frame->arg_count = 0;
     frame->args = NULL;
 
