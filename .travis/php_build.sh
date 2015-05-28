@@ -1,6 +1,6 @@
 #!/bin/bash
 function logit() {
-    echo "[ext_build] $@" 1>&2
+    echo "[php_build] $@" 1>&2
 }
 
 function build_from_tar()
