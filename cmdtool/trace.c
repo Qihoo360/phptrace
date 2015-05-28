@@ -179,10 +179,7 @@ static void parse_args(pt_context_t *ctx, int argc, char *argv[])
             exit(-1);
         }
     } else if (ctx->opt_flag == OPT_FLAG_CLEANUP) {                        /* cleanup */
-        if (ctx->php_pid < 0) {
-            error_msg(ctx, ERR_INVALID_PARAM, "cleanup needs an pid, please add -p pid!");
-            exit(-1);
-        }
+        /* do nothing... */
     } else if (ctx->opt_flag == 0) {                                       /* trace */
         if ((ctx->php_pid >= 0) + (ctx->in_filename != NULL) != 1) {
             error_msg(ctx, ERR_INVALID_PARAM, "trace needs either an pid(option -p) or input file(option -r), not both!");

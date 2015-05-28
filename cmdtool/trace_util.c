@@ -221,7 +221,7 @@ void usage()
     printf ("usage: phptrace [-chlsnvvvvw]  [-p pid] [--cleanup]\n\
    or: phptrace [-chlnvvvvw]  [-r infile]\n\
     -h                   -- show this help\n\
-    --cleanup            -- cleanup the trace switches of pid, or all the switches if no pid parameter\n\
+    --cleanup            -- set inactive for php process of pid, or all processes if no pid parameter\n\
     -p pid               -- access the php process pid\n\
     -s                   -- print status of the php process by the pid\n\
     -c[top_n]            -- count the wall time, cpu time, memory usage for each function calls of the php process.\n\
