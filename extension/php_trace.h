@@ -60,10 +60,10 @@ ZEND_BEGIN_MODULE_GLOBALS(trace)
     char                    comm_file[256]; /* comm filename */
 
     pid_t                   pid;            /* process id */
-    uint32_t                level;          /* nesting level */
+    long                    level;          /* nesting level */
 
-    uint32_t                ping;           /* last ping time (second) */
-    uint32_t                idle_timeout;   /* idle timeout, for current - last ping */
+    long                    ping;           /* last ping time (second) */
+    long                    idle_timeout;   /* idle timeout, for current - last ping */
 ZEND_END_MODULE_GLOBALS(trace)
 
 

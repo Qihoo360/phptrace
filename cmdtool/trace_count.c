@@ -132,8 +132,8 @@ void count_summary(pt_context_t *ctx)
     uint32_t size;
     uint32_t cnt;
     uint32_t calls_all = 0;
-    uint64_t cost_time_all = 0;
-    uint64_t cpu_time_all = 0;
+    int64_t cost_time_all = 0;
+    int64_t cpu_time_all = 0;
     int64_t memory_usage_all = 0;
     int64_t sortby_all = 0;
     int64_t tmp_v;

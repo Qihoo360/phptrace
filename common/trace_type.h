@@ -55,15 +55,15 @@ typedef struct {
     sds retval;                 /* return value represent string */
 
     struct {
-        uint64_t wall_time;     /* wall time */
-        uint64_t cpu_time;      /* cpu time */
+        int64_t wall_time;      /* wall time */
+        int64_t cpu_time;       /* cpu time */
         int64_t mem;            /* memory usage */
         int64_t mempeak;        /* memory peak */
     } entry;
 
     struct {
-        uint64_t wall_time;     /* wall time */
-        uint64_t cpu_time;      /* cpu time */
+        int64_t wall_time;      /* wall time */
+        int64_t cpu_time;       /* cpu time */
         int64_t mem;            /* memory usage */
         int64_t mempeak;        /* memory peak */
     } exit;

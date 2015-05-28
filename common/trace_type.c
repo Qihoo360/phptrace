@@ -77,13 +77,13 @@ size_t pt_type_len_frame(pt_frame_t *frame)
     }
     size += LEN_SDS(frame->retval);                           /* retval */
 
-    size += sizeof(uint64_t);                                 /* wall_time */
-    size += sizeof(uint64_t);                                 /* cpu_time */
+    size += sizeof(int64_t);                                  /* wall_time */
+    size += sizeof(int64_t);                                  /* cpu_time */
     size += sizeof(int64_t);                                  /* mem */
     size += sizeof(int64_t);                                  /* mempeak */
 
-    size += sizeof(uint64_t);                                 /* wall_time */
-    size += sizeof(uint64_t);                                 /* cpu_time */
+    size += sizeof(int64_t);                                  /* wall_time */
+    size += sizeof(int64_t);                                  /* cpu_time */
     size += sizeof(int64_t);                                  /* mem */
     size += sizeof(int64_t);                                  /* mempeak */
 
@@ -111,13 +111,13 @@ size_t pt_type_pack_frame(pt_frame_t *frame, char *buf)
     }
     PACK_SDS(buf, frame->retval);
 
-    PACK(buf, uint64_t, frame->entry.wall_time);
-    PACK(buf, uint64_t, frame->entry.cpu_time);
+    PACK(buf, int64_t, frame->entry.wall_time);
+    PACK(buf, int64_t, frame->entry.cpu_time);
     PACK(buf, int64_t,  frame->entry.mem);
     PACK(buf, int64_t,  frame->entry.mempeak);
 
-    PACK(buf, uint64_t, frame->exit.wall_time);
-    PACK(buf, uint64_t, frame->exit.cpu_time);
+    PACK(buf, int64_t, frame->exit.wall_time);
+    PACK(buf, int64_t, frame->exit.cpu_time);
     PACK(buf, int64_t,  frame->exit.mem);
     PACK(buf, int64_t,  frame->exit.mempeak);
 
@@ -151,13 +151,13 @@ size_t pt_type_unpack_frame(pt_frame_t *frame, char *buf)
     }
     UNPACK_SDS(buf, frame->retval);
 
-    UNPACK(buf, uint64_t, frame->entry.wall_time);
-    UNPACK(buf, uint64_t, frame->entry.cpu_time);
+    UNPACK(buf, int64_t, frame->entry.wall_time);
+    UNPACK(buf, int64_t, frame->entry.cpu_time);
     UNPACK(buf, int64_t,  frame->entry.mem);
     UNPACK(buf, int64_t,  frame->entry.mempeak);
 
-    UNPACK(buf, uint64_t, frame->exit.wall_time);
-    UNPACK(buf, uint64_t, frame->exit.cpu_time);
+    UNPACK(buf, int64_t, frame->exit.wall_time);
+    UNPACK(buf, int64_t, frame->exit.cpu_time);
     UNPACK(buf, int64_t,  frame->exit.mem);
     UNPACK(buf, int64_t,  frame->exit.mempeak);
 

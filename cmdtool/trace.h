@@ -45,8 +45,8 @@
 typedef struct record_count_s {
     sds function_name;
 
-    uint64_t cost_time;                 /* inclusive cost time of function */
-    uint64_t cpu_time;                  /* inclusive cpu time of function */
+    long cost_time;                 /* inclusive cost time of function */
+    long cpu_time;                  /* inclusive cpu time of function */
     int64_t memory_usage;
     int64_t memory_peak_usage;
     int32_t calls;
@@ -85,7 +85,7 @@ typedef sds (*pt_record_transform_t)(pt_context_t *ctx, pt_comm_message_t *msg, 
 
 struct pt_context_s {
     int32_t php_pid;                                    /* pid of the -p option, default -1 */
-    uint64_t start_time;                                /* start time of cmdtool */
+    long start_time;                                    /* start time of cmdtool */
 
     FILE *log;                                          /* log output stream */
     sds mmap_filename;
