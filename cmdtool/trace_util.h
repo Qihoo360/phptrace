@@ -26,7 +26,7 @@
 #include <sys/stat.h>
 
 #define PHPTRACE_NAME               "phptrace"
-#define PHPTRACE_VERSION            "0.3.0"
+#define PHPTRACE_VERSION            "0.3.1-dev"
 #define PHPTRACE_DEVELOPER          "360 Infra Webcore Team"
 
 #define PHPTRACE_LOG_DIR            "/tmp"
