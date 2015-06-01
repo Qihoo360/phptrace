@@ -64,6 +64,11 @@ ZEND_BEGIN_MODULE_GLOBALS(trace)
 
     long                    ping;           /* last ping time (second) */
     long                    idle_timeout;   /* idle timeout, for current - last ping */
+#if TRACE_DEBUG_SOCKET
+    int     sock_fd;
+    char   *sock_buf;
+    size_t  sock_buflen;
+#endif
 ZEND_END_MODULE_GLOBALS(trace)
 
 
