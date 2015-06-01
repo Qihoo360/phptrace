@@ -37,9 +37,9 @@
  */
 /* Debug output */
 #if TRACE_DEBUG_OUTPUT
-#define PTD(format, args...) fprintf(stderr, "[PTDebug:%d] " format "\n", __LINE__, __VA_ARGS__)
+#define PTD(format, ...) fprintf(stderr, "[PTDebug:%d] " format "\n", __LINE__, ##__VA_ARGS__)
 #else
-#define PTD(format, args...)
+#define PTD(format, ...)
 #endif
 
 /* Ctrl module */
