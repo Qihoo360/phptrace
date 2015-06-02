@@ -187,8 +187,8 @@ static void php_trace_init_globals(zend_trace_globals *ptg)
 
 #if TRACE_DEBUG_SOCKET
     ptg->sock_fd = -1;
-    ptg->sock_buf = NULL;
-    ptg->sock_buflen = 0;
+    ptg->sock_buflen = 4096; /* initial buffer size */
+    ptg->sock_buf = malloc(ptg->sock_buflen);
 #endif
 }
 
@@ -268,7 +268,11 @@ PHP_RINIT_FUNCTION(trace)
     /* Anything needs pid, init here */
     if (PTG(pid) == 0) {
         PTG(pid) = getpid();
+#if TRACE_DEBUG_SOCKET
+        snprintf(PTG(comm_file), sizeof(PTG(comm_file)), "%s/%s", PTG(data_dir), "phptrace.sock");
+#else
         snprintf(PTG(comm_file), sizeof(PTG(comm_file)), "%s/%s.%d", PTG(data_dir), PT_COMM_FILENAME, PTG(pid));
+#endif
     }
     PTG(level) = 0;
 
@@ -554,30 +558,30 @@ static int pt_frame_send(pt_frame_t *frame TSRMLS_DC)
     len = pt_type_len_frame(frame);
 #if TRACE_DEBUG_SOCKET
     ssize_t rlen;
-    pt_comm_message_t msgst;
 
-    msgst.seq = 0;
-    msgst.type = PT_MSG_RET;
-    msgst.len = len;
-    msg = &msgst;
+    /* prepare socket buffer */
+    if (PTG(sock_buflen) < sizeof(pt_comm_message_t) + len) {
+        PTG(sock_buf) = realloc(PTG(sock_buf), sizeof(pt_comm_message_t) + len);
+    }
+    msg = (pt_comm_message_t *) PTG(sock_buf);
+
+    /* construct message */
+    msg->seq = 0;
+    msg->type = PT_MSG_RET;
+    msg->len = len;
+    pt_type_pack_frame(frame, msg->data);
 
     /* send message header */
     rlen = send(PTG(sock_fd), msg, sizeof(pt_comm_message_t), 0);
+    PTD("send header return: %ld", rlen);
     if (rlen == -1) {
         php_error(E_WARNING, "Trace send failed, errmsg: %s", strerror(errno));
         return -1;
     }
 
-    /* prepare */
-    if (PTG(sock_buflen) == 0) {
-        PTG(sock_buf) = malloc(msg->len);
-    } else if (PTG(sock_buflen) < msg->len) {
-        PTG(sock_buf) = realloc(PTG(sock_buf), msg->len);
-    }
-    pt_type_pack_frame(frame, PTG(sock_buf));
-
     /* send message body */
-    rlen = send(PTG(sock_fd), PTG(sock_buf), msg->len, 0);
+    rlen = send(PTG(sock_fd), msg->data, msg->len, 0);
+    PTD("send body return: %ld", rlen);
     if (rlen == -1) {
         php_error(E_WARNING, "Trace send failed, errmsg: %s", strerror(errno));
         return -1;
@@ -846,6 +850,7 @@ static void pt_set_inactive(TSRMLS_D)
     if (PTG(sock_fd) != -1) {
         PTD("Comm socket close");
         close(PTG(sock_fd));
+        PTG(sock_fd) = -1;
     }
 #else
     if (PTG(comm).active) {
@@ -876,7 +881,6 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zen
     pt_comm_message_t *msg;
     pt_frame_t frame;
 #if TRACE_DEBUG_SOCKET
-    pt_comm_message_t msgst;
     ssize_t rlen;
 #endif
 
@@ -908,11 +912,12 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zen
 
             /* address */
             memset(&addr, 0, sizeof(addr));
-            strncpy(addr.sun_path, PTG(comm_file), strlen(PTG(comm_file)));
+            addr.sun_family = AF_UNIX;
+            strcpy(addr.sun_path, PTG(comm_file));
 
             /* connect */
-            if (connect(PTG(sock_fd), &addr, sizeof(addr)) == -1) {
-                php_error(E_WARNING, "Trace connect to \"%s\" failed, errmsg: %s", addr.sun_path, strerror(errno));
+            if (connect(PTG(sock_fd), (struct sockaddr *) &addr, sizeof(addr)) == -1) {
+                php_error(E_WARNING, "Trace connect to %s failed, errmsg: %s", addr.sun_path, strerror(errno));
                 pt_set_inactive(TSRMLS_C);
                 goto exec;
             }
@@ -932,40 +937,49 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zen
         while (1) {
 #if TRACE_DEBUG_SOCKET
             /* recv message header */
-            rlen = recv(PTG(sock_fd), (void *) &msgst, sizeof(pt_comm_message_t), MSG_DONTWAIT);
+            PTD("recv header");
+            /* TODO recv() returns -1 if error occurred, 0 if the peer shutdown */
+            rlen = recv(PTG(sock_fd), PTG(sock_buf), sizeof(pt_comm_message_t), MSG_DONTWAIT);
             if (rlen == -1) {
                 if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    PTD("recv err EAGAIN");
+
                     if (PING_TIMEOUT()) {
                         PTD("Ping timeout");
                         pt_set_inactive(TSRMLS_C);
                     }
                 } else {
                     php_error(E_WARNING, "Trace recv failed, errmsg: %s", strerror(errno));
+                    pt_set_inactive(TSRMLS_C);
                 }
                 goto exec;
             } else if (rlen != sizeof(pt_comm_message_t)) {
                 php_error(E_WARNING, "Trace recv size error, actual: %ld", rlen);
+                pt_set_inactive(TSRMLS_C);
                 goto exec;
             }
+            msg = (pt_comm_message_t *) PTG(sock_buf);
+            PTD("type: %x", msg->type);
 
-            /* prepare body space */
-            msg = &msgst;
-            if (PTG(sock_buflen) == 0) {
-                PTG(sock_buf) = malloc(sizeof(pt_comm_message_t) + msg->len);
-            } else if (PTG(sock_buflen) < sizeof(pt_comm_message_t) + msg->len) {
-                PTG(sock_buf) = realloc(PTG(sock_buf), sizeof(pt_comm_message_t) + msg->len);
-            }
-            memcpy(PTG(sock_buf), msg, sizeof(pt_comm_message_t));
-            msg = (pt_comm_message_t *) &PTG(sock_buf);
+            if (msg->len > 0) {
+                /* prepare body space */
+                if (PTG(sock_buflen) < sizeof(pt_comm_message_t) + msg->len) {
+                    /* FIXME msg may point to wrong address after realloc */
+                    PTG(sock_buf) = realloc(PTG(sock_buf), sizeof(pt_comm_message_t) + msg->len);
+                }
 
-            /* recv message body */
-            recv(PTG(sock_fd), PTG(sock_buf) + sizeof(pt_comm_message_t), msg->len, 0);
-            if (rlen == -1) {
-                php_error(E_WARNING, "Trace recv failed, errmsg: %s", strerror(errno));
-                goto exec;
-            } else if (rlen != msg->len) {
-                php_error(E_WARNING, "Trace recv size error, actual: %ld", rlen);
-                goto exec;
+                /* recv message body */
+                PTD("recv body");
+                rlen = recv(PTG(sock_fd), PTG(sock_buf) + sizeof(pt_comm_message_t), msg->len, 0);
+                if (rlen == -1) {
+                    php_error(E_WARNING, "Trace recv failed, errmsg: %s", strerror(errno));
+                    pt_set_inactive(TSRMLS_C);
+                    goto exec;
+                } else if (rlen != msg->len) {
+                    php_error(E_WARNING, "Trace recv size error, actual: %ld", rlen);
+                    pt_set_inactive(TSRMLS_C);
+                    goto exec;
+                }
             }
 
             switch (msg->type) {
