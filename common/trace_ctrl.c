@@ -32,7 +32,12 @@ int pt_ctrl_close(pt_ctrl_t *ctrl)
     return pt_mmap_close(&ctrl->seg);
 }
 
+void pt_ctrl_set_all(pt_ctrl_t *ctrl, uint8_t val)
+{
+    memset(ctrl->seg.addr, val, ctrl->seg.size);
+}
+
 void pt_ctrl_clean_all(pt_ctrl_t *ctrl)
 {
-    memset(ctrl->seg.addr, 0x00, ctrl->seg.size);
+    pt_ctrl_set_all(ctrl, 0x00);
 }
