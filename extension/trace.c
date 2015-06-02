@@ -566,7 +566,7 @@ static int pt_frame_send(pt_frame_t *frame TSRMLS_DC)
     msg = (pt_comm_message_t *) PTG(sock_buf);
 
     /* construct message */
-    msg->seq = 0;
+    msg->seq = PTG(pid); /* FIXME send pid through seq temporary */
     msg->type = PT_MSG_RET;
     msg->len = len;
     pt_type_pack_frame(frame, msg->data);

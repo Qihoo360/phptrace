@@ -1,15 +1,16 @@
-#include <error.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/types.h>
 #include <sys/un.h>
 #include <unistd.h>
 
 #include "trace_comm.h"
 #include "trace_ctrl.h"
 
-#define PTL(format, ...) fprintf(stderr, "[PTDebug:%d] " format "\n", __LINE__, ##__VA_ARGS__)
+#define PTL(format, ...) fprintf(stderr, "[PTLog:%d] " format "\n", __LINE__, ##__VA_ARGS__)
 #if 0
 #define PTD(format, ...) fprintf(stderr, "[PTDebug:%d] " format "\n", __LINE__, ##__VA_ARGS__)
 #else
@@ -80,7 +81,7 @@ void pt_frame_display(pt_frame_t *frame, int indent, const char *format, ...)
 
 int main(int argc, char *argv[])
 {
-    int sfd, cfd;
+    int i, sfd, cfd;
     pid_t pid;
     socklen_t calen;
     struct sockaddr_un saddr, caddr;
@@ -88,11 +89,9 @@ int main(int argc, char *argv[])
 
     /* argument */
     if (argc < 2) {
-        PTL("usage: %s <pid>", argv[0]);
+        PTL("usage: %s <pid>...", argv[0]);
         return 0;
     }
-    pid = atoi(argv[1]);
-    PTL("pid: %d", pid);
 
     /* create socket */
     sfd = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -126,93 +125,130 @@ int main(int argc, char *argv[])
         PTL("ctrl open failed");
         return -1;
     }
-    pt_ctrl_set_active(&ctrlst, pid);
-    PTL("ctrl set active %d", pid);
-
-    /* accept */
-    PTL("accept");
-    calen = sizeof(caddr);
-    cfd = accept(sfd, (struct sockaddr *) &caddr, &calen);
-    if (cfd == -1) {
-        perror("accept");
-        return -1;
+    if (strcmp("all", argv[1]) == 0) {
+        pt_ctrl_set_all(&ctrlst, PT_CTRL_ACTIVE);
+    } else {
+        for (i = 1; i < argc; i++) {
+            pid = atoi(argv[i]);
+            pt_ctrl_set_active(&ctrlst, pid);
+            PTL("ctrl set active %d", pid);
+        }
     }
 
-    /* trace */
-    PTL("client connected");
+    /* select */
+    int maxfd;
+    fd_set cfds, rfds;
+    FD_ZERO(&cfds);
+    maxfd = sfd + 1;
+
+    /* trace message */
     size_t msg_buflen;
     ssize_t rlen;
     void *msg_buf;
     pt_comm_message_t *msg;
-    pt_frame_t *frame, framest;
+    pt_frame_t framest;
+
+    int sock_rcvbuf = 1024 * 1024;
+    socklen_t optlen = sizeof(sock_rcvbuf);
 
     msg_buflen = sizeof(pt_comm_message_t);
     msg = msg_buf = malloc(msg_buflen);
-    frame = &framest;
 
-    /* send do_trace */
-    msg->seq = 0;
-    msg->type = PT_MSG_DO_TRACE;
-    msg->len = 0;
-    rlen = send(cfd, msg, sizeof(pt_comm_message_t), 0);
-    PTL("send do_trace, return: %ld", rlen);
-
-    /* set socket opt */
-    /* http://man7.org/linux/man-pages/man7/socket.7.html */
-    /* http://www.cyberciti.biz/faq/linux-tcp-tuning/ */
-    int sock_rcvbuf;
-    socklen_t optlen = sizeof(sock_rcvbuf);
-
-    if (getsockopt(cfd, SOL_SOCKET, SO_RCVBUF, &sock_rcvbuf, &optlen) == -1) {
-        perror("getsockopt");
-    }
-    PTL("rcvbuf before: %d %u", sock_rcvbuf, optlen);
-
-    sock_rcvbuf = 1024 * 1024;
-    if (setsockopt(cfd, SOL_SOCKET, SO_RCVBUF, &sock_rcvbuf, optlen) == -1) {
-        perror("setsockopt");
-    }
-
-    if (getsockopt(cfd, SOL_SOCKET, SO_RCVBUF, &sock_rcvbuf, &optlen) == -1) {
-        perror("getsockopt");
-    }
-    PTL("rcvbuf after: %d %u", sock_rcvbuf, optlen);
-
-    /* recv trace data */
     for (;;) {
-        /* header */
-        rlen = recv(cfd, msg_buf, sizeof(pt_comm_message_t), 0);
-        PTD("recv header return: %ld", rlen);
-        if (rlen <= 0) {
-            break;
-        }
-        PTD("msg->type: %x len: %d", msg->type, msg->len);
-        if (msg->type != PT_MSG_RET || msg->len <= 0) {
+        memcpy(&rfds, &cfds, sizeof(fd_set)); /* TODO better way */
+        FD_SET(sfd, &rfds);
+        select(maxfd + 1, &rfds, NULL, NULL, NULL);
+
+        /* accept */
+        if (FD_ISSET(sfd, &rfds)) {
+            calen = sizeof(caddr);
+            cfd = accept(sfd, (struct sockaddr *) &caddr, &calen);
+            if (cfd == -1) {
+                perror("accept");
+                return -1;
+            }
+            PTL("accept %d", cfd);
+
+            /* add to cfds */
+            FD_SET(cfd, &cfds);
+            if (cfd > maxfd) {
+                maxfd = cfd;
+            }
+
+            /* send do_trace */
+            msg->seq = 0;
+            msg->type = PT_MSG_DO_TRACE;
+            msg->len = 0;
+            rlen = send(cfd, msg, sizeof(pt_comm_message_t), 0);
+            PTL("send do_trace, return: %ld", rlen);
+
+            /* set socket opt */
+            /* http://man7.org/linux/man-pages/man7/socket.7.html */
+            /* http://www.cyberciti.biz/faq/linux-tcp-tuning/ */
+            if (getsockopt(cfd, SOL_SOCKET, SO_RCVBUF, &sock_rcvbuf, &optlen) == -1) {
+                perror("getsockopt");
+            }
+            PTL("rcvbuf before: %d %u", sock_rcvbuf, optlen);
+
+            if (setsockopt(cfd, SOL_SOCKET, SO_RCVBUF, &sock_rcvbuf, optlen) == -1) {
+                perror("setsockopt");
+            }
+
+            if (getsockopt(cfd, SOL_SOCKET, SO_RCVBUF, &sock_rcvbuf, &optlen) == -1) {
+                perror("getsockopt");
+            }
+            PTL("rcvbuf after: %d %u", sock_rcvbuf, optlen);
+
+            /* accept as much as we can */
             continue;
         }
 
-        /* prepare body space */
-        if (msg_buflen < sizeof(pt_comm_message_t) + msg->len) {
-            /* optimize dynamic alloc */
-            msg_buflen = sizeof(pt_comm_message_t) + msg->len;
-            msg_buf = realloc(msg_buf, msg_buflen);
-            msg = msg_buf; /* address may be changed after realloc */
-            PTL("alloc %ld bytes for new buffer", msg_buflen);
-        }
+        /* recv trace data */
+        for (cfd = sfd + 1; cfd < 256; cfd++) {
+            if (!FD_ISSET(cfd, &rfds)) {
+                continue;
+            }
+            for (i = 0; i < 10; i++) { /* process 10 frames max per process */
+                /* header */
+                rlen = recv(cfd, msg_buf, sizeof(pt_comm_message_t), MSG_DONTWAIT);
+                PTD("recv header return: %ld", rlen);
+                if (rlen == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+                    break;
+                } else if (rlen <= 0) {
+                    FD_CLR(cfd, &cfds);
+                    break;
+                }
+                PTD("msg->type: %x len: %d", msg->type, msg->len);
+                if (msg->type != PT_MSG_RET || msg->len <= 0) {
+                    continue;
+                }
 
-        /* body */
-        rlen = recv(cfd, msg_buf + sizeof(pt_comm_message_t), msg->len, 0);
-        PTD("recv body return: %ld", rlen);
-        if (rlen <= 0) {
-            break;
-        }
+                /* prepare body space */
+                if (msg_buflen < sizeof(pt_comm_message_t) + msg->len) {
+                    /* optimize dynamic alloc */
+                    msg_buflen = sizeof(pt_comm_message_t) + msg->len;
+                    msg_buf = realloc(msg_buf, msg_buflen);
+                    msg = msg_buf; /* address may be changed after realloc */
+                    PTL("alloc %ld bytes for new buffer", msg_buflen);
+                }
 
-        /* unpack */
-        pt_type_unpack_frame(frame, msg->data);
-        if (frame->type == PT_FRAME_ENTRY) {
-            pt_frame_display(frame, 1, "> ");
-        } else {
-            pt_frame_display(frame, 1, "< ");
+                /* body */
+                rlen = recv(cfd, msg_buf + sizeof(pt_comm_message_t), msg->len, 0);
+                PTD("recv body return: %ld", rlen);
+                if (rlen <= 0) {
+                    FD_CLR(cfd, &cfds);
+                    break;
+                }
+
+                /* unpack */
+                pt_type_unpack_frame(&framest, msg->data);
+                printf("[pid %5u]", msg->seq);
+                if (framest.type == PT_FRAME_ENTRY) {
+                    pt_frame_display(&framest, 1, "> ");
+                } else {
+                    pt_frame_display(&framest, 1, "< ");
+                }
+            }
         }
     }
 
