@@ -47,4 +47,13 @@ typedef struct {
     char data[];                /* scaleable data */
 } pt_comm_message_t;
 
+/* function declation */
+int pt_comm_socket(void);
+int pt_comm_connect(int fd, const char *addrstr);
+int pt_comm_recv_msg(int fd, void **buf_ptr, size_t *bufsiz_ptr);
+int pt_comm_send_msg(int fd, pt_comm_message_t *msg);
+int pt_comm_close(int fd);
+int pt_comm_buf_init(void **buf_ptr, size_t *bufsiz_ptr);
+int pt_comm_buf_prepare(void **buf_ptr, size_t *bufsiz_ptr, size_t require);
+
 #endif

@@ -9,6 +9,7 @@
 
 #include "trace_comm.h"
 #include "trace_ctrl.h"
+#include "trace_type.h"
 
 #define PTL(format, ...) fprintf(stderr, "[PTLog:%d] " format "\n", __LINE__, ##__VA_ARGS__)
 #if 0
@@ -176,7 +177,6 @@ int main(int argc, char *argv[])
             }
 
             /* send do_trace */
-            msg->seq = 0;
             msg->type = PT_MSG_DO_TRACE;
             msg->len = 0;
             rlen = send(cfd, msg, sizeof(pt_comm_message_t), 0);
@@ -242,7 +242,7 @@ int main(int argc, char *argv[])
 
                 /* unpack */
                 pt_type_unpack_frame(&framest, msg->data);
-                printf("[pid %5u]", msg->seq);
+                printf("[pid %5u]", 0);
                 if (framest.type == PT_FRAME_ENTRY) {
                     pt_frame_display(&framest, 1, "> ");
                 } else {

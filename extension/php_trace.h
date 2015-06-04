@@ -56,7 +56,13 @@ ZEND_BEGIN_MODULE_GLOBALS(trace)
     pt_ctrl_t               ctrl;           /* ctrl module */
     char                    ctrl_file[256]; /* ctrl filename */
 
+#if TRACE_DEBUG_SOCKET
+    int                     sock_fd;
+    void                   *sock_buf;
+    size_t                  sock_bufsiz;
+#else
     pt_comm_socket_t        comm;           /* comm module */
+#endif
     char                    comm_file[256]; /* comm filename */
 
     pid_t                   pid;            /* process id */
@@ -64,11 +70,6 @@ ZEND_BEGIN_MODULE_GLOBALS(trace)
 
     long                    ping;           /* last ping time (second) */
     long                    idle_timeout;   /* idle timeout, for current - last ping */
-#if TRACE_DEBUG_SOCKET
-    int     sock_fd;
-    char   *sock_buf;
-    size_t  sock_buflen;
-#endif
 ZEND_END_MODULE_GLOBALS(trace)
 
 
