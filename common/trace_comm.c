@@ -23,36 +23,71 @@
 #include <unistd.h>
 #include "trace_comm.h"
 
-int pt_comm_socket(void)
+/* buffer */
+static int pt_comm_buf_prepare(void **buf_ptr, size_t *bufsiz_ptr, size_t require)
 {
-    return socket(AF_UNIX, SOCK_STREAM, 0);
+    if (*bufsiz_ptr >= require) {
+        return 0;
+    }
+
+    /* alloc double required space */
+    *bufsiz_ptr = require * 2;
+
+    if (*buf_ptr == NULL) {
+        *buf_ptr = malloc(*bufsiz_ptr);
+    } else {
+        *buf_ptr = realloc(*buf_ptr, *bufsiz_ptr);
+    }
+    if (*buf_ptr == NULL) {
+        return -1;
+    }
+
+    return 0;
 }
 
-int pt_comm_connect(int fd, const char *addrstr)
+/* socket */
+int pt_comm_init(pt_comm_socket_t *sock)
+{
+    sock->fd = -1;
+    sock->buf = NULL;
+    sock->bufsiz = 0;
+
+    return 0;
+}
+
+int pt_comm_connect(pt_comm_socket_t *sock, const char *addrstr)
 {
     struct sockaddr_un addr;
+
+    /* new socket */
+    if (sock->fd == -1) {
+        sock->fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    }
+    if (sock->fd == -1) {
+        return -1;
+    }
 
     memset(&addr, 0, sizeof(addr));
     addr.sun_family = AF_UNIX;
     memcpy(addr.sun_path, addrstr, strlen(addrstr));
 
-    return connect(fd, (struct sockaddr *) &addr, sizeof(addr));
+    return connect(sock->fd, (struct sockaddr *) &addr, sizeof(addr));
 }
 
-int pt_comm_recv_msg(int fd, void **buf_ptr, size_t *bufsiz_ptr)
+int pt_comm_recv_msg(pt_comm_socket_t *sock, pt_comm_message_t **msg_ptr)
 {
     int i;
     ssize_t retval, recvlen;
     pt_comm_message_t *msg;
 
     /* prepare buffer */
-    if (pt_comm_buf_prepare(buf_ptr, bufsiz_ptr, PT_MSG_HEADER_SIZE) == -1) {
+    if (pt_comm_buf_prepare(&sock->buf, &sock->bufsiz, PT_MSG_HEADER_SIZE) == -1) {
         return PT_MSG_ERRINNER;
     }
-    msg = *buf_ptr;
+    msg = *msg_ptr = sock->buf;
 
     /* header */
-    retval = recv(fd, msg, PT_MSG_HEADER_SIZE, MSG_DONTWAIT);
+    retval = recv(sock->fd, msg, PT_MSG_HEADER_SIZE, MSG_DONTWAIT);
     if (retval == -1) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
             return PT_MSG_EMPTY;
@@ -73,14 +108,14 @@ int pt_comm_recv_msg(int fd, void **buf_ptr, size_t *bufsiz_ptr)
     }
 
     /* prepare buffer */
-    if (pt_comm_buf_prepare(buf_ptr, bufsiz_ptr, PT_MSG_SIZE(msg)) == -1) {
+    if (pt_comm_buf_prepare(&sock->buf, &sock->bufsiz, PT_MSG_SIZE(msg)) == -1) {
         return PT_MSG_ERRINNER;
     }
-    msg = *buf_ptr;
+    msg = *msg_ptr = sock->buf;
 
     /* body */
     for (i = 0, recvlen = 0; i < PT_COMM_MAXRECV; i++) {
-        retval = recv(fd, msg->data + recvlen, msg->len - recvlen, 0); /* would block */
+        retval = recv(sock->fd, msg->data + recvlen, msg->len - recvlen, 0); /* would block */
         if (retval == -1) {
             return PT_MSG_ERRSOCK;
         } else if (retval == 0) {
@@ -102,18 +137,36 @@ int pt_comm_recv_msg(int fd, void **buf_ptr, size_t *bufsiz_ptr)
     return msg->type;
 }
 
-int pt_comm_send_msg(int fd, pt_comm_message_t *msg)
+int pt_comm_build_msg(pt_comm_socket_t *sock, pt_comm_message_t **msg_ptr, size_t size, int type)
+{
+    pt_comm_message_t *msg;
+
+    /* prepare buffer */
+    if (pt_comm_buf_prepare(&sock->buf, &sock->bufsiz, PT_MSG_HEADER_SIZE + size) == -1) {
+        return PT_MSG_ERRINNER;
+    }
+    msg = *msg_ptr = sock->buf;
+
+    /* construct */
+    msg->len = size;
+    msg->type = type;
+
+    return msg->type;
+}
+
+int pt_comm_send_msg(pt_comm_socket_t *sock)
 {
     ssize_t retval;
+    pt_comm_message_t *msg = sock->buf;
 
     /* header */
-    retval = send(fd, msg, PT_MSG_HEADER_SIZE, 0);
+    retval = send(sock->fd, msg, PT_MSG_HEADER_SIZE, 0);
     if (retval == -1) {
         return PT_MSG_ERRSOCK;
     }
 
     /* body */
-    retval = send(fd, msg->data, msg->len, 0);
+    retval = send(sock->fd, msg->data, msg->len, 0);
     if (retval == -1) {
         return PT_MSG_ERRSOCK;
     }
@@ -121,36 +174,12 @@ int pt_comm_send_msg(int fd, pt_comm_message_t *msg)
     return 0;
 }
 
-int pt_comm_close(int fd)
+int pt_comm_close(pt_comm_socket_t *sock)
 {
-    return close(fd);
-}
-
-int pt_comm_buf_init(void **buf_ptr, size_t *bufsiz_ptr)
-{
-    *bufsiz_ptr = 0;
-    *buf_ptr = NULL;
-
-    return 0;
-}
-
-int pt_comm_buf_prepare(void **buf_ptr, size_t *bufsiz_ptr, size_t require)
-{
-    if (*bufsiz_ptr >= require) {
-        return 0;
-    }
-
-    /* alloc double required space */
-    *bufsiz_ptr = require * 2;
-
-    if (*buf_ptr == NULL) {
-        *buf_ptr = malloc(*bufsiz_ptr);
-    } else {
-        *buf_ptr = realloc(*buf_ptr, *bufsiz_ptr);
-    }
-    if (*buf_ptr == NULL) {
+    if (close(sock->fd) == -1) {
         return -1;
     }
 
+    sock->fd = -1;
     return 0;
 }

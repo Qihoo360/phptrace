@@ -27,7 +27,7 @@
 #include "SAPI.h"
 
 #include <errno.h>
-#include <string.h>
+#include <string.h> /* for strerror */
 #include "trace_time.h"
 #include "trace_type.h"
 #include "sds/sds.h"
@@ -173,13 +173,8 @@ static void php_trace_init_globals(zend_trace_globals *ptg)
     memset(&ptg->ctrl, 0, sizeof(ptg->ctrl));
     memset(ptg->ctrl_file, 0, sizeof(ptg->ctrl_file));
 
-#if TRACE_DEBUG_SOCKET
-    ptg->sock_fd = -1;
-    pt_comm_buf_init(&(ptg->sock_buf), &(ptg->sock_bufsiz));
-#else
-    ptg->comm.active = 0;
-#endif
-    memset(ptg->comm_file, 0, sizeof(ptg->comm_file));
+    pt_comm_init(&ptg->sock);
+    memset(ptg->sock_addr, 0, sizeof(ptg->sock_addr));
 
     ptg->pid = ptg->level = 0;
 
@@ -220,10 +215,8 @@ PHP_MINIT_FUNCTION(trace)
         return FAILURE;
     }
 
-#if TRACE_DEBUG_SOCKET
     /* Init comm module */
-    snprintf(PTG(comm_file), sizeof(PTG(comm_file)), "%s/%s", PTG(data_dir), PT_COMM_FILENAME);
-#endif
+    snprintf(PTG(sock_addr), sizeof(PTG(sock_addr)), "%s/%s", PTG(data_dir), PT_COMM_FILENAME);
 
     /* Trace in CLI */
     if (PTG(dotrace) && sapi_module.name[0] == 'c' && sapi_module.name[1] == 'l' && sapi_module.name[2] == 'i') {
@@ -268,9 +261,6 @@ PHP_RINIT_FUNCTION(trace)
     /* Anything needs pid, init here */
     if (PTG(pid) == 0) {
         PTG(pid) = getpid();
-#if !TRACE_DEBUG_SOCKET
-        snprintf(PTG(comm_file), sizeof(PTG(comm_file)), "%s/%s.%d", PTG(data_dir), PT_COMM_FILENAME, PTG(pid));
-#endif
     }
     PTG(level) = 0;
 
@@ -553,33 +543,20 @@ static int pt_frame_send(pt_frame_t *frame TSRMLS_DC)
     size_t len;
     pt_comm_message_t *msg;
 
+    /* build */
     len = pt_type_len_frame(frame);
-#if TRACE_DEBUG_SOCKET
-    /* prepare buffer */
-    if (pt_comm_buf_prepare(&PTG(sock_buf), &PTG(sock_bufsiz), PT_MSG_HEADER_SIZE + len) == -1) {
-        return -1;
-    }
-    msg = (pt_comm_message_t *) PTG(sock_buf);
-
-    /* construct */
-    msg->len = len;
-    msg->type = PT_MSG_RET;
-    pt_type_pack_frame(frame, msg->data);
-
-    /* send */
-    PTD("send message type: %x len: %d", msg->type, msg->len);
-    if (pt_comm_send_msg(PTG(sock_fd), msg) == -1) {
-        php_error(E_WARNING, "Trace send failed, errmsg: %s", strerror(errno));
-        return -1;
-    }
-#else
-    if ((msg = pt_comm_swrite_begin(&PTG(comm), len)) == NULL) {
+    if (pt_comm_build_msg(&PTG(sock), &msg, len, PT_MSG_RET) == -1) {
         php_error(E_WARNING, "Trace comm-module write begin failed, tried to allocate %ld bytes", len);
         return -1;
     }
     pt_type_pack_frame(frame, msg->data);
-    pt_comm_swrite_end(&PTG(comm), PT_MSG_RET, msg);
-#endif
+
+    /* send */
+    PTD("send message type: %x len: %d", msg->type, msg->len);
+    if (pt_comm_send_msg(&PTG(sock)) == -1) {
+        php_error(E_WARNING, "Trace send failed, errmsg: %s", strerror(errno));
+        return -1;
+    }
 
     return 0;
 }
@@ -760,33 +737,20 @@ static int pt_status_send(pt_status_t *status TSRMLS_DC)
     size_t len;
     pt_comm_message_t *msg;
 
+    /* build */
     len = pt_type_len_status(status);
-#if TRACE_DEBUG_SOCKET
-    /* prepare buffer */
-    if (pt_comm_buf_prepare(&PTG(sock_buf), &PTG(sock_bufsiz), PT_MSG_HEADER_SIZE + len) == -1) {
-        return -1;
-    }
-    msg = (pt_comm_message_t *) PTG(sock_buf);
-
-    /* construct */
-    msg->len = len;
-    msg->type = PT_MSG_RET;
-    pt_type_pack_status(status, msg->data);
-
-    /* send */
-    PTD("send message type: %x len: %d", msg->type, msg->len);
-    if (pt_comm_send_msg(PTG(sock_fd), msg) == -1) {
-        php_error(E_WARNING, "Trace send failed, errmsg: %s", strerror(errno));
-        return -1;
-    }
-#else
-    if ((msg = pt_comm_swrite_begin(&PTG(comm), len)) == NULL) {
+    if (pt_comm_build_msg(&PTG(sock), &msg, len, PT_MSG_RET) == -1) {
         php_error(E_WARNING, "Trace comm-module write begin failed, tried to allocate %ld bytes", len);
         return -1;
     }
     pt_type_pack_status(status, msg->data);
-    pt_comm_swrite_end(&PTG(comm), PT_MSG_RET, msg);
-#endif
+
+    /* send */
+    PTD("send message type: %x len: %d", msg->type, msg->len);
+    if (pt_comm_send_msg(&PTG(sock)) == -1) {
+        php_error(E_WARNING, "Trace send failed, errmsg: %s", strerror(errno));
+        return -1;
+    }
 
     return 0;
 }
@@ -852,18 +816,10 @@ static void pt_set_inactive(TSRMLS_D)
 
     /* toggle trace off, close comm-module */
     PTG(dotrace) &= ~TRACE_TO_TOOL;
-#if TRACE_DEBUG_SOCKET
-    if (PTG(sock_fd) != -1) {
+    if (PTG(sock).fd != -1) {
         PTD("Comm socket close");
-        pt_comm_close(PTG(sock_fd));
-        PTG(sock_fd) = -1;
+        pt_comm_close(&PTG(sock));
     }
-#else
-    if (PTG(comm).active) {
-        PTD("Comm socket close");
-        pt_comm_sclose(&PTG(comm), 1);
-    }
-#endif
 }
 
 
@@ -886,9 +842,7 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zen
     zval *retval = NULL;
     pt_comm_message_t *msg;
     pt_frame_t frame;
-#if TRACE_DEBUG_SOCKET
     int msg_type;
-#endif
 
 #if PHP_VERSION_ID >= 50500
     /* Why has a ex_entry ?
@@ -903,43 +857,19 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zen
     /* Check ctrl module */
     if (CTRL_IS_ACTIVE()) {
         /* Open comm socket */
-#if TRACE_DEBUG_SOCKET
-        if (PTG(sock_fd) == -1) {
-            PTD("Comm socket %s open", PTG(comm_file));
-
-            /* socket create */
-            PTG(sock_fd) = pt_comm_socket();
-            if (PTG(sock_fd) == -1) {
-                php_error(E_WARNING, "Trace socket create failed, errmsg: %s", strerror(errno));
+        if (PTG(sock).fd == -1) {
+            PTD("Comm socket %s open", PTG(sock_addr));
+            if (pt_comm_connect(&PTG(sock), PTG(sock_addr)) == -1) {
+                php_error(E_WARNING, "Trace connect to %s failed, errmsg: %s", PTG(sock_addr), strerror(errno));
                 pt_set_inactive(TSRMLS_C);
                 goto exec;
             }
-
-            /* connect */
-            if (pt_comm_connect(PTG(sock_fd), PTG(comm_file)) == -1) {
-                php_error(E_WARNING, "Trace connect to %s failed, errmsg: %s", PTG(comm_file), strerror(errno));
-                pt_set_inactive(TSRMLS_C);
-                goto exec;
-            }
-#else
-        if (!PTG(comm).active) {
-            PTD("Comm socket %s open", PTG(comm_file));
-            if (pt_comm_sopen(&PTG(comm), PTG(comm_file), 0) == -1) {
-                php_error(E_WARNING, "Trace comm-module %s open failed", PTG(comm_file));
-                pt_set_inactive(TSRMLS_C);
-                goto exec;
-            }
-#endif
             PING_UPDATE();
         }
 
         /* Handle message */
         while (1) {
-#if TRACE_DEBUG_SOCKET
-            msg_type = pt_comm_recv_msg(PTG(sock_fd), &PTG(sock_buf), &PTG(sock_bufsiz));
-            msg = (pt_comm_message_t *) PTG(sock_buf);
-            PTD("recv message type: %x", msg_type);
-            switch (msg_type) {
+            switch (msg_type = pt_comm_recv_msg(&PTG(sock), &msg)) {
                 case PT_MSG_PEERDOWN:
                 case PT_MSG_ERRSOCK:
                 case PT_MSG_ERRINNER:
@@ -947,13 +877,6 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zen
                     PTD("msg type: %x errmsg: %s", msg_type, strerror(errno));
                     pt_set_inactive(TSRMLS_C);
                     goto exec;
-#else
-            switch (pt_comm_sread(&PTG(comm), &msg, 1)) {
-                case PT_MSG_INVALID:
-                    PTD("msg type: invalid");
-                    pt_set_inactive(TSRMLS_C);
-                    goto exec;
-#endif
 
                 case PT_MSG_EMPTY:
                     PTD("msg type: empty");
@@ -986,11 +909,7 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zen
                     break;
             }
         }
-#if TRACE_DEBUG_SOCKET
-    } else if (PTG(sock_fd) != -1) {
-#else
-    } else if (PTG(comm).active) { /* comm-module still open */
-#endif
+    } else if (PTG(sock).fd != -1) { /* socket still opend */
         pt_set_inactive(TSRMLS_C);
     }
 

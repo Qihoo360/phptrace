@@ -56,14 +56,8 @@ ZEND_BEGIN_MODULE_GLOBALS(trace)
     pt_ctrl_t               ctrl;           /* ctrl module */
     char                    ctrl_file[256]; /* ctrl filename */
 
-#if TRACE_DEBUG_SOCKET
-    int                     sock_fd;
-    void                   *sock_buf;
-    size_t                  sock_bufsiz;
-#else
-    pt_comm_socket_t        comm;           /* comm module */
-#endif
-    char                    comm_file[256]; /* comm filename */
+    pt_comm_socket_t        sock;           /* comm socket */
+    char                    sock_addr[256]; /* comm address */
 
     pid_t                   pid;            /* process id */
     long                    level;          /* nesting level */

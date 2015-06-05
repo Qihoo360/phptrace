@@ -42,18 +42,23 @@
 #define PT_MSG_DO_PING                  (PT_MSG_DO_BASE + 4)
 
 typedef struct {
+    int fd;
+    void *buf;
+    size_t bufsiz;
+} pt_comm_socket_t;
+
+typedef struct {
     int32_t len;                /* message length */
     int32_t type;               /* message type */
     char data[];                /* scaleable data */
 } pt_comm_message_t;
 
 /* function declation */
-int pt_comm_socket(void);
-int pt_comm_connect(int fd, const char *addrstr);
-int pt_comm_recv_msg(int fd, void **buf_ptr, size_t *bufsiz_ptr);
-int pt_comm_send_msg(int fd, pt_comm_message_t *msg);
-int pt_comm_close(int fd);
-int pt_comm_buf_init(void **buf_ptr, size_t *bufsiz_ptr);
-int pt_comm_buf_prepare(void **buf_ptr, size_t *bufsiz_ptr, size_t require);
+int pt_comm_init(pt_comm_socket_t *sock);
+int pt_comm_connect(pt_comm_socket_t *sock, const char *addrstr);
+int pt_comm_recv_msg(pt_comm_socket_t *sock, pt_comm_message_t **msg_ptr);
+int pt_comm_build_msg(pt_comm_socket_t *sock, pt_comm_message_t **msg_ptr, size_t size, int type);
+int pt_comm_send_msg(pt_comm_socket_t *sock);
+int pt_comm_close(pt_comm_socket_t *sock);
 
 #endif
