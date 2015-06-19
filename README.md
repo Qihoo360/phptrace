@@ -115,7 +115,7 @@ Comparison
 
 ### phptrace
 * It can print call stack of executing php process, which is similar to pstack.
-* It can trace php function callls, which is similar to strace.
+* It can trace php function calls, which is similar to strace.
 * It cannot get performance summary of php scripts, which will be supported in the future.
 * It can not debug php scripts.
 
