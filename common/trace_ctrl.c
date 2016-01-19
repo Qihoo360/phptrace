@@ -37,7 +37,7 @@ void pt_ctrl_set_all(pt_ctrl_t *ctrl, uint8_t val)
     memset(ctrl->seg.addr, val, ctrl->seg.size);
 }
 
-void pt_ctrl_clean_all(pt_ctrl_t *ctrl)
+void pt_ctrl_clear_all(pt_ctrl_t *ctrl)
 {
-    pt_ctrl_set_all(ctrl, 0x00);
+    pt_ctrl_set_all(ctrl, PT_CTRL_CLEAR);
 }

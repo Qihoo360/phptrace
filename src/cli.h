@@ -14,11 +14,7 @@
  * limitations under the License.
  */
 
-/* 4 million is the hard limit of linux kernel so far, and it is 99999 on Mac
- * OS X which is coverd by this value. So 4*1024*1024 can serve both linux and
- * unix(include darwin). */
 #define PT_PID_INVALID  -1
-#define PT_PID_MAX      0x400000
 #define PT_PID_ALL      0xF0000001
 
 /* Context */

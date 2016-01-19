@@ -110,6 +110,7 @@ int pt_trace_main(void)
 
     for (;;) {
         if (interrupted) {
+            pt_ctrl_clear_all(&ctrlst);
             break;
         }
 

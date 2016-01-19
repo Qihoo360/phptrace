@@ -26,6 +26,8 @@
 #define PT_PID_MAX          4194304
 #define PT_CTRL_SIZE        PT_PID_MAX + 1
 #define PT_CTRL_FILENAME    "phptrace.ctrl"
+
+#define PT_CTRL_CLEAR       0x00
 #define PT_CTRL_ACTIVE      0x01
 
 typedef struct {
@@ -36,7 +38,7 @@ int pt_ctrl_open(pt_ctrl_t *ctrl, const char *file);
 int pt_ctrl_create(pt_ctrl_t *ctrl, const char *file);
 int pt_ctrl_close(pt_ctrl_t *ctrl);
 void pt_ctrl_set_all(pt_ctrl_t *ctrl, uint8_t val);
-void pt_ctrl_clean_all(pt_ctrl_t *ctrl);
+void pt_ctrl_clear_all(pt_ctrl_t *ctrl);
 
 #define pt_ctrl_pid(ctrl, pid)              (*(uint8_t *) (((ctrl)->seg.addr) + (pid)))
 #define pt_ctrl_is_active(ctrl, pid)        (pt_ctrl_pid(ctrl, pid) &   PT_CTRL_ACTIVE)
