@@ -150,18 +150,14 @@ void parse_args(int argc, char **argv)
     }
 
     /* sub-command */
-    if (argv[1][0] == '-') {
+    if (strcmp("trace", argv[1]) == 0) {
         clictx.command = CMD_TRACE;
+    } else if (strcmp("version", argv[1]) == 0) {
+        clictx.command = CMD_VERSION;
+    } else if (strcmp("stack", argv[1]) == 0) {
+        clictx.command = CMD_STACK;
     } else {
-        if (strcmp("trace", argv[1]) == 0) {
-            clictx.command = CMD_TRACE;
-        } else if (strcmp("version", argv[1]) == 0) {
-            clictx.command = CMD_VERSION;
-        } else if (strcmp("stack", argv[1]) == 0) {
-            clictx.command = CMD_STACK;
-        } else {
-            clictx.command = CMD_UNKNOWN;
-        }
+        clictx.command = CMD_UNKNOWN;
     }
 
     /* options */
@@ -191,6 +187,11 @@ void parse_args(int argc, char **argv)
                 usage();
                 break;
         }
+    }
+
+    /* default sub-command */
+    if (clictx.command == CMD_UNKNOWN && clictx.pid != PT_PID_INVALID) {
+        clictx.command = CMD_TRACE;
     }
 }
 
