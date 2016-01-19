@@ -21,6 +21,7 @@
 #define PT_PID_MAX      0x400000
 #define PT_PID_ALL      0xF0000001
 
+/* Context */
 typedef struct {
     int command;
     int verbose;
@@ -28,5 +29,21 @@ typedef struct {
     int pid;
 } pt_context_t;
 
-/* make it accessable, the global variable declared in cli.c */
+/* make it accessable, global variables declared in cli.c */
 extern pt_context_t clictx;
+extern volatile int interrupted;
+
+/* Verbose levels
+ * inspired by RFC 5424 http://tools.ietf.org/html/rfc5424 */
+enum {
+    /* PT_EMERGENCY, */
+    /* PT_ALERT, */
+    /* PT_CRITICAL, */
+    PT_ERROR, 
+    /* PT_WARNING, */
+    /* PT_NOTICE, */
+    PT_INFO, 
+    PT_DEBUG, 
+};
+
+int pt_log(int level, const char *format, ...);

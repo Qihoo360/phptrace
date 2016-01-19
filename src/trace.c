@@ -23,28 +23,27 @@
 #include <sys/socket.h>
 #include <sys/un.h> /* sockaddr_un */
 
-#include "common.h"
+#include "cli.h"
 #include "trace.h"
 
-#include "trace_ctrl.h" /* pt_ctrl */
+/* trace */
+#include "trace_comm.h"
+#include "trace_ctrl.h"
+#include "trace_type.h"
 
 /* select() */
 #include <sys/select.h>
 #include <sys/time.h>
 #include <sys/types.h>
-#include <sys/unistd.h>
+#include <sys/unistd.h> /* unlink() */
 
-#define PTL(format, ...) fprintf(stderr, "[PTLog:%d] " format "\n", __LINE__, ##__VA_ARGS__)
-#if 0
-#define PTD(format, ...) fprintf(stderr, "[PTDebug:%d] " format "\n", __LINE__, ##__VA_ARGS__)
-#else
-#define PTD(format, ...)
-#endif
+void pt_frame_display(pt_frame_t *frame, int indent, const char *format, ...);
 
 int pt_trace_main(void)
 {
     int sfd;
     struct sockaddr_un saddr;
+    struct sockaddr_un caddr;
 
     /* TODO config it */
     char *sock_path = "/tmp/phptrace.sock";
@@ -63,7 +62,7 @@ int pt_trace_main(void)
     strncpy(saddr.sun_path, sock_path, sizeof(saddr.sun_path) - 1);
 
     /* socket bind */
-    // unlink(saddr.sun_path);
+    unlink(saddr.sun_path);
     if (bind(sfd, (struct sockaddr *) &saddr, sizeof(struct sockaddr_un)) == -1) {
         perror("bind");
         return -1;
@@ -77,7 +76,7 @@ int pt_trace_main(void)
 
     /* control init */
     if (pt_ctrl_open(&ctrlst, "/tmp/phptrace.ctrl") == -1) {
-        PTL("ctrl open failed");
+        pt_log(PT_ERROR, "ctrl open failed");
         return -1;
     }
 
@@ -105,13 +104,17 @@ int pt_trace_main(void)
     pt_comm_message_t *msg;
     pt_frame_t framest;
 
-    int sock_rcvbuf = 1024 * 1024;
+    int i, cfd, sock_rcvbuf = 1024 * 1024;
     socklen_t optlen = sizeof(sock_rcvbuf);
 
     msg_buflen = sizeof(pt_comm_message_t);
     msg = msg_buf = malloc(msg_buflen);
 
     for (;;) {
+        if (interrupted) {
+            break;
+        }
+
         memcpy(&rfds, &cfds, sizeof(fd_set)); /* TODO better way */
         FD_SET(sfd, &rfds);
         fd_count = select(maxfd + 1, &rfds, NULL, NULL, &timeout);
@@ -128,7 +131,7 @@ int pt_trace_main(void)
                 perror("accept");
                 return -1;
             }
-            PTL("accept %d", cfd);
+            pt_log(PT_INFO, "accept %d", cfd);
 
             /* add to cfds */
             FD_SET(cfd, &cfds);
@@ -140,7 +143,7 @@ int pt_trace_main(void)
             msg->type = PT_MSG_DO_TRACE;
             msg->len = 0;
             rlen = send(cfd, msg, sizeof(pt_comm_message_t), 0);
-            PTL("send do_trace, return: %ld", rlen);
+            pt_log(PT_INFO, "send do_trace, return: %ld", rlen);
 
             /* set socket opt */
             /* http://man7.org/linux/man-pages/man7/socket.7.html */
@@ -148,7 +151,7 @@ int pt_trace_main(void)
             if (getsockopt(cfd, SOL_SOCKET, SO_RCVBUF, &sock_rcvbuf, &optlen) == -1) {
                 perror("getsockopt");
             }
-            PTL("rcvbuf before: %d %u", sock_rcvbuf, optlen);
+            pt_log(PT_INFO, "rcvbuf before: %d %u", sock_rcvbuf, optlen);
 
             if (setsockopt(cfd, SOL_SOCKET, SO_RCVBUF, &sock_rcvbuf, optlen) == -1) {
                 perror("setsockopt");
@@ -157,7 +160,7 @@ int pt_trace_main(void)
             if (getsockopt(cfd, SOL_SOCKET, SO_RCVBUF, &sock_rcvbuf, &optlen) == -1) {
                 perror("getsockopt");
             }
-            PTL("rcvbuf after: %d %u", sock_rcvbuf, optlen);
+            pt_log(PT_INFO, "rcvbuf after: %d %u", sock_rcvbuf, optlen);
 
             /* accept as much as we can */
             continue;
@@ -171,14 +174,14 @@ int pt_trace_main(void)
             for (i = 0; i < 10; i++) { /* process 10 frames max per process */
                 /* header */
                 rlen = recv(cfd, msg_buf, sizeof(pt_comm_message_t), MSG_DONTWAIT);
-                PTD("recv header return: %ld", rlen);
+                pt_log(PT_INFO, "recv header return: %ld", rlen);
                 if (rlen == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
                     break;
                 } else if (rlen <= 0) {
                     FD_CLR(cfd, &cfds);
                     break;
                 }
-                PTD("msg->type: %x len: %d", msg->type, msg->len);
+                pt_log(PT_INFO, "msg->type: %x len: %d", msg->type, msg->len);
                 if (msg->type != PT_MSG_RET || msg->len <= 0) {
                     continue;
                 }
@@ -189,12 +192,12 @@ int pt_trace_main(void)
                     msg_buflen = sizeof(pt_comm_message_t) + msg->len;
                     msg_buf = realloc(msg_buf, msg_buflen);
                     msg = msg_buf; /* address may be changed after realloc */
-                    PTL("alloc %ld bytes for new buffer", msg_buflen);
+                    pt_log(PT_INFO, "alloc %ld bytes for new buffer", msg_buflen);
                 }
 
                 /* body */
                 rlen = recv(cfd, msg_buf + sizeof(pt_comm_message_t), msg->len, 0);
-                PTD("recv body return: %ld", rlen);
+                pt_log(PT_INFO, "recv body return: %ld", rlen);
                 if (rlen <= 0) {
                     FD_CLR(cfd, &cfds);
                     break;
@@ -215,6 +218,7 @@ int pt_trace_main(void)
     return 0;
 }
 
+/* TODO */
 void pt_frame_display(pt_frame_t *frame, int indent, const char *format, ...)
 {
     int i, has_bracket = 1;

@@ -20,8 +20,10 @@
 #include <stdlib.h>
 #include <error.h>
 #include <errno.h>
+#include <stdarg.h>
+#include <signal.h>
 
-#include "common.h"
+#include "cli.h"
 #include "trace.h"
 #include "version.h"
 
@@ -34,6 +36,8 @@ void parse_args(int argc, char **argv);
 /* True Global */
 pt_context_t clictx;
 
+volatile int interrupted = 0; /* flag of interrupt */
+
 /* Commands */
 enum {
     CMD_UNKNOWN = -1,
@@ -43,11 +47,36 @@ enum {
     CMD_VERSION,
 };
 
+static void sighandler(int signal)
+{
+    pt_log(PT_ERROR, "Catch signal(%d)", signal);
+    interrupted = signal;
+}
+
+int pt_log(int level, const char *format, ...)
+{
+    int ret;
+    va_list ap;
+
+    if (level > clictx.verbose) {
+        return 0;
+    }
+
+    va_start(ap, format);
+    fputs("", stderr);
+    ret = vfprintf(stderr, format, ap);
+    fputs("\n", stderr);
+    va_end(ap);
+
+    return ret;
+}
+
 void context_init(void)
 {
-    clictx.command = 0;
+    clictx.command = CMD_UNKNOWN;
     clictx.verbose = 0;
-    clictx.pid = 0;
+
+    clictx.pid = PT_PID_INVALID;
 }
 
 void context_show(void)
@@ -110,12 +139,14 @@ void parse_args(int argc, char **argv)
 
     struct option long_opts[] = {
         {"pid",     required_argument,  NULL, 'p'},
+        {"help",    no_argument,        NULL, 'h'},
         {"verbose", no_argument,        NULL, 'v'},
         {0, 0, 0, 0}
     };
 
     if (argc < 2) {
         usage();
+        return;
     }
 
     /* sub-command */
@@ -144,7 +175,7 @@ void parse_args(int argc, char **argv)
 
                 clictx.pid = (int) strtol(optarg, &end, 10);
                 if (errno || *end != '\0' || clictx.pid < 0 || clictx.pid > PT_PID_MAX) {
-                    error(EXIT_FAILURE, errno, "Invalid procee id \"%s\"", optarg);
+                    error(EXIT_FAILURE, errno, "Invalid process id \"%s\"", optarg);
                 }
                 break;
 
@@ -175,8 +206,14 @@ int main(int argc, char **argv)
         context_show();
     }
 
+    if (signal(SIGINT, sighandler) == SIG_ERR) {
+        pt_log(PT_ERROR, "Register signal handler failed");
+        exit(EXIT_FAILURE);
+    }
+
     switch (clictx.command) {
         case CMD_VERSION:
+            status = 0;
             printf("php-trace version %s (cli:%s)\n", TRACE_VERSION, TRACE_CLI_VERSION);
             break;
 
