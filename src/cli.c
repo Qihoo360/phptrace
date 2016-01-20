@@ -50,7 +50,7 @@ enum {
 
 static void sighandler(int signal)
 {
-    pt_log(PT_ERROR, "Catch signal(%d)", signal);
+    pt_log(PT_INFO, "Catch signal (%d)", signal);
     interrupted = signal;
 }
 
@@ -63,11 +63,25 @@ int pt_log(int level, const char *format, ...)
         return 0;
     }
 
+    if (level == PT_ERROR) {
+        fputs("trace_cli.ERROR: ", stderr);
+    } else if (level == PT_WARNING) {
+        fputs("trace_cli.WARN:  ", stderr);
+    } else if (level == PT_INFO) {
+        fputs("trace_cli.INFO:  ", stderr);
+    } else if (level == PT_DEBUG) {
+        fputs("trace_cli.DEBUG: ", stderr);
+    }
+
     va_start(ap, format);
-    fputs("", stderr);
     ret = vfprintf(stderr, format, ap);
-    fputs("\n", stderr);
     va_end(ap);
+
+    if (errno) {
+        fprintf(stderr, " \"%s(%d)\"", strerror(errno), errno);
+    }
+
+    fputs("\n", stderr);
 
     return ret;
 }
@@ -95,12 +109,9 @@ void context_show(void)
         cmdname = "unknown";
     }
 
-    printf(
-        "command: %s\n"
-        "verbose: %d\n"
-        "pid: %d\n",
-        cmdname, clictx.verbose, clictx.pid
-    );
+    pt_log(PT_INFO, "command = %s", cmdname);
+    pt_log(PT_INFO, "verbose = %d", clictx.verbose);
+    pt_log(PT_INFO, "pid = %d", clictx.pid);
 }
 
 void usage(void)
@@ -208,19 +219,23 @@ int main(int argc, char **argv)
         context_show();
     }
 
-    if (signal(SIGINT, sighandler) == SIG_ERR) {
+    if (signal(SIGINT, sighandler) == SIG_ERR || signal(SIGTERM, sighandler) == SIG_ERR) {
         pt_log(PT_ERROR, "Register signal handler failed");
         exit(EXIT_FAILURE);
     }
 
+    status = 0;
     switch (clictx.command) {
         case CMD_VERSION:
-            status = 0;
             printf("php-trace version %s (cli:%s)\n", TRACE_VERSION, TRACE_CLI_VERSION);
             break;
 
         case CMD_TRACE:
             status = pt_trace_main();
+            break;
+
+        case CMD_STACK:
+            printf("Currently, stack output still not support.\n");
             break;
 
         default:

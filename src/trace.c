@@ -37,24 +37,60 @@
 #include <sys/types.h>
 #include <sys/unistd.h> /* unlink() */
 
-int pt_trace_main(void)
+static int trace_single_process(int fd, int times)
 {
-    int i, sfd, cfd, maxfd, retval, msg_type;
-    fd_set client_fds, read_fds;
-    struct timeval timeout = {1, 0};
-
-    pt_comm_socket_t sock;
-    pt_ctrl_t ctrlst;
+    int i, msg_type;
     pt_comm_message_t *msg;
     pt_frame_t framest;
 
+    for (i = 0; i < times; i++) {
+        msg_type = pt_comm_recv_msg(fd, &msg);
+        pt_log(PT_DEBUG, "recv message type: 0x%08x len: %d", msg_type, msg->len);
+
+        switch (msg_type) {
+            case PT_MSG_PEERDOWN:
+            case PT_MSG_ERR_SOCK:
+            case PT_MSG_ERR_BUF:
+            case PT_MSG_INVALID:
+                pt_log(PT_WARNING, "recv message error");
+                return -1;
+
+            case PT_MSG_EMPTY:
+                return 0;
+
+            case PT_MSG_RET:
+                pt_type_unpack_frame(&framest, msg->data);
+                printf("[pid %5u]", msg->pid);
+                if (framest.type == PT_FRAME_ENTRY) {
+                    pt_type_display_frame(&framest, 1, "> ");
+                } else {
+                    pt_type_display_frame(&framest, 1, "< ");
+                }
+                break;
+
+            default:
+                pt_log(PT_ERROR, "unknown message received with type 0x%08x", msg_type);
+                break;
+        }
+    }
+
+    return i;
+}
+
+int pt_trace_main(void)
+{
+    int sfd, cfd, maxfd, retval;
+    fd_set client_fds, read_fds;
+    struct timeval timeout;
+
+    pt_ctrl_t ctrlst;
+
     /* socket prepare */
-    pt_comm_init(&sock);
-    if (pt_comm_listen(&sock, "/tmp/" PT_COMM_FILENAME) == -1) {
+    maxfd = sfd = pt_comm_listen("/tmp/" PT_COMM_FILENAME);
+    if (sfd == -1) {
         pt_log(PT_ERROR, "socket listen failed");
         return -1;
     }
-    maxfd = sfd= sock.fd;
 
     /* control prepare */
     if (pt_ctrl_open(&ctrlst, "/tmp/" PT_CTRL_FILENAME) == -1) {
@@ -80,11 +116,11 @@ int pt_trace_main(void)
         /* select */
         memcpy(&read_fds, &client_fds, sizeof(fd_set));
         FD_SET(sfd, &read_fds);
-        timeout.tv_sec = 1;
-        timeout.tv_usec = 0;
+        timeout.tv_sec = 0;
+        timeout.tv_usec = 100000;
         retval = select(maxfd + 1, &read_fds, NULL, NULL, &timeout);
         if (retval == -1) {
-            pt_log(PT_ERROR, "select return error");
+            pt_log(PT_WARNING, "select error");
             return -1;
         } else if (retval == 0) {
             continue; /* timeout */
@@ -92,13 +128,14 @@ int pt_trace_main(void)
 
         /* accept */
         if (FD_ISSET(sfd, &read_fds)) {
-            sock.fd = sfd;
-            if ((cfd = pt_comm_accept(&sock)) == -1) {
+            cfd = pt_comm_accept(sfd);
+            if (cfd == -1) {
                 pt_log(PT_ERROR, "accept return error");
                 continue;
             }
+
             FD_SET(cfd, &client_fds);
-            pt_log(PT_INFO, "accepted %d", cfd);
+            printf("process attached\n");
 
             /* max fd */
             if (cfd > maxfd) {
@@ -107,11 +144,8 @@ int pt_trace_main(void)
             }
 
             /* send do_trace */
-            sock.fd = cfd;
-            pt_comm_build_msg(&sock, &msg, 0, PT_MSG_DO_TRACE);
-            retval = pt_comm_send_msg(&sock);
-            if (retval != 0) {
-                pt_log(PT_INFO, "send do_trace, return: %d error: %s", retval, strerror(errno));
+            if (pt_comm_send_type(cfd, PT_MSG_DO_TRACE) == -1) {
+                pt_log(PT_ERROR, "send do_trace error");
             }
 
             continue; /* accept first */
@@ -122,42 +156,11 @@ int pt_trace_main(void)
             if (!FD_ISSET(cfd, &read_fds)) {
                 continue;
             }
-            sock.fd = cfd;
 
-            for (i = 0; i < 10; i++) { /* read 10 frames per process */
-                msg_type = pt_comm_recv_msg(&sock, &msg);
-                pt_log(PT_DEBUG, "recv message type: 0x%08x len: %d", msg_type, msg->len);
-
-                switch (msg_type) {
-                    case PT_MSG_PEERDOWN:
-                    case PT_MSG_ERRSOCK:
-                    case PT_MSG_ERRINNER:
-                    case PT_MSG_INVALID:
-                        pt_log(PT_WARNING, "recv message error errno: %d errmsg: %s", errno, strerror(errno));
-                        FD_CLR(cfd, &client_fds);
-                        close(cfd);
-                        pt_log(PT_WARNING, "close %d", cfd);
-                        i = 11; /* jump out for loop */
-                        break;
-
-                    case PT_MSG_EMPTY:
-                        i = 11; /* jump out for loop */
-                        break;
-
-                    case PT_MSG_RET:
-                        pt_type_unpack_frame(&framest, msg->data);
-                        printf("[pid %5u]", msg->pid);
-                        if (framest.type == PT_FRAME_ENTRY) {
-                            pt_type_display_frame(&framest, 1, "> ");
-                        } else {
-                            pt_type_display_frame(&framest, 1, "< ");
-                        }
-                        break;
-
-                    default:
-                        pt_log(PT_ERROR, "Trace unknown message received with type 0x%08x", msg_type);
-                        break;
-                }
+            if (trace_single_process(cfd, 10) == -1) {
+                FD_CLR(cfd, &client_fds);
+                pt_comm_close(cfd);
+                printf("process detached\n");
             }
         }
     }

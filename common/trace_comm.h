@@ -19,7 +19,7 @@
 
 #define PT_COMM_FILENAME                "phptrace.sock"
 #define PT_COMM_MAXRECV                 10
-#define PT_COMM_BUFSIZ                  4096
+#define PT_COMM_BACKLOG                 128
 
 #define PT_MSG_HEADER_SIZE              sizeof(pt_comm_message_t)
 #define PT_MSG_SIZE(msg)                sizeof(pt_comm_message_t) + msg->len
@@ -29,8 +29,8 @@
 /* Type codes of inner message */
 #define PT_MSG_EMPTY                    0x00000000
 #define PT_MSG_PEERDOWN                 0x00000001
-#define PT_MSG_ERRSOCK                  0x00000002
-#define PT_MSG_ERRINNER                 0x00000003
+#define PT_MSG_ERR_SOCK                 0x00000002
+#define PT_MSG_ERR_BUF                  0x00000003
 #define PT_MSG_INVALID                  0x00000004
 
 /* Type codes of user defined message
@@ -42,12 +42,6 @@
 #define PT_MSG_DO_PING                  (PT_MSG_DO_BASE + 4)
 
 typedef struct {
-    int fd;
-    void *buf;
-    size_t bufsiz;
-} pt_comm_socket_t;
-
-typedef struct {
     int32_t len;                /* message length */
     int32_t type;               /* message type */
     int32_t pid;                /* pid TODO to be moved out */
@@ -55,13 +49,13 @@ typedef struct {
 } pt_comm_message_t;
 
 /* function declation */
-int pt_comm_init(pt_comm_socket_t *sock);
-int pt_comm_connect(pt_comm_socket_t *sock, const char *addrstr);
-int pt_comm_listen(pt_comm_socket_t *sock, const char *addrstr);
-int pt_comm_accept(pt_comm_socket_t *sock);
-int pt_comm_recv_msg(pt_comm_socket_t *sock, pt_comm_message_t **msg_ptr);
-int pt_comm_build_msg(pt_comm_socket_t *sock, pt_comm_message_t **msg_ptr, size_t size, int type);
-int pt_comm_send_msg(pt_comm_socket_t *sock);
-int pt_comm_close(pt_comm_socket_t *sock);
+int pt_comm_connect(const char *addrstr);
+int pt_comm_listen(const char *addrstr);
+int pt_comm_accept(int fd);
+int pt_comm_recv_msg(int fd, pt_comm_message_t **msg_ptr);
+int pt_comm_build_msg(pt_comm_message_t **msg_ptr, size_t size, int type);
+int pt_comm_send_type(int fd, int type);
+int pt_comm_send_msg(int fd, pt_comm_message_t *msg);
+int pt_comm_close(int fd);
 
 #endif
