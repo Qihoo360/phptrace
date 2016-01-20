@@ -14,28 +14,18 @@
  * limitations under the License.
  */
 
-#include <stdlib.h>
+#include <string.h>
 #include <stdio.h>
-#include <errno.h>
-
-/* socket(), bind() */
+#include <sys/select.h>
+#include <sys/time.h>
 #include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/un.h> /* sockaddr_un */
 
-#include "cli.h"
-#include "trace.h"
-
-/* trace */
 #include "trace_comm.h"
 #include "trace_ctrl.h"
 #include "trace_type.h"
 
-/* select() */
-#include <sys/select.h>
-#include <sys/time.h>
-#include <sys/types.h>
-#include <sys/unistd.h> /* unlink() */
+#include "cli.h"
+#include "trace.h"
 
 static int trace_single_process(int fd, int times)
 {

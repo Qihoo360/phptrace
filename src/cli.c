@@ -23,7 +23,7 @@
 #include <stdarg.h>
 #include <signal.h>
 
-#include "common/trace_ctrl.h"
+#include "trace_ctrl.h"
 
 #include "cli.h"
 #include "trace.h"
