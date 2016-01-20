@@ -122,8 +122,9 @@ int pt_trace_main(void)
             continue; /* timeout */
         }
 
-        /* accept */
+        /* client connected */
         if (FD_ISSET(sfd, &read_fds)) {
+            /* accept */
             cfd = pt_comm_accept(sfd);
             if (cfd == -1) {
                 pt_log(PT_ERROR, "accept return error");
@@ -154,6 +155,7 @@ int pt_trace_main(void)
             }
 
             if (trace_single_process(cfd, 10) == -1) {
+                /* client disconnect */
                 FD_CLR(cfd, &client_fds);
                 pt_comm_close(cfd);
                 printf("process detached\n");

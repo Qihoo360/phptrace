@@ -559,7 +559,8 @@ static int pt_frame_send(pt_frame_t *frame TSRMLS_DC)
     /* send */
     PTD("send message type: 0x%08x len: %d", msg->type, msg->len);
     if (pt_comm_send_msg(PTG(sock_fd), msg) == -1) {
-        php_error(E_WARNING, "Trace send message failed, errmsg: %s", strerror(errno));
+        /* Call php_error carefully, frameworks may handle it and shutdown
+           php_error(E_WARNING, "Trace send message failed, errmsg: %s", strerror(errno)); */
         return -1;
     }
 
@@ -688,7 +689,8 @@ static int pt_status_send(pt_status_t *status TSRMLS_DC)
     /* send */
     PTD("send message type: 0x%08x len: %d", msg->type, msg->len);
     if (pt_comm_send_msg(PTG(sock_fd), msg) == -1) {
-        php_error(E_WARNING, "Trace send message failed, errmsg: %s", strerror(errno));
+        /* Call php_error carefully, frameworks may handle it and shutdown
+           php_error(E_WARNING, "Trace send message failed, errmsg: %s", strerror(errno)); */
         return -1;
     }
 
