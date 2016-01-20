@@ -26,6 +26,7 @@
 #include "zend_extensions.h"
 #include "SAPI.h"
 
+#include "trace_comm.h"
 #include "trace_time.h"
 #include "trace_type.h"
 #include "sds/sds.h"
@@ -170,7 +171,7 @@ static void php_trace_init_globals(zend_trace_globals *ptg)
     memset(&ptg->ctrl, 0, sizeof(ptg->ctrl));
     memset(ptg->ctrl_file, 0, sizeof(ptg->ctrl_file));
 
-    pt_comm_init(&ptg->sock);
+    ptg->sock_fd = -1;
     memset(ptg->sock_addr, 0, sizeof(ptg->sock_addr));
 
     ptg->pid = ptg->level = 0;
@@ -251,9 +252,9 @@ PHP_MSHUTDOWN_FUNCTION(trace)
     pt_ctrl_close(&PTG(ctrl));
 
     /* Close comm module */
-    if (PTG(sock).fd != -1) {
+    if (PTG(sock_fd) != -1) {
         PTD("Comm socket close");
-        pt_comm_close(&PTG(sock));
+        pt_comm_close(PTG(sock_fd));
     }
 
     return SUCCESS;
@@ -548,7 +549,7 @@ static int pt_frame_send(pt_frame_t *frame TSRMLS_DC)
 
     /* build */
     len = pt_type_len_frame(frame);
-    if (pt_comm_build_msg(&PTG(sock), &msg, len, PT_MSG_RET) == -1) {
+    if (pt_comm_build_msg(&msg, len, PT_MSG_RET) == -1) {
         php_error(E_WARNING, "Trace build message failed, size: %ld", len);
         return -1;
     }
@@ -557,7 +558,7 @@ static int pt_frame_send(pt_frame_t *frame TSRMLS_DC)
 
     /* send */
     PTD("send message type: 0x%08x len: %d", msg->type, msg->len);
-    if (pt_comm_send_msg(&PTG(sock)) == -1) {
+    if (pt_comm_send_msg(PTG(sock_fd), msg) == -1) {
         php_error(E_WARNING, "Trace send message failed, errmsg: %s", strerror(errno));
         return -1;
     }
@@ -677,7 +678,7 @@ static int pt_status_send(pt_status_t *status TSRMLS_DC)
 
     /* build */
     len = pt_type_len_status(status);
-    if (pt_comm_build_msg(&PTG(sock), &msg, len, PT_MSG_RET) == -1) {
+    if (pt_comm_build_msg(&msg, len, PT_MSG_RET) == -1) {
         php_error(E_WARNING, "Trace build message failed, size: %ld", len);
         return -1;
     }
@@ -686,7 +687,7 @@ static int pt_status_send(pt_status_t *status TSRMLS_DC)
 
     /* send */
     PTD("send message type: 0x%08x len: %d", msg->type, msg->len);
-    if (pt_comm_send_msg(&PTG(sock)) == -1) {
+    if (pt_comm_send_msg(PTG(sock_fd), msg) == -1) {
         php_error(E_WARNING, "Trace send message failed, errmsg: %s", strerror(errno));
         return -1;
     }
@@ -758,9 +759,10 @@ static void pt_set_inactive(TSRMLS_D)
     CTRL_SET_INACTIVE();
 
     /* Close comm module */
-    if (PTG(sock).fd != -1) {
+    if (PTG(sock_fd) != -1) {
         PTD("Comm socket close");
-        pt_comm_close(&PTG(sock));
+        pt_comm_close(PTG(sock_fd));
+        PTG(sock_fd) = -1;
     }
 }
 
@@ -799,9 +801,10 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zen
     /* Check ctrl module */
     if (CTRL_IS_ACTIVE()) {
         /* Open comm socket */
-        if (PTG(sock).fd == -1) {
+        if (PTG(sock_fd) == -1) {
             PTD("Comm socket connect to %s", PTG(sock_addr));
-            if (pt_comm_connect(&PTG(sock), PTG(sock_addr)) == -1) {
+            PTG(sock_fd) = pt_comm_connect(PTG(sock_addr));
+            if (PTG(sock_fd) == -1) {
                 php_error(E_WARNING, "Trace connect to %s failed, errmsg: %s", PTG(sock_addr), strerror(errno));
                 pt_set_inactive(TSRMLS_C);
                 goto exec;
@@ -811,12 +814,12 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zen
 
         /* Handle message */
         while (1) {
-            msg_type = pt_comm_recv_msg(&PTG(sock), &msg);
+            msg_type = pt_comm_recv_msg(PTG(sock_fd), &msg);
             PTD("recv message type: 0x%08x len: %d", msg_type, msg->len);
             switch (msg_type) {
                 case PT_MSG_PEERDOWN:
-                case PT_MSG_ERRSOCK:
-                case PT_MSG_ERRINNER:
+                case PT_MSG_ERR_SOCK:
+                case PT_MSG_ERR_BUF:
                 case PT_MSG_INVALID:
                     PTD("recv message error errno: %d errmsg: %s", errno, strerror(errno));
                     pt_set_inactive(TSRMLS_C);
@@ -853,7 +856,7 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zen
                     break;
             }
         }
-    } else if (PTG(sock).fd != -1) { /* comm socket still opend */
+    } else if (PTG(sock_fd) != -1) { /* comm socket still opend */
         pt_set_inactive(TSRMLS_C);
     }
 
