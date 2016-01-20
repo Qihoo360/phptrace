@@ -39,176 +39,124 @@
 
 int pt_trace_main(void)
 {
-    int sfd;
-    struct sockaddr_un saddr;
-    struct sockaddr_un caddr;
+    int i, sfd, cfd, maxfd, retval, msg_type;
+    fd_set client_fds, read_fds;
+    struct timeval timeout = {1, 0};
 
-    /* TODO config it */
-    char *sock_path = "/tmp/phptrace.sock";
+    pt_comm_socket_t sock;
     pt_ctrl_t ctrlst;
+    pt_comm_message_t *msg;
+    pt_frame_t framest;
 
-    /* socket create */
-    sfd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (sfd == -1) {
-        perror("create");
+    /* socket prepare */
+    pt_comm_init(&sock);
+    if (pt_comm_listen(&sock, "/tmp/" PT_COMM_FILENAME) == -1) {
+        pt_log(PT_ERROR, "socket listen failed");
         return -1;
     }
+    maxfd = sfd= sock.fd;
 
-    /* socket address */
-    memset(&saddr, 0, sizeof(struct sockaddr_un));
-    saddr.sun_family = AF_UNIX;
-    strncpy(saddr.sun_path, sock_path, sizeof(saddr.sun_path) - 1);
-
-    /* socket bind */
-    unlink(saddr.sun_path);
-    if (bind(sfd, (struct sockaddr *) &saddr, sizeof(struct sockaddr_un)) == -1) {
-        perror("bind");
-        return -1;
-    }
-
-    /* socket listen */
-    if (listen(sfd, 128) == -1) {
-        perror("listen");
-        return -1;
-    }
-
-    /* control init */
-    if (pt_ctrl_open(&ctrlst, "/tmp/phptrace.ctrl") == -1) {
+    /* control prepare */
+    if (pt_ctrl_open(&ctrlst, "/tmp/" PT_CTRL_FILENAME) == -1) {
         pt_log(PT_ERROR, "ctrl open failed");
         return -1;
     }
-
-    /* control switch on */
     if (clictx.pid == PT_PID_ALL) {
         pt_ctrl_set_all(&ctrlst, PT_CTRL_ACTIVE);
     } else {
         pt_ctrl_set_active(&ctrlst, clictx.pid);
     }
 
-    /* TODO fd declaration */
-    int maxfd, fd_count;
-    struct timeval timeout = {1, 0};
-    fd_set cfds, rfds;
-    FD_ZERO(&cfds);
-    maxfd = sfd;
-
-    /* TODO */
-    socklen_t calen;
-
-    /* trace message */
-    size_t msg_buflen;
-    ssize_t rlen;
-    void *msg_buf;
-    pt_comm_message_t *msg;
-    pt_frame_t framest;
-
-    int i, cfd, sock_rcvbuf = 1024 * 1024;
-    socklen_t optlen = sizeof(sock_rcvbuf);
-
-    msg_buflen = sizeof(pt_comm_message_t);
-    msg = msg_buf = malloc(msg_buflen);
+    /* select prepare */
+    FD_ZERO(&client_fds);
+    FD_ZERO(&read_fds);
 
     for (;;) {
         if (interrupted) {
             pt_ctrl_clear_all(&ctrlst);
-            break;
+            return 0;
         }
 
-        memcpy(&rfds, &cfds, sizeof(fd_set)); /* TODO better way */
-        FD_SET(sfd, &rfds);
-        fd_count = select(maxfd + 1, &rfds, NULL, NULL, &timeout);
-        if (fd_count <= 0) {
-            /* timeout or error */
-            continue;
+        /* select */
+        memcpy(&read_fds, &client_fds, sizeof(fd_set));
+        FD_SET(sfd, &read_fds);
+        timeout.tv_sec = 1;
+        timeout.tv_usec = 0;
+        retval = select(maxfd + 1, &read_fds, NULL, NULL, &timeout);
+        if (retval == -1) {
+            pt_log(PT_ERROR, "select return error");
+            return -1;
+        } else if (retval == 0) {
+            continue; /* timeout */
         }
 
         /* accept */
-        if (FD_ISSET(sfd, &rfds)) {
-            calen = sizeof(caddr);
-            cfd = accept(sfd, (struct sockaddr *) &caddr, &calen);
-            if (cfd == -1) {
-                perror("accept");
-                return -1;
+        if (FD_ISSET(sfd, &read_fds)) {
+            sock.fd = sfd;
+            if ((cfd = pt_comm_accept(&sock)) == -1) {
+                pt_log(PT_ERROR, "accept return error");
+                continue;
             }
-            pt_log(PT_INFO, "accept %d", cfd);
+            FD_SET(cfd, &client_fds);
+            pt_log(PT_INFO, "accepted %d", cfd);
 
-            /* add to cfds */
-            FD_SET(cfd, &cfds);
+            /* max fd */
             if (cfd > maxfd) {
                 maxfd = cfd;
+                pt_log(PT_INFO, "maxfd update to %d", cfd);
             }
 
             /* send do_trace */
-            msg->type = PT_MSG_DO_TRACE;
-            msg->len = 0;
-            rlen = send(cfd, msg, sizeof(pt_comm_message_t), 0);
-            pt_log(PT_INFO, "send do_trace, return: %ld", rlen);
-
-            /* set socket opt */
-            /* http://man7.org/linux/man-pages/man7/socket.7.html */
-            /* http://www.cyberciti.biz/faq/linux-tcp-tuning/ */
-            if (getsockopt(cfd, SOL_SOCKET, SO_RCVBUF, &sock_rcvbuf, &optlen) == -1) {
-                perror("getsockopt");
-            }
-            pt_log(PT_INFO, "rcvbuf before: %d %u", sock_rcvbuf, optlen);
-
-            if (setsockopt(cfd, SOL_SOCKET, SO_RCVBUF, &sock_rcvbuf, optlen) == -1) {
-                perror("setsockopt");
+            sock.fd = cfd;
+            pt_comm_build_msg(&sock, &msg, 0, PT_MSG_DO_TRACE);
+            retval = pt_comm_send_msg(&sock);
+            if (retval != 0) {
+                pt_log(PT_INFO, "send do_trace, return: %d error: %s", retval, strerror(errno));
             }
 
-            if (getsockopt(cfd, SOL_SOCKET, SO_RCVBUF, &sock_rcvbuf, &optlen) == -1) {
-                perror("getsockopt");
-            }
-            pt_log(PT_INFO, "rcvbuf after: %d %u", sock_rcvbuf, optlen);
-
-            /* accept as much as we can */
-            continue;
+            continue; /* accept first */
         }
 
-        /* recv trace data */
-        for (cfd = sfd + 1; cfd < 256; cfd++) {
-            if (!FD_ISSET(cfd, &rfds)) {
+        /* read trace data */
+        for (cfd = sfd + 1; cfd <= maxfd; cfd++) {
+            if (!FD_ISSET(cfd, &read_fds)) {
                 continue;
             }
-            for (i = 0; i < 10; i++) { /* process 10 frames max per process */
-                /* header */
-                rlen = recv(cfd, msg_buf, sizeof(pt_comm_message_t), MSG_DONTWAIT);
-                pt_log(PT_INFO, "recv header return: %ld", rlen);
-                if (rlen == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-                    break;
-                } else if (rlen <= 0) {
-                    FD_CLR(cfd, &cfds);
-                    break;
-                }
-                pt_log(PT_INFO, "msg->type: %x len: %d", msg->type, msg->len);
-                if (msg->type != PT_MSG_RET || msg->len <= 0) {
-                    continue;
-                }
+            sock.fd = cfd;
 
-                /* prepare body space */
-                if (msg_buflen < sizeof(pt_comm_message_t) + msg->len) {
-                    /* optimize dynamic alloc */
-                    msg_buflen = sizeof(pt_comm_message_t) + msg->len;
-                    msg_buf = realloc(msg_buf, msg_buflen);
-                    msg = msg_buf; /* address may be changed after realloc */
-                    pt_log(PT_INFO, "alloc %ld bytes for new buffer", msg_buflen);
-                }
+            for (i = 0; i < 10; i++) { /* read 10 frames per process */
+                msg_type = pt_comm_recv_msg(&sock, &msg);
+                pt_log(PT_DEBUG, "recv message type: 0x%08x len: %d", msg_type, msg->len);
 
-                /* body */
-                rlen = recv(cfd, msg_buf + sizeof(pt_comm_message_t), msg->len, 0);
-                pt_log(PT_INFO, "recv body return: %ld", rlen);
-                if (rlen <= 0) {
-                    FD_CLR(cfd, &cfds);
-                    break;
-                }
+                switch (msg_type) {
+                    case PT_MSG_PEERDOWN:
+                    case PT_MSG_ERRSOCK:
+                    case PT_MSG_ERRINNER:
+                    case PT_MSG_INVALID:
+                        pt_log(PT_WARNING, "recv message error errno: %d errmsg: %s", errno, strerror(errno));
+                        FD_CLR(cfd, &client_fds);
+                        close(cfd);
+                        pt_log(PT_WARNING, "close %d", cfd);
+                        i = 11; /* jump out for loop */
+                        break;
 
-                /* unpack */
-                pt_type_unpack_frame(&framest, msg->data);
-                printf("[pid %5u]", 0);
-                if (framest.type == PT_FRAME_ENTRY) {
-                    pt_type_display_frame(&framest, 1, "> ");
-                } else {
-                    pt_type_display_frame(&framest, 1, "< ");
+                    case PT_MSG_EMPTY:
+                        i = 11; /* jump out for loop */
+                        break;
+
+                    case PT_MSG_RET:
+                        pt_type_unpack_frame(&framest, msg->data);
+                        printf("[pid %5u]", msg->pid);
+                        if (framest.type == PT_FRAME_ENTRY) {
+                            pt_type_display_frame(&framest, 1, "> ");
+                        } else {
+                            pt_type_display_frame(&framest, 1, "< ");
+                        }
+                        break;
+
+                    default:
+                        pt_log(PT_ERROR, "Trace unknown message received with type 0x%08x", msg_type);
+                        break;
                 }
             }
         }

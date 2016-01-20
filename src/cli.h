@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#define TRACE_VERSION "0.4.0-dev"
+#define TRACE_CLI_VERSION "0.4.0-dev"
+
 #define PT_PID_INVALID  -1
 #define PT_PID_ALL      0xF0000001
 
@@ -36,7 +39,7 @@ enum {
     /* PT_ALERT, */
     /* PT_CRITICAL, */
     PT_ERROR, 
-    /* PT_WARNING, */
+    PT_WARNING,
     /* PT_NOTICE, */
     PT_INFO, 
     PT_DEBUG, 

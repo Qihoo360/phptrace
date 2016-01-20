@@ -27,7 +27,6 @@
 
 #include "cli.h"
 #include "trace.h"
-#include "version.h"
 
 void context_init(void);
 void context_show(void);

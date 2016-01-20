@@ -59,7 +59,7 @@ int pt_comm_connect(pt_comm_socket_t *sock, const char *addrstr)
 {
     struct sockaddr_un addr;
 
-    /* new socket */
+    /* create */
     if (sock->fd == -1) {
         sock->fd = socket(AF_UNIX, SOCK_STREAM, 0);
     }
@@ -67,11 +67,51 @@ int pt_comm_connect(pt_comm_socket_t *sock, const char *addrstr)
         return -1;
     }
 
-    memset(&addr, 0, sizeof(addr));
+    /* address */
+    memset(&addr, 0, sizeof(struct sockaddr_un));
     addr.sun_family = AF_UNIX;
-    memcpy(addr.sun_path, addrstr, strlen(addrstr));
+    strncpy(addr.sun_path, addrstr, sizeof(addr.sun_path) - 1);
 
     return connect(sock->fd, (struct sockaddr *) &addr, sizeof(addr));
+}
+
+int pt_comm_listen(pt_comm_socket_t *sock, const char *addrstr)
+{
+    struct sockaddr_un addr;
+
+    /* create */
+    if (sock->fd == -1) {
+        sock->fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    }
+    if (sock->fd == -1) {
+        return -1;
+    }
+
+    /* address */
+    memset(&addr, 0, sizeof(struct sockaddr_un));
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, addrstr, sizeof(addr.sun_path) - 1);
+
+    /* bind */
+    unlink(addr.sun_path);
+    if (bind(sock->fd, (struct sockaddr *) &addr, sizeof(struct sockaddr_un)) == -1) {
+        return -1;
+    }
+
+    /* listen */
+    if (listen(sock->fd, 128) == -1) {
+        return -1;
+    }
+
+    return 0;
+}
+
+int pt_comm_accept(pt_comm_socket_t *sock)
+{
+    struct sockaddr_un addr;
+    socklen_t addrlen = sizeof(addr);
+
+    return accept(sock->fd, (struct sockaddr *) &addr, &addrlen);
 }
 
 int pt_comm_recv_msg(pt_comm_socket_t *sock, pt_comm_message_t **msg_ptr)

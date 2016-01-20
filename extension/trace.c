@@ -553,6 +553,7 @@ static int pt_frame_send(pt_frame_t *frame TSRMLS_DC)
         return -1;
     }
     pt_type_pack_frame(frame, msg->data);
+    msg->pid = PTG(pid); /* TODO move to seperated init command */
 
     /* send */
     PTD("send message type: 0x%08x len: %d", msg->type, msg->len);
@@ -681,6 +682,7 @@ static int pt_status_send(pt_status_t *status TSRMLS_DC)
         return -1;
     }
     pt_type_pack_status(status, msg->data);
+    msg->pid = PTG(pid); /* TODO move to seperated init command */
 
     /* send */
     PTD("send message type: 0x%08x len: %d", msg->type, msg->len);

@@ -50,12 +50,15 @@ typedef struct {
 typedef struct {
     int32_t len;                /* message length */
     int32_t type;               /* message type */
+    int32_t pid;                /* pid TODO to be moved out */
     char data[];                /* scaleable data */
 } pt_comm_message_t;
 
 /* function declation */
 int pt_comm_init(pt_comm_socket_t *sock);
 int pt_comm_connect(pt_comm_socket_t *sock, const char *addrstr);
+int pt_comm_listen(pt_comm_socket_t *sock, const char *addrstr);
+int pt_comm_accept(pt_comm_socket_t *sock);
 int pt_comm_recv_msg(pt_comm_socket_t *sock, pt_comm_message_t **msg_ptr);
 int pt_comm_build_msg(pt_comm_socket_t *sock, pt_comm_message_t **msg_ptr, size_t size, int type);
 int pt_comm_send_msg(pt_comm_socket_t *sock);
