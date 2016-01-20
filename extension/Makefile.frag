@@ -7,15 +7,15 @@ PHP_TRACE_BINDIR = ` \
 		$(top_srcdir)/build/shtool path -d "${PHP_EXECUTABLE}"; \
 	fi`
 
-install-tracetool: tracetool
+install-cli: tracetool
 	-@$(mkinstalldirs) $(INSTALL_ROOT)${PHP_TRACE_BINDIR}
 	@echo "Installing PHP Trace binary:      $(INSTALL_ROOT)${PHP_TRACE_BINDIR}/"
-	@$(INSTALL) $(builddir)/../cmdtool/phptrace $(INSTALL_ROOT)${PHP_TRACE_BINDIR}
+	@$(INSTALL) $(builddir)/../src/phptrace $(INSTALL_ROOT)${PHP_TRACE_BINDIR}
 
 clean-tracetool:
-	cd ../cmdtool && make clean
+	cd ../src && make clean
 
-tracetool: $(builddir)/../cmdtool/phptrace
+tracetool: $(builddir)/../src/phptrace
 
-$(builddir)/../cmdtool/phptrace:
-	cd ../cmdtool && make
+$(builddir)/../src/phptrace:
+	cd ../src && make

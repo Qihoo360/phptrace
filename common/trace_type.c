@@ -1,5 +1,5 @@
 /**
- * Copyright 2015 Qihoo 360
+ * Copyright 2016 Qihoo 360
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #define _GNU_SOURCE /* only for strndup() */
 #endif
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "trace_type.h"
@@ -162,6 +163,68 @@ size_t pt_type_unpack_frame(pt_frame_t *frame, char *buf)
     UNPACK(buf, int64_t,  frame->exit.mempeak);
 
     return buf - ori;
+}
+
+void pt_type_display_frame(pt_frame_t *frame, int indent, const char *format, ...)
+{
+    int i, has_bracket = 1;
+    va_list ap;
+
+    /* indent */
+    if (indent) {
+        printf("%*s", (frame->level - 1) * 4, "");
+    }
+
+    /* format */
+    if (format) {
+        va_start(ap, format);
+        vprintf(format, ap);
+        va_end(ap);
+    }
+
+    /* frame */
+    if ((frame->functype & PT_FUNC_TYPES) == PT_FUNC_NORMAL ||
+            frame->functype & PT_FUNC_TYPES & PT_FUNC_INCLUDES) {
+        printf("%s(", frame->function);
+    } else if ((frame->functype & PT_FUNC_TYPES) == PT_FUNC_MEMBER) {
+        printf("%s->%s(", frame->class, frame->function);
+    } else if ((frame->functype & PT_FUNC_TYPES) == PT_FUNC_STATIC) {
+        printf("%s::%s(", frame->class, frame->function);
+    } else if ((frame->functype & PT_FUNC_TYPES) == PT_FUNC_EVAL) {
+        printf("%s", frame->function);
+        has_bracket = 0;
+    } else {
+        printf("unknown");
+        has_bracket = 0;
+    }
+
+    /* arguments */
+    if (frame->arg_count) {
+        for (i = 0; i < frame->arg_count; i++) {
+            printf("%s", frame->args[i]);
+            if (i < frame->arg_count - 1) {
+                printf(", ");
+            }
+        }
+    }
+    if (has_bracket) {
+        printf(")");
+    }
+
+    /* return value */
+    if (frame->type == PT_FRAME_EXIT && frame->retval) {
+        printf(" = %s", frame->retval);
+    }
+
+    /* TODO output relative filepath */
+    printf(" called at [%s:%d]", frame->filename, frame->lineno);
+    if (frame->type == PT_FRAME_EXIT) {
+        printf(" wt: %.3f ct: %.3f\n",
+                ((frame->exit.wall_time - frame->entry.wall_time) / 1000000.0),
+                ((frame->exit.cpu_time - frame->entry.cpu_time) / 1000000.0));
+    } else {
+        printf("\n");
+    }
 }
 
 /* pt_status */
