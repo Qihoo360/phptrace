@@ -1,5 +1,5 @@
 /**
- * Copyright 2015 Yuchen Wang <phobosw@gmail.com>
+ * Copyright 2016 Yuchen Wang <phobosw@gmail.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+#ifndef TRACE_CLI_H
+#define TRACE_CLI_H
 
 #define TRACE_VERSION "0.4.0-dev"
 #define TRACE_CLI_VERSION "0.4.0-dev"
@@ -46,3 +49,5 @@ enum {
 };
 
 int pt_log(int level, const char *format, ...);
+
+#endif

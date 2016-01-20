@@ -1,5 +1,5 @@
 /**
- * Copyright 2015 Yuchen Wang <phobosw@gmail.com>
+ * Copyright 2016 Yuchen Wang <phobosw@gmail.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,4 +14,9 @@
  * limitations under the License.
  */
 
+#ifndef TRACE_TRACE_H
+#define TRACE_TRACE_H
+
 int pt_trace_main(void);
+
+#endif
