@@ -16,7 +16,7 @@ before_install:
     - PT_PHP_BIN=${PT_PHP_PATH}/bin/php
 
 before_script:
-    - (cd cmdtool && make)
+    - (cd src && make)
     - ./.travis/ext_build.sh extension ${PT_PHP_PATH}
 
 script:
