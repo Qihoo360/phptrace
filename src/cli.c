@@ -24,6 +24,7 @@
 #include <signal.h>
 
 #include "trace_ctrl.h"
+#include "trace_version.h"
 
 #include "cli.h"
 #include "trace.h"

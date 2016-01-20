@@ -1,3 +1,18 @@
+Version 0.4.0-dev (2016-01-20)
+------------------------------
+
+### Added
+
+- Add support for tracing multiple PHP process
+
+### Changed
+
+- Refactor communication module base on unix socket
+- Rewrite cli tool
+    - Introduce sub-commands
+    - Only basic trace keeped in dev-version
+
+
 Version 0.3.0 (2015-05-22)
 ------------------------------
 

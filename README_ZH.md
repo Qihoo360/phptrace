@@ -47,16 +47,15 @@ phptrace是一个低开销的用于跟踪、分析PHP运行情况的工具。
     extension=trace.so
     ```
 
-4. 命令行工具编译
+4. 命令行工具编译安装
     ```
-    cd cmdtool
-    make
+    make install-cli
     ```
 
 5. 验证安装情况
     ```
     php -r 'for ($i = 0; $i < 100; $i++) usleep(10000);' &
-    ./phptrace -p $!
+    {php_bin_dir}/phptrace -p $!
     ```
 
     如果一切正常，应该可以看到类似下面的输出

@@ -14,37 +14,11 @@
  * limitations under the License.
  */
 
-#ifndef TRACE_CLI_H
-#define TRACE_CLI_H
+#ifndef TRACE_VERSION_H
+#define TRACE_VERSION_H
 
-#define PT_PID_INVALID  -1
-#define PT_PID_ALL      0xF0000001
-
-/* Context */
-typedef struct {
-    int command;
-    int verbose;
-
-    int pid;
-} pt_context_t;
-
-/* make it accessable, global variables declared in cli.c */
-extern pt_context_t clictx;
-extern volatile int interrupted;
-
-/* Verbose levels
- * inspired by RFC 5424 http://tools.ietf.org/html/rfc5424 */
-enum {
-    /* PT_EMERGENCY, */
-    /* PT_ALERT, */
-    /* PT_CRITICAL, */
-    PT_ERROR, 
-    PT_WARNING,
-    /* PT_NOTICE, */
-    PT_INFO, 
-    PT_DEBUG, 
-};
-
-int pt_log(int level, const char *format, ...);
+#define TRACE_VERSION "0.4.0-dev"
+#define TRACE_CLI_VERSION "0.4.0-dev"
+#define TRACE_EXT_VERSION "0.4.0-dev"
 
 #endif

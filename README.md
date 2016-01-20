@@ -48,16 +48,15 @@ Building
     extension=trace.so
     ```
 
-4. Command tool - Compile
+4. Command tool - Install
     ```
-    cd cmdtool
-    make
+    make install-cli
     ```
 
 5. Verify
     ```
     php -r 'for ($i = 0; $i < 100; $i++) usleep(10000);' &
-    ./phptrace -p $!
+    {php_bin_dir}/phptrace -p $!
     ```
 
     You should see something below if everything fine

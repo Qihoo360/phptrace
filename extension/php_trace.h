@@ -20,8 +20,6 @@
 extern zend_module_entry trace_module_entry;
 #define phpext_trace_ptr &trace_module_entry
 
-#define TRACE_EXT_VERSION "0.4.0-dev"
-
 #ifdef PHP_WIN32
 #   define PHP_TRACE_API __declspec(dllexport)
 #elif defined(__GNUC__) && __GNUC__ >= 4
@@ -35,6 +33,7 @@ extern zend_module_entry trace_module_entry;
 #endif
 
 #include "trace_ctrl.h"
+#include "trace_version.h"
 
 PHP_MINIT_FUNCTION(trace);
 PHP_MSHUTDOWN_FUNCTION(trace);
