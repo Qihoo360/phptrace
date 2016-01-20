@@ -22,6 +22,7 @@
 #include <errno.h>
 #include <stdarg.h>
 #include <signal.h>
+#include <sys/types.h>
 
 #include "trace_ctrl.h"
 #include "trace_version.h"
@@ -186,6 +187,12 @@ void parse_args(int argc, char **argv)
                 if (errno || *end != '\0' || clictx.pid < 0 || clictx.pid > PT_PID_MAX) {
                     error(EXIT_FAILURE, errno, "Invalid process id \"%s\"", optarg);
                 }
+
+                /* check process exists */
+                if (kill(clictx.pid, 0) == -1 && errno == ESRCH) {
+                    error(EXIT_FAILURE, errno, "Process %s not exists", optarg);
+                }
+
                 break;
 
             case 'h':

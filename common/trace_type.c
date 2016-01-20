@@ -172,7 +172,7 @@ void pt_type_display_frame(pt_frame_t *frame, int indent, const char *format, ..
 
     /* indent */
     if (indent) {
-        printf("%*s", (frame->level - 1) * 4, "");
+        printf("%*s", (frame->level - 1) * 2, "");
     }
 
     /* format */
