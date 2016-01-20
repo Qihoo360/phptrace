@@ -559,8 +559,7 @@ static int pt_frame_send(pt_frame_t *frame TSRMLS_DC)
     /* send */
     PTD("send message type: 0x%08x len: %d", msg->type, msg->len);
     if (pt_comm_send_msg(PTG(sock_fd), msg) == -1) {
-        /* Call php_error carefully, frameworks may handle it and shutdown
-           php_error(E_WARNING, "Trace send message failed, errmsg: %s", strerror(errno)); */
+        PTD("send message failed, errmsg: %s", strerror(errno));
         return -1;
     }
 
@@ -689,8 +688,7 @@ static int pt_status_send(pt_status_t *status TSRMLS_DC)
     /* send */
     PTD("send message type: 0x%08x len: %d", msg->type, msg->len);
     if (pt_comm_send_msg(PTG(sock_fd), msg) == -1) {
-        /* Call php_error carefully, frameworks may handle it and shutdown
-           php_error(E_WARNING, "Trace send message failed, errmsg: %s", strerror(errno)); */
+        PTD("send message failed, errmsg: %s", strerror(errno));
         return -1;
     }
 
@@ -807,7 +805,7 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zen
             PTD("Comm socket connect to %s", PTG(sock_addr));
             PTG(sock_fd) = pt_comm_connect(PTG(sock_addr));
             if (PTG(sock_fd) == -1) {
-                php_error(E_WARNING, "Trace connect to %s failed, errmsg: %s", PTG(sock_addr), strerror(errno));
+                PTD("Connect to %s failed, errmsg: %s", PTG(sock_addr), strerror(errno));
                 pt_set_inactive(TSRMLS_C);
                 goto exec;
             }
