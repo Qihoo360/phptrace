@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <errno.h>
 #include <string.h>
 #include <stdio.h>
 #include <sys/select.h>
@@ -100,6 +101,7 @@ int pt_trace_main(void)
     for (;;) {
         if (interrupted) {
             pt_ctrl_clear_all(&ctrlst);
+            pt_log(PT_INFO, "clear all ctrl bits");
             return 0;
         }
 
@@ -110,8 +112,12 @@ int pt_trace_main(void)
         timeout.tv_usec = 100000;
         retval = select(maxfd + 1, &read_fds, NULL, NULL, &timeout);
         if (retval == -1) {
-            pt_log(PT_WARNING, "select error");
-            return -1;
+            if (errno == EINTR) {
+                continue; /* leave interrupted to deal */
+            } else {
+                pt_log(PT_WARNING, "select error");
+                return -1;
+            }
         } else if (retval == 0) {
             continue; /* timeout */
         }

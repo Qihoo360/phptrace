@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/un.h>
 #include <unistd.h>
@@ -97,11 +98,14 @@ int pt_comm_listen(const char *addrstr)
     addr.sun_family = AF_UNIX;
     strncpy(addr.sun_path, addrstr, sizeof(addr.sun_path) - 1);
 
-    /* bind, listen */
+    /* bind */
     unlink(addr.sun_path);
     if (bind(fd, (struct sockaddr *) &addr, sizeof(struct sockaddr_un)) == -1) {
         return -1;
     }
+    chmod(addr.sun_path, ALLPERMS);
+
+    /* listen */
     if (listen(fd, PT_COMM_BACKLOG) == -1) {
         return -1;
     }
