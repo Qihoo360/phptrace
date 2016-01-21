@@ -254,7 +254,8 @@ PHP_MSHUTDOWN_FUNCTION(trace)
     /* Close comm module */
     if (PTG(sock_fd) != -1) {
         PTD("Comm socket close");
-        pt_comm_close(PTG(sock_fd));
+        pt_comm_close(PTG(sock_fd), NULL);
+        PTG(sock_fd) = -1;
     }
 
     return SUCCESS;
@@ -761,7 +762,7 @@ static void pt_set_inactive(TSRMLS_D)
     /* Close comm module */
     if (PTG(sock_fd) != -1) {
         PTD("Comm socket close");
-        pt_comm_close(PTG(sock_fd));
+        pt_comm_close(PTG(sock_fd), NULL);
         PTG(sock_fd) = -1;
     }
 }

@@ -102,6 +102,7 @@ int pt_trace_main(void)
         if (interrupted) {
             pt_ctrl_clear_all(&ctrlst);
             pt_log(PT_INFO, "clear all ctrl bits");
+            pt_comm_close(sfd, "/tmp/" PT_COMM_FILENAME);
             return 0;
         }
 
@@ -157,7 +158,7 @@ int pt_trace_main(void)
             if (trace_single_process(cfd, 10) == -1) {
                 /* client disconnect */
                 FD_CLR(cfd, &client_fds);
-                pt_comm_close(cfd);
+                pt_comm_close(cfd, NULL);
                 printf("process detached\n");
             }
         }

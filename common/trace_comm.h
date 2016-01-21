@@ -56,6 +56,6 @@ int pt_comm_recv_msg(int fd, pt_comm_message_t **msg_ptr);
 int pt_comm_build_msg(pt_comm_message_t **msg_ptr, size_t size, int type);
 int pt_comm_send_type(int fd, int type);
 int pt_comm_send_msg(int fd, pt_comm_message_t *msg);
-int pt_comm_close(int fd);
+int pt_comm_close(int fd, const char *addrstr);
 
 #endif
