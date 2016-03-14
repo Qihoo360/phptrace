@@ -16,8 +16,8 @@ before_install:
     - PT_PHP_BIN=${PT_PHP_PATH}/bin/php
 
 before_script:
-    - (cd src && make)
     - ./.travis/ext_build.sh extension ${PT_PHP_PATH}
+    - (cd extension && make cli)
 
 script:
     - (cd ${PT_PHP_PATH} && TEST_PHP_EXECUTABLE=${PT_PHP_BIN} ${PT_PHP_BIN} -n run-tests.php -q -n -d extension=trace.so -g "FAIL" --show-diff --set-timeout 120 tests Zend/tests; true)

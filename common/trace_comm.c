@@ -237,7 +237,11 @@ int pt_comm_send_msg(int fd, pt_comm_message_t *msg)
     return 0;
 }
 
-int pt_comm_close(int fd)
+int pt_comm_close(int fd, const char *addrstr)
 {
+    if (addrstr != NULL) {
+        unlink(addrstr);
+    }
+
     return close(fd);
 }
