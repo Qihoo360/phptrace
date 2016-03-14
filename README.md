@@ -30,7 +30,7 @@ Building
     cd phptrace-{version}
     ```
 
-2. PHP extension - Compile
+2. PHP extension - Build & Install
     ```
     cd extension
     {php_bin_dir}/phpize
@@ -48,15 +48,16 @@ Building
     extension=trace.so
     ```
 
-4. Command tool - Install
+4. Command tool - Build & Install
     ```
+    make cli
     make install-cli
     ```
 
 5. Verify
     ```
-    php -r 'for ($i = 0; $i < 100; $i++) usleep(10000);' &
-    {php_bin_dir}/phptrace -p $!
+    php -r 'for ($i = 0; $i < 10; $i++) usleep(10000);' &
+    phptrace -p $!
     ```
 
     You should see something below if everything fine
