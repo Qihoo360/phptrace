@@ -7,7 +7,7 @@ trace.dotrace=1
 // Tick
 function handler_for_tick() {}
 register_tick_function('handler_for_tick');
-declare (ticks = 1) {;}
+declare (ticks = 1) { $a = null; }
 
 // Shutdown
 function handler_for_shutdown() {}
@@ -30,8 +30,6 @@ throw new Exception('test');
     < register_tick_function("handler_for_tick") = true called at [%s:4] wt: %f ct: %f
     > handler_for_tick() called at [%s:5]
     < handler_for_tick() = NULL called at [%s:5] wt: %f ct: %f
-    > handler_for_tick() called at [%s:5]
-    < handler_for_tick() = NULL called at [%s:5] wt: %f ct: %f
     > register_shutdown_function("handler_for_shutdown") called at [%s:9]
     < register_shutdown_function("handler_for_shutdown") = NULL called at [%s:9] wt: %f ct: %f
     > set_error_handler("handler_for_error", %d) called at [%s:13]
@@ -46,7 +44,7 @@ throw new Exception('test');
     < set_exception_handler("handler_for_exception") = NULL called at [%s:19] wt: %f ct: %f
     > Exception->__construct("test") called at [%s:20]
     < Exception->__construct("test") = NULL called at [%s:20] wt: %f ct: %f
-< {main}() called at [%s:3] wt: %f ct: %f
+< {main}() %r(= {undef} )?%rcalled at [%s:3] wt: %f ct: %f
 > handler_for_exception(object(Exception)#1) called at [(null):0]
 < handler_for_exception(object(Exception)#1) = NULL called at [(null):0] wt: %f ct: %f
 > handler_for_shutdown() called at [(null):0]

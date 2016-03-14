@@ -64,6 +64,19 @@
 #define TRACE_TO_TOOL   (1 << 1)
 #define TRACE_TO_NULL   (1 << 2)
 
+/* Utils for PHP 7 */
+#if PHP_VERSION_ID < 70000
+#define P7_EX_OBJ(ex)   ex->object
+#define P7_EX_OBJCE(ex) Z_OBJCE_P(ex->object)
+#define P7_EX_OPARR(ex) ex->op_array
+#define P7_STR(v)       v
+#else
+#define P7_EX_OBJ(ex)   Z_OBJ(ex->This)
+#define P7_EX_OBJCE(ex) Z_OBJCE(ex->This)
+#define P7_EX_OPARR(ex) (&(ex->func->op_array))
+#define P7_STR(v)       ZSTR_VAL(v)
+#endif
+
 /**
  * Compatible with PHP 5.1, zend_memory_usage() is not available in 5.1.
  * AG(allocated_memory) is the value we want, but it available only when
@@ -81,10 +94,12 @@ PHP_FUNCTION(trace_end);
 PHP_FUNCTION(trace_status);
 #endif
 
-static void pt_frame_build(pt_frame_t *frame, zend_bool internal, unsigned char type, zend_execute_data *ex, zend_op_array *op_array TSRMLS_DC);
+static void pt_frame_build(pt_frame_t *frame, zend_bool internal, unsigned char type, zend_execute_data *caller, zend_execute_data *ex, zend_op_array *op_array TSRMLS_DC);
 static void pt_frame_destroy(pt_frame_t *frame TSRMLS_DC);
 static int pt_frame_send(pt_frame_t *frame TSRMLS_DC);
+#if PHP_VERSION_ID < 70000
 static void pt_frame_set_retval(pt_frame_t *frame, zend_bool internal, zend_execute_data *ex, zend_fcall_info *fci TSRMLS_DC);
+#endif
 
 static void pt_status_build(pt_status_t *status, zend_bool internal, zend_execute_data *ex TSRMLS_DC);
 static void pt_status_destroy(pt_status_t *status TSRMLS_DC);
@@ -99,11 +114,16 @@ static void (*pt_ori_execute)(zend_op_array *op_array TSRMLS_DC);
 static void (*pt_ori_execute_internal)(zend_execute_data *execute_data_ptr, int return_value_used TSRMLS_DC);
 ZEND_API void pt_execute(zend_op_array *op_array TSRMLS_DC);
 ZEND_API void pt_execute_internal(zend_execute_data *execute_data, int return_value_used TSRMLS_DC);
-#else
+#elif PHP_VERSION_ID < 70000
 static void (*pt_ori_execute_ex)(zend_execute_data *execute_data TSRMLS_DC);
 static void (*pt_ori_execute_internal)(zend_execute_data *execute_data_ptr, zend_fcall_info *fci, int return_value_used TSRMLS_DC);
 ZEND_API void pt_execute_ex(zend_execute_data *execute_data TSRMLS_DC);
 ZEND_API void pt_execute_internal(zend_execute_data *execute_data, zend_fcall_info *fci, int return_value_used TSRMLS_DC);
+#else
+static void (*pt_ori_execute_ex)(zend_execute_data *execute_data);
+static void (*pt_ori_execute_internal)(zend_execute_data *execute_data, zval *return_value);
+ZEND_API void pt_execute_ex(zend_execute_data *execute_data);
+ZEND_API void pt_execute_internal(zend_execute_data *execute_data, zval *return_value);
 #endif
 
 
@@ -150,6 +170,10 @@ zend_module_entry trace_module_entry = {
 #endif
     STANDARD_MODULE_PROPERTIES
 };
+
+#if PHP_VERSION_ID >= 70000 && defined(COMPILE_DL_TRACE) && defined(ZTS)
+ZEND_TSRMLS_CACHE_DEFINE();
+#endif
 
 #ifdef COMPILE_DL_TRACE
 ZEND_GET_MODULE(trace)
@@ -263,6 +287,9 @@ PHP_MSHUTDOWN_FUNCTION(trace)
 
 PHP_RINIT_FUNCTION(trace)
 {
+#if PHP_VERSION_ID >= 70000 && defined(COMPILE_DL_TRACE) && defined(ZTS)
+    ZEND_TSRMLS_CACHE_UPDATE();
+#endif
     /* Anything needs pid, init here */
     if (PTG(pid) == 0) {
         PTG(pid) = getpid();
@@ -316,9 +343,9 @@ PHP_FUNCTION(trace_status)
  * Trace Manipulation of Frame
  * --------------------
  */
-static void pt_frame_build(pt_frame_t *frame, zend_bool internal, unsigned char type, zend_execute_data *ex, zend_op_array *op_array TSRMLS_DC)
+static void pt_frame_build(pt_frame_t *frame, zend_bool internal, unsigned char type, zend_execute_data *caller, zend_execute_data *ex, zend_op_array *op_array TSRMLS_DC)
 {
-    int i;
+    unsigned int i;
     zval **args;
     zend_function *zf;
 
@@ -332,8 +359,10 @@ static void pt_frame_build(pt_frame_t *frame, zend_bool internal, unsigned char 
     } else {
         zf = (zend_function *) op_array;
     }
-#else
+#elif PHP_VERSION_ID < 70000
     zf = ex->function_state.function;
+#else
+    zf = ex->func;
 #endif
 
     /* types, level */
@@ -349,14 +378,16 @@ static void pt_frame_build(pt_frame_t *frame, zend_bool internal, unsigned char 
     /* names */
     if (zf->common.function_name) {
         /* functype, class name */
-        if (ex && ex->object) {
+#if PHP_VERSION_ID < 70000
+        if (caller && P7_EX_OBJ(caller)) {
+#else
+        if (ex && P7_EX_OBJ(ex)) {
+#endif
             frame->functype |= PT_FUNC_MEMBER;
-            /**
-             * User care about which method is called exactly, so use
-             * zf->common.scope->name instead of ex->object->name.
-             */
+            /* User care about which method is called exactly, so use
+             * zf->common.scope->name instead of ex->object->name. */
             if (zf->common.scope) {
-                frame->class = sdsnew(zf->common.scope->name);
+                frame->class = sdsnew(P7_STR(zf->common.scope->name));
             } else {
                 /* TODO zend uses zend_get_object_classname() in
                  * debug_print_backtrace() */
@@ -364,26 +395,26 @@ static void pt_frame_build(pt_frame_t *frame, zend_bool internal, unsigned char 
             }
         } else if (zf->common.scope) {
             frame->functype |= PT_FUNC_STATIC;
-            frame->class = sdsnew(zf->common.scope->name);
+            frame->class = sdsnew(P7_STR(zf->common.scope->name));
         } else {
             frame->functype |= PT_FUNC_NORMAL;
         }
 
         /* function name */
-        if (strcmp(zf->common.function_name, "{closure}") == 0) {
-            frame->function = sdscatprintf(sdsempty(), "{closure:%s:%d-%d}", zf->op_array.filename, zf->op_array.line_start, zf->op_array.line_end);
-        } else if (strcmp(zf->common.function_name, "__lambda_func") == 0) {
-            frame->function = sdscatprintf(sdsempty(), "{lambda:%s}", zf->op_array.filename);
+        if (strcmp(P7_STR(zf->common.function_name), "{closure}") == 0) {
+            frame->function = sdscatprintf(sdsempty(), "{closure:%s:%d-%d}", P7_STR(zf->op_array.filename), zf->op_array.line_start, zf->op_array.line_end);
+        } else if (strcmp(P7_STR(zf->common.function_name), "__lambda_func") == 0) {
+            frame->function = sdscatprintf(sdsempty(), "{lambda:%s}", P7_STR(zf->op_array.filename));
 #if PHP_VERSION_ID >= 50414
         } else if (zf->common.scope && zf->common.scope->trait_aliases) {
             /* Use trait alias instead real function name.
              * There is also a bug "#64239 Debug backtrace changed behavior
              * since 5.4.10 or 5.4.11" about this
              * https://bugs.php.net/bug.php?id=64239.*/
-            frame->function = sdsnew(zend_resolve_method_name(ex->object ? Z_OBJCE_P(ex->object) : zf->common.scope, zf));
+            frame->function = sdsnew(P7_STR(zend_resolve_method_name(P7_EX_OBJ(ex) ? P7_EX_OBJCE(ex) : zf->common.scope, zf)));
 #endif
         } else {
-            frame->function = sdsnew(zf->common.function_name);
+            frame->function = sdsnew(P7_STR(zf->common.function_name));
         }
 
         /* args */
@@ -393,33 +424,61 @@ static void pt_frame_build(pt_frame_t *frame, zend_bool internal, unsigned char 
             frame->arg_count = (int)(zend_uintptr_t) *(EG(argument_stack).top_element - 2);
             args = (zval **)(EG(argument_stack).top_element - 2 - frame->arg_count);
         }
-#else
-        if (ex && ex->function_state.arguments) {
-            frame->arg_count = (int)(zend_uintptr_t) *(ex->function_state.arguments);
-            args = (zval **)(ex->function_state.arguments - frame->arg_count);
+#elif PHP_VERSION_ID < 70000
+        if (caller && caller->function_state.arguments) {
+            frame->arg_count = (int)(zend_uintptr_t) *(caller->function_state.arguments);
+            args = (zval **)(caller->function_state.arguments - frame->arg_count);
         }
+#else
+        frame->arg_count = ZEND_CALL_NUM_ARGS(ex);
 #endif
         if (frame->arg_count > 0) {
             frame->args = calloc(frame->arg_count, sizeof(sds));
-            for (i = 0; i < frame->arg_count; i++) {
-                frame->args[i] = pt_repr_zval(args[i], 32 TSRMLS_CC);
+        }
+
+#if PHP_VERSION_ID < 70000
+        for (i = 0; i < frame->arg_count; i++) {
+            frame->args[i] = pt_repr_zval(args[i], 32 TSRMLS_CC);
+        }
+#else
+        if (frame->arg_count) {
+            i = 0;
+            zval *p = ZEND_CALL_ARG(ex, 1);
+            if (ex->func->type == ZEND_USER_FUNCTION) {
+                uint32_t first_extra_arg = ex->func->op_array.num_args;
+
+                if (first_extra_arg && frame->arg_count > first_extra_arg) {
+                    while (i < first_extra_arg) {
+                        frame->args[i++] = pt_repr_zval(p++, 32);
+                    }
+                    p = ZEND_CALL_VAR_NUM(ex, ex->func->op_array.last_var + ex->func->op_array.T);
+                }
+            }
+            while(i < frame->arg_count) {
+                frame->args[i++] = pt_repr_zval(p++, 32);
             }
         }
+#endif
+
     } else {
         int add_filename = 1;
         long ev = 0;
 
 #if ZEND_EXTENSION_API_NO < 220100525
-        if (ex) {
-            ev = ex->opline->op2.u.constant.value.lval;
+        if (caller) {
+            ev = caller->opline->op2.u.constant.value.lval;
         } else if (op_array && op_array->opcodes) {
             ev = op_array->opcodes->op2.u.constant.value.lval;
         }
-#else
-        if (ex) {
-            ev = ex->opline->extended_value;
+#elif PHP_VERSION_ID < 70000
+        if (caller) {
+            ev = caller->opline->extended_value;
         } else if (op_array && op_array->opcodes) {
             ev = op_array->opcodes->extended_value;
+        }
+#else
+        if (caller && caller->opline) {
+            ev = caller->opline->extended_value;
         }
 #endif
 
@@ -457,20 +516,43 @@ static void pt_frame_build(pt_frame_t *frame, zend_bool internal, unsigned char 
         if (add_filename) {
             frame->arg_count = 1;
             frame->args = calloc(frame->arg_count, sizeof(sds));
-            frame->args[0] = sdscatrepr(sdsempty(), zf->op_array.filename, strlen(zf->op_array.filename));
+            frame->args[0] = sdscatrepr(sdsempty(), P7_STR(zf->op_array.filename), strlen(P7_STR(zf->op_array.filename)));
         }
     }
 
-    /* lineno */
-    if (ex && ex->opline) {
-        frame->lineno = ex->opline->lineno;
-    } else if (ex && ex->prev_execute_data && ex->prev_execute_data->opline) {
-        frame->lineno = ex->prev_execute_data->opline->lineno; /* try using prev */
+#if PHP_VERSION_ID >= 70000
+    if (caller && caller->opline && caller->prev_execute_data) {
+        /* FIXME Sometimes execute_data->opline can be a interger NOT pointer.
+         * I dont know how to handle it, this just make it works. */
+        if (caller->func && caller->func->op_array.opcodes == NULL) {
+            caller = caller->prev_execute_data;
+        }
+
+        /* skip internal handler */
+        if (caller->opline->opcode != ZEND_DO_FCALL &&
+                caller->opline->opcode != ZEND_DO_ICALL &&
+                caller->opline->opcode != ZEND_DO_UCALL &&
+                caller->opline->opcode != ZEND_DO_FCALL_BY_NAME &&
+                caller->opline->opcode != ZEND_INCLUDE_OR_EVAL) {
+            caller = caller->prev_execute_data;
+        }
+    }
+#endif
+
+    /* lineno
+     * The method we try to detect line number and filename is different
+     * between Zend's debug_backtrace().
+     * Because 1. Performance, so we won't use loop to find the valid op_array.
+     * 2. And still want to catch internal function call, such as
+     * call_user_func().  */
+    if (caller && caller->opline) {
+        frame->lineno = caller->opline->lineno;
+    } else if (caller && caller->prev_execute_data && caller->prev_execute_data->opline) {
+        frame->lineno = caller->prev_execute_data->opline->lineno; /* try using prev */
     } else if (op_array && op_array->opcodes) {
         frame->lineno = op_array->opcodes->lineno;
-    /**
-     * TODO Shall we use definition lineno if entry lineno is null
-     * } else if (ex != EG(current_execute_data) && EG(current_execute_data)->opline) {
+    /* Uncomment to use definition lineno if entry lineno is null, but we won't :P
+     * } else if (caller != EG(current_execute_data) && EG(current_execute_data)->opline) {
      *     frame->lineno = EG(current_execute_data)->opline->lineno; [> try using current <]
      */
     } else {
@@ -478,16 +560,27 @@ static void pt_frame_build(pt_frame_t *frame, zend_bool internal, unsigned char 
     }
 
     /* filename */
-    if (ex && ex->op_array) {
-        frame->filename = sdsnew(ex->op_array->filename);
-    } else if (ex && ex->prev_execute_data && ex->prev_execute_data->op_array) {
-        frame->filename = sdsnew(ex->prev_execute_data->op_array->filename); /* try using prev */
-    } else if (op_array) {
-        frame->filename = sdsnew(op_array->filename);
-    /**
-     * } else if (ex != EG(current_execute_data) && EG(current_execute_data)->op_array) {
-     *     frame->filename = sdsnew(EG(current_execute_data)->op_array->filename); [> try using current <]
+#if PHP_VERSION_ID < 70000
+    if (caller && caller->op_array) {
+        op_array = caller->op_array;
+    } else if (caller && caller->prev_execute_data && caller->prev_execute_data->op_array) {
+        op_array = caller->prev_execute_data->op_array; /* try using prev */
+    }
+#else
+    if (caller->func && ZEND_USER_CODE(caller->func->common.type)) {
+        op_array = &(caller->func->op_array);
+    } else if (caller->prev_execute_data && caller->prev_execute_data->func &&
+            ZEND_USER_CODE(caller->prev_execute_data->func->common.type)) {
+        op_array = &(caller->prev_execute_data->func->op_array); /* try using prev */
+    }
+#endif
+    /* Same as upper
+     * } else if (caller != EG(current_execute_data) && EG(current_execute_data)->op_array) {
+     *     op_array = EG(current_execute_data)->op_array [> try using current <]
+     * }
      */
+    if (op_array) {
+        frame->filename = sdsnew(P7_STR(op_array->filename));
     } else {
         frame->filename = NULL;
     }
@@ -509,6 +602,7 @@ static void pt_frame_destroy(pt_frame_t *frame TSRMLS_DC)
     sdsfree(frame->retval);
 }
 
+#if PHP_VERSION_ID < 70000
 static void pt_frame_set_retval(pt_frame_t *frame, zend_bool internal, zend_execute_data *ex, zend_fcall_info *fci TSRMLS_DC)
 {
     zval *retval = NULL;
@@ -542,6 +636,7 @@ static void pt_frame_set_retval(pt_frame_t *frame, zend_bool internal, zend_exec
         frame->retval = pt_repr_zval(retval, 32 TSRMLS_CC);
     }
 }
+#endif
 
 static int pt_frame_send(pt_frame_t *frame TSRMLS_DC)
 {
@@ -608,7 +703,7 @@ static void pt_status_build(pt_status_t *status, zend_bool internal, zend_execut
     if (status->frame_count) {
         status->frames = calloc(status->frame_count, sizeof(pt_frame_t));
         for (i = 0, ex = ex_ori; i < status->frame_count && ex; i++, ex = ex->prev_execute_data) {
-            pt_frame_build(status->frames + i, internal, PT_FRAME_STACK, ex, NULL TSRMLS_CC);
+            pt_frame_build(status->frames + i, internal, PT_FRAME_STACK, ex, ex, NULL TSRMLS_CC);
             status->frames[i].level = 1;
         }
     } else {
@@ -707,14 +802,25 @@ static sds pt_repr_zval(zval *zv, int limit TSRMLS_DC)
     char buf[256], *tstr = NULL;
     sds result;
 
+#if PHP_VERSION_ID >= 70000
+    zend_string *class_name;
+#endif
+
     /* php_var_export_ex is a good example */
     switch (Z_TYPE_P(zv)) {
+#if PHP_VERSION_ID < 70000
         case IS_BOOL:
             if (Z_LVAL_P(zv)) {
                 return sdsnew("true");
             } else {
                 return sdsnew("false");
             }
+#else
+        case IS_TRUE:
+            return sdsnew("true");
+        case IS_FALSE:
+            return sdsnew("false");
+#endif
         case IS_NULL:
             return sdsnew("NULL");
         case IS_LONG:
@@ -734,6 +840,7 @@ static sds pt_repr_zval(zval *zv, int limit TSRMLS_DC)
             /* TODO more info */
             return sdscatprintf(sdsempty(), "array(%d)", zend_hash_num_elements(Z_ARRVAL_P(zv)));
         case IS_OBJECT:
+#if PHP_VERSION_ID < 70000
             if (Z_OBJ_HANDLER(*zv, get_class_name)) {
                 Z_OBJ_HANDLER(*zv, get_class_name)(zv, (const char **) &tstr, (zend_uint *) &tlen, 0 TSRMLS_CC);
                 result = sdscatprintf(sdsempty(), "object(%s)#%d", tstr, Z_OBJ_HANDLE_P(zv));
@@ -741,10 +848,22 @@ static sds pt_repr_zval(zval *zv, int limit TSRMLS_DC)
             } else {
                 result = sdscatprintf(sdsempty(), "object(unknown)#%d", Z_OBJ_HANDLE_P(zv));
             }
+#else
+            class_name = Z_OBJ_HANDLER_P(zv, get_class_name)(Z_OBJ_P(zv));
+            result = sdscatprintf(sdsempty(), "object(%s)#%d", P7_STR(class_name), Z_OBJ_HANDLE_P(zv));
+			zend_string_release(class_name);
+#endif
             return result;
         case IS_RESOURCE:
+#if PHP_VERSION_ID < 70000
             tstr = (char *) zend_rsrc_list_get_rsrc_type(Z_LVAL_P(zv) TSRMLS_CC);
             return sdscatprintf(sdsempty(), "resource(%s)#%ld", tstr ? tstr : "Unknown", Z_LVAL_P(zv));
+#else
+            tstr = (char *) zend_rsrc_list_get_rsrc_type(Z_RES_P(zv) TSRMLS_CC);
+            return sdscatprintf(sdsempty(), "resource(%s)#%ld", tstr ? tstr : "Unknown", Z_RES_P(zv)->handle);
+        case IS_UNDEF:
+            return sdsnew("{undef}");
+#endif
         default:
             return sdsnew("{unknown}");
     }
@@ -774,28 +893,34 @@ static void pt_set_inactive(TSRMLS_D)
  */
 #if PHP_VERSION_ID < 50500
 ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zend_op_array *op_array, int rvu TSRMLS_DC)
-{
-    zend_fcall_info *fci = NULL;
-#else
+#elif PHP_VERSION_ID < 70000
 ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zend_fcall_info *fci, int rvu TSRMLS_DC)
-{
-    zend_op_array *op_array = NULL;
+#else
+ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zval *return_value)
 #endif
+{
     long dotrace;
     zend_bool dobailout = 0;
-    zend_execute_data *ex_entry = execute_data;
+    zend_execute_data *caller = execute_data;
+#if PHP_VERSION_ID < 70000
     zval *retval = NULL;
+#else
+    zval retval;
+#endif
     pt_comm_message_t *msg;
     pt_frame_t frame;
     int msg_type;
 
-#if PHP_VERSION_ID >= 50500
-    /* Why has a ex_entry ?
-     * In PHP 5.5 and after, execute_data is the data going to be executed, not
+#if PHP_VERSION_ID >= 70000
+    if (execute_data->prev_execute_data) {
+        caller = execute_data->prev_execute_data;
+    }
+#elif PHP_VERSION_ID >= 50500
+    /* In PHP 5.5 and later, execute_data is the data going to be executed, not
      * the entry point, so we switch to previous data. The internal function is
      * a exception because it's no need to execute by op_array. */
     if (!internal && execute_data->prev_execute_data) {
-        ex_entry = execute_data->prev_execute_data;
+        caller = execute_data->prev_execute_data;
     }
 #endif
 
@@ -842,7 +967,7 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zen
                 case PT_MSG_DO_STATUS:
                     PTD("handle DO_STATUS");
                     pt_status_t status;
-                    pt_status_build(&status, internal, ex_entry TSRMLS_CC);
+                    pt_status_build(&status, internal, caller TSRMLS_CC);
                     pt_status_send(&status TSRMLS_CC);
                     pt_status_destroy(&status TSRMLS_CC);
                     break;
@@ -871,12 +996,24 @@ exec:
     PTG(level)++;
 
     if (dotrace) {
-        pt_frame_build(&frame, internal, PT_FRAME_ENTRY, ex_entry, op_array TSRMLS_CC);
+#if PHP_VERSION_ID < 50500
+        pt_frame_build(&frame, internal, PT_FRAME_ENTRY, caller, execute_data, op_array TSRMLS_CC);
+#else
+        pt_frame_build(&frame, internal, PT_FRAME_ENTRY, caller, execute_data, NULL TSRMLS_CC);
+#endif
 
-        /* Register reture value ptr */
+        /* Register return value ptr */
+#if PHP_VERSION_ID < 70000
         if (!internal && EG(return_value_ptr_ptr) == NULL) {
             EG(return_value_ptr_ptr) = &retval;
         }
+#else
+        if (!internal && execute_data->return_value == NULL) {
+            ZVAL_UNDEF(&retval);
+            Z_VAR_FLAGS(retval) = 0;
+            execute_data->return_value = &retval;
+        }
+#endif
 
         PROFILING_SET(frame.entry);
 
@@ -903,7 +1040,7 @@ exec:
         } else {
             pt_ori_execute(op_array TSRMLS_CC);
         }
-#else
+#elif PHP_VERSION_ID < 70000
         if (internal) {
             if (pt_ori_execute_internal) {
                 pt_ori_execute_internal(execute_data, fci, rvu TSRMLS_CC);
@@ -912,6 +1049,16 @@ exec:
             }
         } else {
             pt_ori_execute_ex(execute_data TSRMLS_CC);
+        }
+#else
+        if (internal) {
+            if (pt_ori_execute_internal) {
+                pt_ori_execute_internal(execute_data, return_value);
+            } else {
+                execute_internal(execute_data, return_value);
+            }
+        } else {
+            pt_ori_execute_ex(execute_data);
         }
 #endif
     } zend_catch {
@@ -924,7 +1071,17 @@ exec:
         PROFILING_SET(frame.exit);
 
         if (!dobailout) {
+#if PHP_VERSION_ID < 50500
+            pt_frame_set_retval(&frame, internal, execute_data, NULL TSRMLS_CC);
+#elif PHP_VERSION_ID < 70000
             pt_frame_set_retval(&frame, internal, execute_data, fci TSRMLS_CC);
+#else
+            if (return_value) { /* internal */
+                frame.retval = pt_repr_zval(return_value, 32);
+            } else if (execute_data->return_value) { /* user function */
+                frame.retval = pt_repr_zval(execute_data->return_value, 32);
+            }
+#endif
         }
         frame.type = PT_FRAME_EXIT;
 
@@ -936,11 +1093,13 @@ exec:
             pt_type_display_frame(&frame, 1, "< ");
         }
 
-        /* Free reture value */
+#if PHP_VERSION_ID < 70000
+        /* Free return value */
         if (!internal && retval != NULL) {
             zval_ptr_dtor(&retval);
             EG(return_value_ptr_ptr) = NULL;
         }
+#endif
 
         pt_frame_destroy(&frame TSRMLS_CC);
     }
@@ -962,7 +1121,7 @@ ZEND_API void pt_execute_internal(zend_execute_data *execute_data, int return_va
 {
     pt_execute_core(1, execute_data, NULL, return_value_used TSRMLS_CC);
 }
-#else
+#elif PHP_VERSION_ID < 70000
 ZEND_API void pt_execute_ex(zend_execute_data *execute_data TSRMLS_DC)
 {
     pt_execute_core(0, execute_data, NULL, 0 TSRMLS_CC);
@@ -971,5 +1130,15 @@ ZEND_API void pt_execute_ex(zend_execute_data *execute_data TSRMLS_DC)
 ZEND_API void pt_execute_internal(zend_execute_data *execute_data, zend_fcall_info *fci, int return_value_used TSRMLS_DC)
 {
     pt_execute_core(1, execute_data, fci, return_value_used TSRMLS_CC);
+}
+#else
+ZEND_API void pt_execute_ex(zend_execute_data *execute_data)
+{
+    pt_execute_core(0, execute_data, NULL);
+}
+
+ZEND_API void pt_execute_internal(zend_execute_data *execute_data, zval *return_value)
+{
+    pt_execute_core(1, execute_data, return_value);
 }
 #endif

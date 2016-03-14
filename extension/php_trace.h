@@ -65,20 +65,28 @@ ZEND_BEGIN_MODULE_GLOBALS(trace)
 ZEND_END_MODULE_GLOBALS(trace)
 
 
-/**
- * In every utility function you add that needs to use variables in
- * php_trace_globals, call TSRMLS_FETCH(); after declaring other variables
- * used by that function, or better yet, pass in TSRMLS_CC after the last
- * function argument and declare your utility function with TSRMLS_DC after the
- * last declared argument.  Always refer to the globals in your function as
- * TRACE_G(variable).  You are encouraged to rename these macros something
- * shorter, see examples in any other php module directory.
- */
+#ifdef ZEND_ENGINE_3
+    /* Always refer to the globals in your function as TRACE_G(variable). You are
+     * encouraged to rename these macros something shorter, see examples in any
+     * other php module directory. */
+    #define PTG(v) ZEND_MODULE_GLOBALS_ACCESSOR(trace, v)
 
-#ifdef ZTS
-#define PTG(v) TSRMG(trace_globals_id, zend_trace_globals *, v)
+    #if defined(ZTS) && defined(COMPILE_DL_TRACE)
+    ZEND_TSRMLS_CACHE_EXTERN();
+    #endif
 #else
-#define PTG(v) (trace_globals.v)
+    /* In every utility function you add that needs to use variables in
+     * php_trace_globals, call TSRMLS_FETCH(); after declaring other variables used
+     * by that function, or better yet, pass in TSRMLS_CC after the last function
+     * argument and declare your utility function with TSRMLS_DC after the last
+     * declared argument.  Always refer to the globals in your function as
+     * TRACE_G(variable).  You are encouraged to rename these macros something
+     * shorter, see examples in any other php module directory. */
+    #ifdef ZTS
+    #define PTG(v) TSRMG(trace_globals_id, zend_trace_globals *, v)
+    #else
+    #define PTG(v) (trace_globals.v)
+    #endif
 #endif
 
 #endif  /* PHP_TRACE_H */
