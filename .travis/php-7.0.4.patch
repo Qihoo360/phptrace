@@ -1,0 +1,12 @@
+--- Zend/zend_compile.c
++++ Zend/zend_compile.c
+@@ -3151,6 +3151,9 @@ static int zend_compile_assert(znode *result, zend_ast_list *args, zend_string *
+ 
+ int zend_try_compile_special_func(znode *result, zend_string *lcname, zend_ast_list *args, zend_function *fbc) /* {{{ */
+ {
++    /* Disable this feature to test trace */
++    return FAILURE;
++
+ 	if (fbc->internal_function.handler == ZEND_FN(display_disabled_function)) {
+ 		return FAILURE;
+ 	}

@@ -38,8 +38,18 @@ function build()
     buildname="php-${version}${prefix_debug}"
     logit "[$buildname] build"
 
-    # prepare
+    # patch
+    selfpath=`dirname $0`
+    if [ -f $selfpath/php-${version}.patch ]; then
+        cp $selfpath/php-${version}.patch $src/trace.patch
+    fi
     cd $src
+    if [ -f trace.patch ]; then
+        patch -p0 --verbose < trace.patch
+        logit "[$buildname] patch"
+    fi
+
+    # prepare
     param_general="--disable-all $param_debug"
     param_sapi="--enable-cli --disable-cgi"
     # hack for PHP 5.2
