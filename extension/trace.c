@@ -521,21 +521,21 @@ static void pt_frame_build(pt_frame_t *frame, zend_bool internal, unsigned char 
     }
 
 #if PHP_VERSION_ID >= 70000
-    if (caller && caller->opline && caller->prev_execute_data) {
-        /* FIXME Sometimes execute_data->opline can be a interger NOT pointer.
-         * I dont know how to handle it, this just make it works. */
-        if (caller->func && caller->func->op_array.opcodes == NULL) {
-            caller = caller->prev_execute_data;
-        }
+    /* FIXME Sometimes execute_data->opline can be a interger NOT pointer.
+     * I dont know how to handle it, this just make it works. */
+    if (caller && caller->opline && caller->prev_execute_data &&
+            caller->func && caller->func->op_array.opcodes == NULL) {
+        caller = caller->prev_execute_data;
+    }
 
-        /* skip internal handler */
-        if (caller->opline->opcode != ZEND_DO_FCALL &&
-                caller->opline->opcode != ZEND_DO_ICALL &&
-                caller->opline->opcode != ZEND_DO_UCALL &&
-                caller->opline->opcode != ZEND_DO_FCALL_BY_NAME &&
-                caller->opline->opcode != ZEND_INCLUDE_OR_EVAL) {
-            caller = caller->prev_execute_data;
-        }
+    /* skip internal handler */
+    if (caller && caller->opline && caller->prev_execute_data &&
+            caller->opline->opcode != ZEND_DO_FCALL &&
+            caller->opline->opcode != ZEND_DO_ICALL &&
+            caller->opline->opcode != ZEND_DO_UCALL &&
+            caller->opline->opcode != ZEND_DO_FCALL_BY_NAME &&
+            caller->opline->opcode != ZEND_INCLUDE_OR_EVAL) {
+        caller = caller->prev_execute_data;
     }
 #endif
 
