@@ -30,6 +30,8 @@ throw new Exception('test');
     < register_tick_function("handler_for_tick") = true called at [%s:4] wt: %f ct: %f
     > handler_for_tick() called at [%s:5]
     < handler_for_tick() = NULL called at [%s:5] wt: %f ct: %f
+    %r(> handler_for_tick\(\) called at \[%s:5\])?%r
+    %r(< handler_for_tick\(\) = NULL called at \[%s:5\] wt: %f ct: %f)?%r
     > register_shutdown_function("handler_for_shutdown") called at [%s:9]
     < register_shutdown_function("handler_for_shutdown") = NULL called at [%s:9] wt: %f ct: %f
     > set_error_handler("handler_for_error", %d) called at [%s:13]

@@ -61,14 +61,14 @@ eval('strlen("shit");call_normal();');
         < call_normal() = NULL called at [%s:11] wt: %f ct: %f
     < call_user_func("call_normal") = NULL called at [%s:11] wt: %f ct: %f
     > create_function("", "return 0;") called at [%s:14]
-        > %r({main}\(\)|include\("[^"]+"\))%r called at [%s:14]
-        < %r({main}\(\)|include\("[^"]+"\))%r = NULL called at [%s:14] wt: %f ct: %f
+        > %r({main}|include|create_function)\(.*\)%r called at [%s:14]
+        < %r({main}|include|create_function)\(.*\)%r = NULL called at [%s:14] wt: %f ct: %f
     < create_function("", "return 0;") = "\x00lambda_1" called at [%s:14] wt: %f ct: %f
     > {lambda:%s(14) : runtime-created function}() called at [%s:15]
     < {lambda:%s(14) : runtime-created function}() = 0 called at [%s:15] wt: %f ct: %f
     > create_function("", "return 1;") called at [%s:16]
-        > %r({main}\(\)|include\("[^"]+"\))%r called at [%s:16]
-        < %r({main}\(\)|include\("[^"]+"\))%r = NULL called at [%s:16] wt: %f ct: %f
+        > %r({main}|include|create_function)\(.*\)%r called at [%s:16]
+        < %r({main}|include|create_function)\(.*\)%r = NULL called at [%s:16] wt: %f ct: %f
     < create_function("", "return 1;") = "\x00lambda_2" called at [%s:16] wt: %f ct: %f
     > {lambda:%s(16) : runtime-created function}() called at [%s:17]
     < {lambda:%s(16) : runtime-created function}() = 1 called at [%s:17] wt: %f ct: %f
