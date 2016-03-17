@@ -1,16 +1,15 @@
-language: php
+language: c
 
-php:
-  - 5.2
-  - 5.3
-  - 5.4
-  - 5.5
-  - 5.6
-  - 7.0
+env:
+    - PT_PHP_VERSION=5.2.17
+    - PT_PHP_VERSION=5.3.29
+    - PT_PHP_VERSION=5.4.37
+    - PT_PHP_VERSION=5.5.33
+    - PT_PHP_VERSION=5.6.19
+    - PT_PHP_VERSION=7.0.4
 
 before_install:
     # build PHP without ZTS by ourselves...
-    - PT_PHP_VERSION=`php --version | awk 'NR == 1 {print $2}'`
     - ./.travis/php_get.sh ${PT_PHP_VERSION}
     - ./.travis/php_build.sh `pwd` php-${PT_PHP_VERSION}.tar.bz2
     - PT_PHP_PATH=`pwd`/php-${PT_PHP_VERSION}

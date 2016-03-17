@@ -5,7 +5,12 @@ function logit() {
 
 function version_ge()
 {
-    php -nr "exit(version_compare('$1', '$2', '>=') ? 0 : 1);"
+    python << EOF
+import sys
+from distutils.version import LooseVersion
+
+sys.exit(not (LooseVersion('$1') > LooseVersion('$2')))
+EOF
 }
 
 function download()
