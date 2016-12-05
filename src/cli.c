@@ -18,7 +18,6 @@
 #include <getopt.h>
 #include <string.h>
 #include <stdlib.h>
-#include <error.h>
 #include <errno.h>
 #include <stdarg.h>
 #include <signal.h>
@@ -91,7 +90,7 @@ int pt_log(int level, const char *format, ...)
 void context_init(void)
 {
     clictx.command = CMD_UNKNOWN;
-    clictx.verbose = 0;
+    clictx.verbose = PT_ERROR;
 
     clictx.pid = PT_PID_INVALID;
 }
@@ -185,12 +184,14 @@ void parse_args(int argc, char **argv)
 
                 clictx.pid = (int) strtol(optarg, &end, 10);
                 if (errno || *end != '\0' || clictx.pid < 0 || clictx.pid > PT_PID_MAX) {
-                    error(EXIT_FAILURE, errno, "Invalid process id \"%s\"", optarg);
+                    pt_log(PT_ERROR, "Invalid process id \"%s\"", optarg);
+                    exit(EXIT_FAILURE);
                 }
 
                 /* check process exists */
                 if (kill(clictx.pid, 0) == -1 && errno == ESRCH) {
-                    error(EXIT_FAILURE, errno, "Process %s not exists", optarg);
+                    pt_log(PT_ERROR, "Process %s not exists", optarg);
+                    exit(EXIT_FAILURE);
                 }
 
                 break;
