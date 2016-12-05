@@ -45,6 +45,11 @@ enum {
     PT_DEBUG, 
 };
 
-int pt_log(int level, const char *format, ...);
+void pt_log(int level, char *filename, int lineno, const char *format, ...);
+
+#define pt_error(format, ...)   pt_log(PT_ERROR, __FILE__, __LINE__, format, ##__VA_ARGS__)
+#define pt_warning(format, ...) pt_log(PT_WARNING, __FILE__, __LINE__, format, ##__VA_ARGS__)
+#define pt_info(format, ...)    pt_log(PT_INFO, __FILE__, __LINE__, format, ##__VA_ARGS__)
+#define pt_debug(format, ...)   pt_log(PT_DEBUG, __FILE__, __LINE__, format, ##__VA_ARGS__)
 
 #endif

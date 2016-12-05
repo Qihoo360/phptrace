@@ -22,6 +22,7 @@
 #include <stdarg.h>
 #include <signal.h>
 #include <sys/types.h>
+#include <libgen.h>
 
 #include "trace_ctrl.h"
 #include "trace_version.h"
@@ -51,17 +52,17 @@ enum {
 
 static void sighandler(int signal)
 {
-    pt_log(PT_INFO, "Catch signal (%d)", signal);
+    pt_info("Catch signal (%d)", signal);
     interrupted = signal;
 }
 
-int pt_log(int level, const char *format, ...)
+void pt_log(int level, char *filename, int lineno, const char *format, ...)
 {
     int ret;
     va_list ap;
 
     if (level > clictx.verbose) {
-        return 0;
+        return;
     }
 
     if (level == PT_ERROR) {
@@ -80,11 +81,14 @@ int pt_log(int level, const char *format, ...)
 
     if (errno) {
         fprintf(stderr, " \"%s(%d)\"", strerror(errno), errno);
+        errno = 0;
+    }
+
+    if (level == PT_DEBUG) {
+        fprintf(stderr, " %s:%d", basename(filename), lineno);
     }
 
     fputs("\n", stderr);
-
-    return ret;
 }
 
 void context_init(void)
@@ -110,9 +114,9 @@ void context_show(void)
         cmdname = "unknown";
     }
 
-    pt_log(PT_INFO, "command = %s", cmdname);
-    pt_log(PT_INFO, "verbose = %d", clictx.verbose);
-    pt_log(PT_INFO, "pid = %d", clictx.pid);
+    pt_info("command = %s", cmdname);
+    pt_info("verbose = %d", clictx.verbose);
+    pt_info("pid = %d", clictx.pid);
 }
 
 void usage(void)
@@ -184,13 +188,13 @@ void parse_args(int argc, char **argv)
 
                 clictx.pid = (int) strtol(optarg, &end, 10);
                 if (errno || *end != '\0' || clictx.pid < 0 || clictx.pid > PT_PID_MAX) {
-                    pt_log(PT_ERROR, "Invalid process id \"%s\"", optarg);
+                    pt_error("Invalid process id \"%s\"", optarg);
                     exit(EXIT_FAILURE);
                 }
 
                 /* check process exists */
                 if (kill(clictx.pid, 0) == -1 && errno == ESRCH) {
-                    pt_log(PT_ERROR, "Process %s not exists", optarg);
+                    pt_error("Process %s not exists", optarg);
                     exit(EXIT_FAILURE);
                 }
 
@@ -229,7 +233,7 @@ int main(int argc, char **argv)
     }
 
     if (signal(SIGINT, sighandler) == SIG_ERR || signal(SIGTERM, sighandler) == SIG_ERR) {
-        pt_log(PT_ERROR, "Register signal handler failed");
+        pt_error("Register signal handler failed");
         exit(EXIT_FAILURE);
     }
 

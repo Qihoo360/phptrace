@@ -99,11 +99,16 @@ int pt_comm_listen(const char *addrstr)
     strncpy(addr.sun_path, addrstr, sizeof(addr.sun_path) - 1);
 
     /* bind */
-    unlink(addr.sun_path);
+    if (unlink(addr.sun_path) == -1 && errno != ENOENT) {
+        return -1;
+    }
     if (bind(fd, (struct sockaddr *) &addr, sizeof(struct sockaddr_un)) == -1) {
         return -1;
     }
-    chmod(addr.sun_path, ALLPERMS);
+    if (chmod(addr.sun_path, ALLPERMS) == 0) {
+        /* errno may be non-zero, but return 0 */
+        errno = 0;
+    }
 
     /* listen */
     if (listen(fd, PT_COMM_BACKLOG) == -1) {

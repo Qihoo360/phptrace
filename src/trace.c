@@ -36,14 +36,14 @@ static int trace_single_process(int fd, int times)
 
     for (i = 0; i < times; i++) {
         msg_type = pt_comm_recv_msg(fd, &msg);
-        pt_log(PT_DEBUG, "recv message type: 0x%08x len: %d", msg_type, msg->len);
+        pt_debug("recv message type: 0x%08x len: %d", msg_type, msg->len);
 
         switch (msg_type) {
             case PT_MSG_PEERDOWN:
             case PT_MSG_ERR_SOCK:
             case PT_MSG_ERR_BUF:
             case PT_MSG_INVALID:
-                pt_log(PT_WARNING, "recv message error");
+                pt_warning("recv message error");
                 return -1;
 
             case PT_MSG_EMPTY:
@@ -60,7 +60,7 @@ static int trace_single_process(int fd, int times)
                 break;
 
             default:
-                pt_log(PT_ERROR, "unknown message received with type 0x%08x", msg_type);
+                pt_error("unknown message received with type 0x%08x", msg_type);
                 break;
         }
     }
@@ -79,13 +79,13 @@ int pt_trace_main(void)
     /* socket prepare */
     maxfd = sfd = pt_comm_listen("/tmp/" PT_COMM_FILENAME);
     if (sfd == -1) {
-        pt_log(PT_ERROR, "socket listen failed");
+        pt_error("socket listen failed");
         return -1;
     }
 
     /* control prepare */
     if (pt_ctrl_open(&ctrlst, "/tmp/" PT_CTRL_FILENAME) == -1) {
-        pt_log(PT_ERROR, "ctrl open failed");
+        pt_error("ctrl open failed");
         return -1;
     }
     if (clictx.pid == PT_PID_ALL) {
@@ -101,7 +101,7 @@ int pt_trace_main(void)
     for (;;) {
         if (interrupted) {
             pt_ctrl_clear_all(&ctrlst);
-            pt_log(PT_INFO, "clear all ctrl bits");
+            pt_info("clear all ctrl bits");
             pt_comm_close(sfd, "/tmp/" PT_COMM_FILENAME);
             return 0;
         }
@@ -116,7 +116,7 @@ int pt_trace_main(void)
             if (errno == EINTR) {
                 continue; /* leave interrupted to deal */
             } else {
-                pt_log(PT_WARNING, "select error");
+                pt_warning("select error");
                 return -1;
             }
         } else if (retval == 0) {
@@ -128,7 +128,7 @@ int pt_trace_main(void)
             /* accept */
             cfd = pt_comm_accept(sfd);
             if (cfd == -1) {
-                pt_log(PT_ERROR, "accept return error");
+                pt_error("accept return error");
                 continue;
             }
 
@@ -138,12 +138,12 @@ int pt_trace_main(void)
             /* max fd */
             if (cfd > maxfd) {
                 maxfd = cfd;
-                pt_log(PT_INFO, "maxfd update to %d", cfd);
+                pt_info("maxfd update to %d", cfd);
             }
 
             /* send do_trace */
             if (pt_comm_send_type(cfd, PT_MSG_DO_TRACE) == -1) {
-                pt_log(PT_ERROR, "send do_trace error");
+                pt_error("send do_trace error");
             }
 
             continue; /* accept first */
