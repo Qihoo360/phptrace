@@ -860,7 +860,7 @@ static sds pt_repr_zval(zval *zv, int limit TSRMLS_DC)
             return sdscatprintf(sdsempty(), "resource(%s)#%ld", tstr ? tstr : "Unknown", Z_LVAL_P(zv));
 #else
             tstr = (char *) zend_rsrc_list_get_rsrc_type(Z_RES_P(zv) TSRMLS_CC);
-            return sdscatprintf(sdsempty(), "resource(%s)#%ld", tstr ? tstr : "Unknown", Z_RES_P(zv)->handle);
+            return sdscatprintf(sdsempty(), "resource(%s)#%d", tstr ? tstr : "Unknown", Z_RES_P(zv)->handle);
         case IS_UNDEF:
             return sdsnew("{undef}");
 #endif
