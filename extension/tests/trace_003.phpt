@@ -70,6 +70,7 @@ unset($o->attr);
 clone($o);
 ?>
 --EXPECTF--
+> cli php %s
 > {main}() called at [%s:2]
     > TestClass->__construct() called at [%s:33]
     < TestClass->__construct() = NULL called at [%s:33] wt: %f ct: %f
@@ -130,3 +131,4 @@ clone($o);
 < {main}() = 1 called at [%s:2] wt: %f ct: %f
 > TestClass->__destruct() called at [(null):0]
 < TestClass->__destruct() = NULL called at [(null):0] wt: %f ct: %f
+< cli php %s

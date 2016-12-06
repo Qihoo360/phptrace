@@ -24,6 +24,7 @@ call_normal(new DummyClass());
 call_normal(null, 1234, 1.234, true, false, array(), 'hello', tmpfile(), DUMMYCONST, new DummyClass());
 ?>
 --EXPECTF--
+> cli php %s
 > {main}() called at [%s:2]
     > define("DUMMYCONST", "this is a const string") called at [%s:4]
     < define("DUMMYCONST", "this is a const string") = true called at [%s:4] wt: %f ct: %f
@@ -60,3 +61,4 @@ call_normal(null, 1234, 1.234, true, false, array(), 'hello', tmpfile(), DUMMYCO
     > call_normal(NULL, 1234, 1.234, true, false, array(0), "hello", resource(stream)#%d, "this is a const string", object(DummyClass)#1) called at [%s:19]
     < call_normal(NULL, 1234, 1.234, true, false, array(0), "hello", resource(stream)#%d, "this is a const string", object(DummyClass)#1) = NULL called at [%s:19] wt: %f ct: %f
 < {main}() = 1 called at [%s:2] wt: %f ct: %f
+< cli php %s

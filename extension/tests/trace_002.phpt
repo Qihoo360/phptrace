@@ -31,6 +31,7 @@ eval('strlen("shit");call_normal();');
 // TODO generator, yield
 ?>
 --EXPECTF--
+> cli php %s
 > {main}() called at [%s:2]
     > require_once("%s_require.inc") called at [%s:5]
         > basename("%s"...) called at [%s_require.inc:2]
@@ -81,3 +82,4 @@ eval('strlen("shit");call_normal();');
         < call_normal() = NULL called at [%s(24) : eval()'d code:1] wt: %f ct: %f
     < {eval} = NULL called at [%s:24] wt: %f ct: %f
 < {main}() = 1 called at [%s:2] wt: %f ct: %f
+< cli php %s

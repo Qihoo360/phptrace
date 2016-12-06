@@ -13,6 +13,7 @@ function call_recursive($r = 0) {
 call_recursive(36);
 ?>
 --EXPECTF--
+> cli php %s
 > {main}() called at [%s:2]
     > call_recursive(36) called at [%s:8]
         > call_recursive(35) called at [%s:4]
@@ -89,3 +90,4 @@ call_recursive(36);
         < call_recursive(35) = NULL called at [%s:4] wt: %f ct: %f
     < call_recursive(36) = NULL called at [%s:8] wt: %f ct: %f
 < {main}() = 1 called at [%s:2] wt: %f ct: %f
+< cli php %s

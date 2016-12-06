@@ -20,6 +20,7 @@ set_exception_handler('handler_for_exception');
 throw new Exception('test');
 ?>
 --EXPECTF--
+> cli php %s
 > {main}() called at [%s:3]
     > register_shutdown_function("handler_for_shutdown") called at [%s:4]
     < register_shutdown_function("handler_for_shutdown") = NULL called at [%s:4] wt: %f ct: %f
@@ -40,3 +41,4 @@ throw new Exception('test');
 < handler_for_exception(object(Exception)#1) = NULL called at [(null):0] wt: %f ct: %f
 > handler_for_shutdown() called at [(null):0]
 < handler_for_shutdown() = NULL called at [(null):0] wt: %f ct: %f
+< cli php %s
