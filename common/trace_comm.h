@@ -17,6 +17,8 @@
 #ifndef TRACE_COMM_H
 #define TRACE_COMM_H
 
+#include <stdlib.h>
+
 #define PT_COMM_FILENAME                "phptrace.sock"
 #define PT_COMM_MAXRECV                 10
 #define PT_COMM_BACKLOG                 128
