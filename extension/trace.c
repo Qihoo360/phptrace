@@ -87,6 +87,7 @@ typedef unsigned long zend_uintptr_t;
 PHP_FUNCTION(trace_start);
 PHP_FUNCTION(trace_end);
 PHP_FUNCTION(trace_status);
+PHP_FUNCTION(trace_dump_address);
 #endif
 
 static void frame_build(pt_frame_t *frame, zend_bool internal, unsigned char type, zend_execute_data *caller, zend_execute_data *ex, zend_op_array *op_array TSRMLS_DC);
@@ -144,6 +145,7 @@ const zend_function_entry trace_functions[] = {
     PHP_FE(trace_start, NULL)
     PHP_FE(trace_end, NULL)
     PHP_FE(trace_status, NULL)
+    PHP_FE(trace_dump_address, NULL)
 #endif
 #ifdef PHP_FE_END
     PHP_FE_END  /* Must be the last line in trace_functions[] */
@@ -386,6 +388,87 @@ PHP_FUNCTION(trace_status)
     status_build(&status, 1, EG(current_execute_data) TSRMLS_CC);
     pt_type_display_status(&status);
     status_destroy(&status TSRMLS_CC);
+}
+
+PHP_FUNCTION(trace_dump_address)
+{
+    zend_printf("PHP_VERSION: %s\n", PHP_VERSION);
+
+    /* sapi module */
+    zend_printf("sapi_module: 0x%lx\n", &sapi_module);
+    zend_printf("    .name: %ld\n", (long) &sapi_module.name - (long) &sapi_module);
+
+    /* sapi globals */
+    zend_printf("sapi_globals: 0x%lx\n", &sapi_globals);
+    zend_printf("    .request_info.path_translated: %ld\n",
+            (long) &sapi_globals.request_info.path_translated - (long) &sapi_globals);
+    zend_printf("    .request_info.request_method: %ld\n",
+            (long) &sapi_globals.request_info.request_method - (long) &sapi_globals);
+    zend_printf("    .request_info.request_uri: %ld\n",
+            (long) &sapi_globals.request_info.request_uri - (long) &sapi_globals);
+    zend_printf("    .request_info.argc: %ld\n",
+            (long) &sapi_globals.request_info.argc - (long) &sapi_globals);
+    zend_printf("    .request_info.argv: %ld\n",
+            (long) &sapi_globals.request_info.argv - (long) &sapi_globals);
+
+    /* executor_globals */
+    zend_printf("executor_globals: 0x%lx\n", &executor_globals);
+    zend_printf("    .current_execute_data: %ld\n",
+            (long) &executor_globals.current_execute_data - (long) &executor_globals);
+
+    /* execute_data */
+    zend_printf("executor_globals.current_execute_data: 0x%lx\n",
+            executor_globals.current_execute_data);
+    zend_printf("    .opline: %ld\n",
+            (long) &executor_globals.current_execute_data->opline -
+            (long) executor_globals.current_execute_data);
+    zend_printf("    .prev_execute_data: %ld\n",
+            (long) &executor_globals.current_execute_data->prev_execute_data -
+            (long) executor_globals.current_execute_data);
+    zend_printf("    .func: %ld\n",
+            (long) &executor_globals.current_execute_data->func -
+            (long) executor_globals.current_execute_data);
+    zend_printf("    .This: %ld\n",
+            (long) &executor_globals.current_execute_data->This -
+            (long) executor_globals.current_execute_data);
+
+    /* opline */
+    zend_printf("executor_globals.current_execute_data->opline: 0x%lx\n",
+            executor_globals.current_execute_data->opline);
+    zend_printf("    .extended_value: %ld\n",
+            (long) &executor_globals.current_execute_data->opline->extended_value -
+            (long) executor_globals.current_execute_data->opline);
+    zend_printf("    .lineno: %ld\n",
+            (long) &executor_globals.current_execute_data->opline->lineno -
+            (long) executor_globals.current_execute_data->opline);
+
+    /* func */
+    zend_printf("executor_globals.current_execute_data->func: 0x%lx\n",
+            executor_globals.current_execute_data->func);
+    zend_printf("    .op_array: %ld\n",
+            (long) &executor_globals.current_execute_data->func->op_array -
+            (long) executor_globals.current_execute_data->func);
+    zend_printf("    .function_name: %ld\n",
+            (long) &executor_globals.current_execute_data->func->common.function_name -
+            (long) executor_globals.current_execute_data->func);
+    zend_printf("    .scope: %ld\n",
+            (long) &executor_globals.current_execute_data->func->common.scope -
+            (long) executor_globals.current_execute_data->func);
+    zend_printf("    .type: %ld\n",
+            (long) &executor_globals.current_execute_data->func->common.type -
+            (long) executor_globals.current_execute_data->func);
+
+    zend_printf("executor_globals.current_execute_data->func.op_array: 0x%lx\n",
+            (long) &executor_globals.current_execute_data->func->op_array);
+    zend_printf("    .filename: %ld\n",
+            (long) &executor_globals.current_execute_data->func->op_array.filename -
+            (long) &executor_globals.current_execute_data->func->op_array);
+
+    zend_printf("executor_globals.current_execute_data->func.scope: 0x%lx\n",
+            (long) executor_globals.current_execute_data->func->common.scope);
+    zend_printf("    .name: %ld\n",
+            (long) &executor_globals.current_execute_data->func->common.scope->name -
+            (long) executor_globals.current_execute_data->func->common.scope);
 }
 #endif
 
