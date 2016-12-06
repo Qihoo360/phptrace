@@ -111,10 +111,7 @@ int pt_trace_main(void)
 
     for (;;) {
         if (interrupted) {
-            pt_ctrl_clear_all(&ctrlst);
-            pt_info("clear all ctrl bits");
-            pt_comm_close(sfd, "/tmp/" PT_COMM_FILENAME);
-            return 0;
+            break;
         }
 
         /* select */
@@ -174,6 +171,10 @@ int pt_trace_main(void)
             }
         }
     }
+
+    pt_ctrl_clear_all(&ctrlst);
+    pt_info("clear all ctrl bits");
+    pt_comm_close(sfd, "/tmp/" PT_COMM_FILENAME);
 
     return 0;
 }

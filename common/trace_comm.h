@@ -39,7 +39,6 @@ enum {
 
     PT_MSG_DO_TRACE,
     PT_MSG_DO_STATUS,
-    PT_MSG_DO_PING,
 
     PT_MSG_FRAME,
     PT_MSG_REQ,

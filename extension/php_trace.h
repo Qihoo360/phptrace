@@ -61,9 +61,6 @@ ZEND_BEGIN_MODULE_GLOBALS(trace)
     pid_t                   pid;            /* process id */
     long                    level;          /* nesting level */
 
-    long                    ping;           /* last ping time (second) */
-    long                    idle_timeout;   /* idle timeout, for current - last ping */
-
     pt_request_t            request;        /* current request info */
 ZEND_END_MODULE_GLOBALS(trace)
 

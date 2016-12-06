@@ -47,10 +47,6 @@
 #define CTRL_IS_ACTIVE()    pt_ctrl_is_active(&PTG(ctrl), PTG(pid))
 #define CTRL_SET_INACTIVE() pt_ctrl_set_inactive(&PTG(ctrl), PTG(pid))
 
-/* Ping process */
-#define PING_UPDATE() PTG(ping) = pt_time_sec()
-#define PING_TIMEOUT() (pt_time_sec() > PTG(ping) + PTG(idle_timeout))
-
 /* Profiling */
 #define PROFILING_SET(p) do { \
     p.wall_time = pt_time_usec(); \
@@ -101,7 +97,7 @@ static int pt_frame_send(pt_frame_t *frame TSRMLS_DC);
 static void pt_frame_set_retval(pt_frame_t *frame, zend_bool internal, zend_execute_data *ex, zend_fcall_info *fci TSRMLS_DC);
 #endif
 
-static void pt_request_build(pt_request_t *request TSRMLS_DC);
+static void pt_request_build(pt_request_t *request, unsigned char type TSRMLS_DC);
 static int pt_request_send(pt_request_t *request TSRMLS_DC);
 
 static void pt_status_build(pt_status_t *status, zend_bool internal, zend_execute_data *ex TSRMLS_DC);
@@ -110,7 +106,8 @@ static void pt_status_display(pt_status_t *status TSRMLS_DC);
 static int pt_status_send(pt_status_t *status TSRMLS_DC);
 
 static sds pt_repr_zval(zval *zv, int limit TSRMLS_DC);
-static void pt_set_inactive(TSRMLS_D);
+static void pt_handle_error(TSRMLS_D);
+static void pt_handle_command(void);
 
 #if PHP_VERSION_ID < 50500
 static void (*pt_ori_execute)(zend_op_array *op_array TSRMLS_DC);
@@ -203,8 +200,7 @@ static void php_trace_init_globals(zend_trace_globals *ptg)
 
     ptg->pid = ptg->level = 0;
 
-    ptg->ping = 0;
-    ptg->idle_timeout = 30; /* hardcoded */
+    memset(&ptg->request, 0, sizeof(ptg->request));
 }
 
 
@@ -299,10 +295,15 @@ PHP_RINIT_FUNCTION(trace)
     }
     PTG(level) = 0;
 
-    /* Build request */
+    /* Check ctrl module */
+    if (CTRL_IS_ACTIVE()) {
+        pt_handle_command();
+    }
+
+    /* Request process */
     if (PTG(dotrace)) {
-        pt_request_build(&PTG(request));
-        PTG(request).type = PT_FRAME_ENTRY;
+        pt_request_build(&PTG(request), PT_FRAME_ENTRY);
+
         if (PTG(dotrace) & TRACE_TO_TOOL) {
             pt_request_send(&PTG(request) TSRMLS_CC);
         }
@@ -316,10 +317,10 @@ PHP_RINIT_FUNCTION(trace)
 
 PHP_RSHUTDOWN_FUNCTION(trace)
 {
-    /* Build request */
+    /* Request process */
     if (PTG(dotrace)) {
-        pt_request_build(&PTG(request));
-        PTG(request).type = PT_FRAME_EXIT;
+        pt_request_build(&PTG(request), PT_FRAME_EXIT);
+
         if (PTG(dotrace) & TRACE_TO_TOOL) {
             pt_request_send(&PTG(request) TSRMLS_CC);
         }
@@ -694,8 +695,9 @@ static int pt_frame_send(pt_frame_t *frame TSRMLS_DC)
  * Trace Manipulation of Request
  * --------------------
  */
-static void pt_request_build(pt_request_t *request TSRMLS_DC)
+static void pt_request_build(pt_request_t *request, unsigned char type TSRMLS_DC)
 {
+    request->type = type;
     request->sapi = sapi_module.name;
     request->script = SG(request_info).path_translated;
 
@@ -939,8 +941,18 @@ static sds pt_repr_zval(zval *zv, int limit TSRMLS_DC)
     }
 }
 
-static void pt_set_inactive(TSRMLS_D)
+static void pt_handle_error(TSRMLS_D)
 {
+    /* retry once if ctrl bit still ON */
+    if (PTG(sock_fd) != -1 && CTRL_IS_ACTIVE()) {
+        PTD("Comm socket retry connect to %s", PTG(sock_addr));
+        PTG(sock_fd) = pt_comm_connect(PTG(sock_addr));
+        if (PTG(sock_fd) != -1) {
+            PTD("Connect to %s successful", PTG(sock_addr));
+            return;
+        }
+    }
+
     /* Toggle off dotrace flag */
     PTG(dotrace) &= ~TRACE_TO_TOOL;
 
@@ -953,6 +965,60 @@ static void pt_set_inactive(TSRMLS_D)
         PTD("Comm socket close");
         pt_comm_close(PTG(sock_fd), NULL);
         PTG(sock_fd) = -1;
+    }
+}
+
+static void pt_handle_command(void)
+{
+    int msg_type;
+    pt_comm_message_t *msg;
+
+    /* Open comm socket */
+    if (PTG(sock_fd) == -1) {
+        PTD("Comm socket connect to %s", PTG(sock_addr));
+        PTG(sock_fd) = pt_comm_connect(PTG(sock_addr));
+        if (PTG(sock_fd) == -1) {
+            PTD("Connect to %s failed, errmsg: %s", PTG(sock_addr), strerror(errno));
+            pt_handle_error(TSRMLS_C);
+            return;
+        }
+    }
+
+    /* Handle message */
+    while (1) {
+        msg_type = pt_comm_recv_msg(PTG(sock_fd), &msg);
+        PTD("recv message type: 0x%08x len: %d", msg_type, msg->len);
+
+        switch (msg_type) {
+            case PT_MSG_PEERDOWN:
+            case PT_MSG_ERR_SOCK:
+            case PT_MSG_ERR_BUF:
+            case PT_MSG_INVALID:
+                PTD("recv message error errno: %d errmsg: %s", errno, strerror(errno));
+                pt_handle_error(TSRMLS_C);
+                return;
+
+            case PT_MSG_EMPTY:
+                PTD("handle EMPTY");
+                return;
+
+            case PT_MSG_DO_TRACE:
+                PTD("handle DO_TRACE");
+                PTG(dotrace) |= TRACE_TO_TOOL;
+                break;
+
+            case PT_MSG_DO_STATUS:
+                PTD("handle DO_STATUS");
+                // pt_status_t status;
+                // pt_status_build(&status, internal, caller TSRMLS_CC);
+                // pt_status_send(&status TSRMLS_CC);
+                // pt_status_destroy(&status TSRMLS_CC);
+                break;
+
+            default:
+                php_error(E_NOTICE, "Trace unknown message received with type 0x%08x", msg->type);
+                break;
+        }
     }
 }
 
@@ -977,9 +1043,7 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zva
 #else
     zval retval;
 #endif
-    pt_comm_message_t *msg;
     pt_frame_t frame;
-    int msg_type;
 
 #if PHP_VERSION_ID >= 70000
     if (execute_data->prev_execute_data) {
@@ -996,67 +1060,11 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zva
 
     /* Check ctrl module */
     if (CTRL_IS_ACTIVE()) {
-        /* Open comm socket */
-        if (PTG(sock_fd) == -1) {
-            PTD("Comm socket connect to %s", PTG(sock_addr));
-            PTG(sock_fd) = pt_comm_connect(PTG(sock_addr));
-            if (PTG(sock_fd) == -1) {
-                PTD("Connect to %s failed, errmsg: %s", PTG(sock_addr), strerror(errno));
-                pt_set_inactive(TSRMLS_C);
-                goto exec;
-            }
-            PING_UPDATE();
-        }
-
-        /* Handle message */
-        while (1) {
-            msg_type = pt_comm_recv_msg(PTG(sock_fd), &msg);
-            PTD("recv message type: 0x%08x len: %d", msg_type, msg->len);
-            switch (msg_type) {
-                case PT_MSG_PEERDOWN:
-                case PT_MSG_ERR_SOCK:
-                case PT_MSG_ERR_BUF:
-                case PT_MSG_INVALID:
-                    PTD("recv message error errno: %d errmsg: %s", errno, strerror(errno));
-                    pt_set_inactive(TSRMLS_C);
-                    goto exec;
-
-                case PT_MSG_EMPTY:
-                    PTD("handle EMPTY");
-                    if (PING_TIMEOUT()) {
-                        PTD("Ping timeout");
-                        pt_set_inactive(TSRMLS_C);
-                    }
-                    goto exec;
-
-                case PT_MSG_DO_TRACE:
-                    PTD("handle DO_TRACE");
-                    PTG(dotrace) |= TRACE_TO_TOOL;
-                    break;
-
-                case PT_MSG_DO_STATUS:
-                    PTD("handle DO_STATUS");
-                    pt_status_t status;
-                    pt_status_build(&status, internal, caller TSRMLS_CC);
-                    pt_status_send(&status TSRMLS_CC);
-                    pt_status_destroy(&status TSRMLS_CC);
-                    break;
-
-                case PT_MSG_DO_PING:
-                    PTD("handle DO_PING");
-                    PING_UPDATE();
-                    break;
-
-                default:
-                    php_error(E_NOTICE, "Trace unknown message received with type 0x%08x", msg->type);
-                    break;
-            }
-        }
+        pt_handle_command();
     } else if (PTG(sock_fd) != -1) { /* comm socket still opend */
-        pt_set_inactive(TSRMLS_C);
+        pt_handle_error(TSRMLS_C);
     }
 
-exec:
     /* Assigning to a LOCAL VARIABLE at begining to prevent value changed
      * during executing. And whether send frame mesage back is controlled by
      * GLOBAL VALUE and LOCAL VALUE both because comm-module may be closed in
@@ -1085,8 +1093,6 @@ exec:
         }
 #endif
 
-        PROFILING_SET(frame.entry);
-
         /* Send frame message */
         if (dotrace & TRACE_TO_TOOL) {
             pt_frame_send(&frame TSRMLS_CC);
@@ -1094,6 +1100,8 @@ exec:
         if (dotrace & TRACE_TO_OUTPUT) {
             pt_type_display_frame(&frame, 1, "> ");
         }
+
+        PROFILING_SET(frame.entry);
     }
 
     /* Call original under zend_try. baitout will be called when exit(), error
