@@ -19,11 +19,11 @@ new UndefinedClass;
 trace_end(); ?>
 --EXPECTF--
 > spl_autoload_register("handler_for_autoload") called at [%s:4]
-    < spl_autoload_register("handler_for_autoload") = true called at [%s:4] wt: %f ct: %f
+    < spl_autoload_register("handler_for_autoload") = true called at [%s:4] wt: %f
     > spl_autoload_call("UndefinedClass") called at [%s:5]
         > handler_for_autoload("UndefinedClass") called at [(null):0]
             > {eval} called at [%s:3]
-            < {eval} = NULL called at [%s:3] wt: %f ct: %f
-        < handler_for_autoload("UndefinedClass") = NULL called at [(null):0] wt: %f ct: %f
-    < spl_autoload_call("UndefinedClass") = NULL called at [%s:5] wt: %f ct: %f
+            < {eval} = NULL called at [%s:3] wt: %f
+        < handler_for_autoload("UndefinedClass") = NULL called at [(null):0] wt: %f
+    < spl_autoload_call("UndefinedClass") = NULL called at [%s:5] wt: %f
     > trace_end() called at [%s:7]

@@ -45,9 +45,9 @@ $c->callAlias();
 trace_end(); ?>
 --EXPECTF--
 > TestClassA->callNormal() called at [%s:29]
-    < TestClassA->callNormal() = NULL called at [%s:29] wt: %f ct: %f
+    < TestClassA->callNormal() = NULL called at [%s:29] wt: %f
     > TestClassB->callNormal() called at [%s:30]
-    < TestClassB->callNormal() = NULL called at [%s:30] wt: %f ct: %f
+    < TestClassB->callNormal() = NULL called at [%s:30] wt: %f
     > TestClassC->callAlias() called at [%s:31]
-    < TestClassC->callAlias() = NULL called at [%s:31] wt: %f ct: %f
+    < TestClassC->callAlias() = NULL called at [%s:31] wt: %f
     > trace_end() called at [%s:33]

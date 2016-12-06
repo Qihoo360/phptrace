@@ -56,14 +56,12 @@ typedef struct {
 
     struct {
         int64_t wall_time;      /* wall time */
-        int64_t cpu_time;       /* cpu time */
         int64_t mem;            /* memory usage */
         int64_t mempeak;        /* memory peak */
     } entry;
 
     struct {
         int64_t wall_time;      /* wall time */
-        int64_t cpu_time;       /* cpu time */
         int64_t mem;            /* memory usage */
         int64_t mempeak;        /* memory peak */
     } exit;
