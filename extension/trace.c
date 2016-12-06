@@ -102,7 +102,6 @@ static int pt_request_send(pt_request_t *request TSRMLS_DC);
 
 static void pt_status_build(pt_status_t *status, zend_bool internal, zend_execute_data *ex TSRMLS_DC);
 static void pt_status_destroy(pt_status_t *status TSRMLS_DC);
-static void pt_status_display(pt_status_t *status TSRMLS_DC);
 static int pt_status_send(pt_status_t *status TSRMLS_DC);
 
 static sds pt_repr_zval(zval *zv, int limit TSRMLS_DC);
@@ -360,8 +359,9 @@ PHP_FUNCTION(trace_end)
 PHP_FUNCTION(trace_status)
 {
     pt_status_t status;
+
     pt_status_build(&status, 1, EG(current_execute_data) TSRMLS_CC);
-    pt_status_display(&status TSRMLS_CC);
+    pt_type_display_status(&status);
     pt_status_destroy(&status TSRMLS_CC);
 }
 #endif
@@ -749,7 +749,6 @@ static void pt_status_build(pt_status_t *status, zend_bool internal, zend_execut
 
     /* common */
     status->php_version = PHP_VERSION;
-    status->sapi_name = sapi_module.name;
 
     /* profile */
     status->mem = zend_memory_usage(0 TSRMLS_CC);
@@ -758,16 +757,7 @@ static void pt_status_build(pt_status_t *status, zend_bool internal, zend_execut
     status->mempeak_real = zend_memory_peak_usage(1 TSRMLS_CC);
 
     /* request */
-    status->request_method = (char *) SG(request_info).request_method;
-    status->request_uri = SG(request_info).request_uri;
-    status->request_query = SG(request_info).query_string;
-    status->request_time = SG(global_request_time);
-    status->request_script = SG(request_info).path_translated;
-    status->proto_num = SG(request_info).proto_num;
-
-    /* arguments */
-    status->argc = SG(request_info).argc;
-    status->argv = SG(request_info).argv;
+    pt_request_build(&status->request, PT_FRAME_STACK);
 
     /* frame */
     for (i = 0; ex; ex = ex->prev_execute_data, i++) ; /* calculate stack depth */
@@ -795,50 +785,6 @@ static void pt_status_destroy(pt_status_t *status TSRMLS_DC)
     }
 }
 
-static void pt_status_display(pt_status_t *status TSRMLS_DC)
-{
-    int i;
-
-    zend_printf("------------------------------- Status --------------------------------\n");
-    zend_printf("PHP Version:       %s\n", status->php_version);
-    zend_printf("SAPI:              %s\n", status->sapi_name);
-
-    zend_printf("memory:            %.2fm\n", status->mem / 1048576.0);
-    zend_printf("memory peak:       %.2fm\n", status->mempeak / 1048576.0);
-    zend_printf("real-memory:       %.2fm\n", status->mem_real / 1048576.0);
-    zend_printf("real-memory peak   %.2fm\n", status->mempeak_real / 1048576.0);
-
-    zend_printf("------------------------------- Request -------------------------------\n");
-    if (status->request_method) {
-    zend_printf("request method:    %s\n", status->request_method);
-    }
-    zend_printf("request time:      %f\n", status->request_time);
-    if (status->request_uri) {
-    zend_printf("request uri:       %s\n", status->request_uri);
-    }
-    if (status->request_query) {
-    zend_printf("request query:     %s\n", status->request_query);
-    }
-    if (status->request_script) {
-    zend_printf("request script:    %s\n", status->request_script);
-    }
-    zend_printf("proto_num:         %d\n", status->proto_num);
-
-    if (status->argc) {
-        zend_printf("------------------------------ Arguments ------------------------------\n");
-        for (i = 0; i < status->argc; i++) {
-            zend_printf("$%-10d        %s\n", i, status->argv[i]);
-        }
-    }
-
-    if (status->frame_count) {
-        zend_printf("------------------------------ Backtrace ------------------------------\n");
-        for (i = 0; i < status->frame_count; i++) {
-            pt_type_display_frame(status->frames + i, 0, "#%-3d", i);
-        }
-    }
-}
-
 static int pt_status_send(pt_status_t *status TSRMLS_DC)
 {
     size_t len;
@@ -846,7 +792,7 @@ static int pt_status_send(pt_status_t *status TSRMLS_DC)
 
     /* build */
     len = pt_type_len_status(status);
-    if (pt_comm_build_msg(&msg, len, PT_MSG_FRAME) == -1) {
+    if (pt_comm_build_msg(&msg, len, PT_MSG_STATUS) == -1) {
         php_error(E_WARNING, "Trace build message failed, size: %ld", len);
         return -1;
     }
@@ -1009,10 +955,10 @@ static void pt_handle_command(void)
 
             case PT_MSG_DO_STATUS:
                 PTD("handle DO_STATUS");
-                // pt_status_t status;
-                // pt_status_build(&status, internal, caller TSRMLS_CC);
-                // pt_status_send(&status TSRMLS_CC);
-                // pt_status_destroy(&status TSRMLS_CC);
+                pt_status_t status;
+                pt_status_build(&status, 1, EG(current_execute_data) TSRMLS_CC);
+                pt_status_send(&status TSRMLS_CC);
+                pt_status_destroy(&status TSRMLS_CC);
                 break;
 
             default:

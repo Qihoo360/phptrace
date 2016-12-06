@@ -42,6 +42,7 @@ enum {
 
     PT_MSG_FRAME,
     PT_MSG_REQ,
+    PT_MSG_STATUS,
 };
 
 typedef struct {

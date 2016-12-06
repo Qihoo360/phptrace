@@ -29,6 +29,7 @@
 
 #include "cli.h"
 #include "trace.h"
+#include "status.h"
 
 void context_init(void);
 void context_show(void);
@@ -44,9 +45,10 @@ volatile int interrupted = 0; /* flag of interrupt */
 /* Commands */
 enum {
     CMD_UNKNOWN = -1,
+    CMD_INVALID,
 
     CMD_TRACE,
-    CMD_STACK,
+    CMD_STATUS,
     CMD_VERSION,
 };
 
@@ -106,8 +108,8 @@ void context_show(void)
     /* command name */
     if (clictx.command == CMD_TRACE) {
         cmdname = "trace";
-    } else if (clictx.command == CMD_STACK) {
-        cmdname = "stack";
+    } else if (clictx.command == CMD_STATUS) {
+        cmdname = "status";
     } else if (clictx.command == CMD_VERSION) {
         cmdname = "version";
     } else {
@@ -138,7 +140,7 @@ void usage_full(void)
 "\n"
 "Commands:\n"
 "    trace               Trace a running PHP process [default]\n"
-"    stack               Display call-stack of a PHP process\n"
+"    status              Display current status of specified PHP process\n"
 "    version             Show version\n"
 "\n"
 "Options:\n"
@@ -162,7 +164,6 @@ void parse_args(int argc, char **argv)
     };
 
     if (argc < 2) {
-        usage();
         return;
     }
 
@@ -171,8 +172,10 @@ void parse_args(int argc, char **argv)
         clictx.command = CMD_TRACE;
     } else if (strcmp("version", argv[1]) == 0) {
         clictx.command = CMD_VERSION;
-    } else if (strcmp("stack", argv[1]) == 0) {
-        clictx.command = CMD_STACK;
+    } else if (strcmp("status", argv[1]) == 0) {
+        clictx.command = CMD_STATUS;
+    } else if (argv[1][0] != '-') {
+        clictx.command = CMD_INVALID;
     } else {
         clictx.command = CMD_UNKNOWN;
     }
@@ -247,8 +250,8 @@ int main(int argc, char **argv)
             status = pt_trace_main();
             break;
 
-        case CMD_STACK:
-            printf("Currently, stack output still not support.\n");
+        case CMD_STATUS:
+            status = pt_status_main();
             break;
 
         default:

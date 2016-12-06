@@ -377,30 +377,17 @@ void pt_type_display_request(pt_request_t *request, const char *format, ...)
 /* pt_status */
 size_t pt_type_len_status(pt_status_t *status)
 {
-    /* FIXME support sds, str both */
     int i;
     size_t size = 0;
 
     size += LEN_STR(status->php_version);                     /* php_version */
-    size += LEN_STR(status->sapi_name);                       /* sapi_name */
 
     size += sizeof(int64_t);                                  /* mem */
     size += sizeof(int64_t);                                  /* mempeak */
     size += sizeof(int64_t);                                  /* real mem */
     size += sizeof(int64_t);                                  /* real mempeak */
 
-    size += sizeof(double);                                   /* request time */
-    size += LEN_STR(status->request_method);                  /* request method */
-    size += LEN_STR(status->request_uri);                     /* request uri */
-    size += LEN_STR(status->request_query);                   /* request query */
-    size += LEN_STR(status->request_script);                  /* request script */
-
-    size += sizeof(uint32_t);                                 /* argc */
-    for (i = 0; i < status->argc; i++) {
-        size += LEN_STR(status->argv[i]);                     /* argv */
-    }
-
-    size += sizeof(uint32_t);                                 /* proto_num */
+    size += pt_type_len_request(&status->request);            /* request */
 
     size += sizeof(uint32_t);                                 /* frame count */
     for (i = 0; i < status->frame_count; i++) {
@@ -412,31 +399,19 @@ size_t pt_type_len_status(pt_status_t *status)
 
 size_t pt_type_pack_status(pt_status_t *status, char *buf)
 {
-    /* FIXME support sds, str both */
     int i;
     size_t len;
     char *ori = buf;
 
     PACK_STR(buf,       status->php_version);
-    PACK_STR(buf,       status->sapi_name);
 
     PACK(buf, int64_t,  status->mem);
     PACK(buf, int64_t,  status->mempeak);
     PACK(buf, int64_t,  status->mem_real);
     PACK(buf, int64_t,  status->mempeak_real);
 
-    PACK(buf, double,   status->request_time);
-    PACK_STR(buf,       status->request_method);
-    PACK_STR(buf,       status->request_uri);
-    PACK_STR(buf,       status->request_query);
-    PACK_STR(buf,       status->request_script);
-
-    PACK(buf, uint32_t, status->argc);
-    for (i = 0; i < status->argc; i++) {
-        PACK_STR(buf,   status->argv[i]);
-    }
-
-    PACK(buf, uint32_t, status->proto_num);
+    len = pt_type_pack_request(&status->request, buf);
+    buf += len;
 
     PACK(buf, uint32_t, status->frame_count);
     for (i = 0; i < status->frame_count; i++) {
@@ -454,30 +429,14 @@ size_t pt_type_unpack_status(pt_status_t *status, char *buf)
     char *ori = buf;
 
     UNPACK_SDS(buf,       status->php_version);
-    UNPACK_SDS(buf,       status->sapi_name);
 
     UNPACK(buf, int64_t,  status->mem);
     UNPACK(buf, int64_t,  status->mempeak);
     UNPACK(buf, int64_t,  status->mem_real);
     UNPACK(buf, int64_t,  status->mempeak_real);
 
-    UNPACK(buf, double,   status->request_time);
-    UNPACK_SDS(buf,       status->request_method);
-    UNPACK_SDS(buf,       status->request_uri);
-    UNPACK_SDS(buf,       status->request_query);
-    UNPACK_SDS(buf,       status->request_script);
-
-    UNPACK(buf, uint32_t, status->argc);
-    if (status->argc > 0) {
-        status->argv = calloc(status->argc, sizeof(char *));
-    } else {
-        status->argv = NULL;
-    }
-    for (i = 0; i < status->argc; i++) {
-        UNPACK_SDS(buf,   status->argv[i]);
-    }
-
-    UNPACK(buf, uint32_t, status->proto_num);
+    len = pt_type_unpack_request(&status->request, buf);
+    buf += len;
 
     UNPACK(buf, uint32_t, status->frame_count);
     if (status->frame_count > 0) {
@@ -492,3 +451,42 @@ size_t pt_type_unpack_status(pt_status_t *status, char *buf)
 
     return buf - ori;
 }
+
+/* TODO improve display format */
+void pt_type_display_status(pt_status_t *status)
+{
+    int i;
+
+    printf("------------------------------- Status --------------------------------\n");
+    printf("PHP Version:       %s\n", status->php_version);
+    printf("SAPI:              %s\n", status->request.sapi);
+    printf("script:            %s\n", status->request.script);
+
+    printf("memory:            %.2fm\n", status->mem / 1048576.0);
+    printf("memory peak:       %.2fm\n", status->mempeak / 1048576.0);
+    printf("real-memory:       %.2fm\n", status->mem_real / 1048576.0);
+    printf("real-memory peak   %.2fm\n", status->mempeak_real / 1048576.0);
+
+    printf("------------------------------- Request -------------------------------\n");
+    if (status->request.method) {
+    printf("request method:    %s\n", status->request.method);
+    }
+    if (status->request.uri) {
+    printf("request uri:       %s\n", status->request.uri);
+    }
+
+    if (status->request.argc) {
+        printf("------------------------------ Arguments ------------------------------\n");
+        for (i = 0; i < status->request.argc; i++) {
+            printf("$%-10d        %s\n", i, status->request.argv[i]);
+        }
+    }
+
+    if (status->frame_count) {
+        printf("------------------------------ Backtrace ------------------------------\n");
+        for (i = 0; i < status->frame_count; i++) {
+            pt_type_display_frame(status->frames + i, 0, "#%-3d", i);
+        }
+    }
+}
+

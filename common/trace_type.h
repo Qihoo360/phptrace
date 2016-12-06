@@ -86,39 +86,31 @@ typedef struct {
     sds *argv;
 } pt_request_t;
 
+/* pt_request
+ * use sds to make pack, unpack reliable and uniform outside PHP */
 size_t pt_type_len_request(pt_request_t *request);
 size_t pt_type_pack_request(pt_request_t *request, char *buf);
 size_t pt_type_unpack_request(pt_request_t *request, char *buf);
 void pt_type_display_request(pt_request_t *request, const char *format, ...);
 
-/* pt_status
- * use sds to make pack, unpack reliable and uniform outside PHP */
+/* pt_status */
 typedef struct {
     sds php_version;            /* php version eg: 5.5.24 */
-    sds sapi_name;              /* sapi name eg: fpm-fcgi */
 
     int64_t mem;                /* memory usage */
     int64_t mempeak;            /* memory peak */
     int64_t mem_real;           /* real memory usage */
     int64_t mempeak_real;       /* real memory peak */
 
-    double request_time;        /* request part, available in fpm, cli-server */
-    sds request_method;         /* [optional] */
-    sds request_uri;            /* [optional] */
-    sds request_query;          /* [optional] */
-    sds request_script;         /* [optional] */
-
-    int argc;                   /* arguments part, available in cli */
-    sds *argv;
-
-    int proto_num;
+    pt_request_t request;       /* request */
 
     uint32_t frame_count;       /* backtrace depth */
-    pt_frame_t *frames;     /* backtrace frames */
+    pt_frame_t *frames;         /* backtrace frames */
 } pt_status_t;
 
 size_t pt_type_len_status(pt_status_t *status);
 size_t pt_type_pack_status(pt_status_t *status, char *buf);
 size_t pt_type_unpack_status(pt_status_t *status, char *buf);
+void pt_type_display_status(pt_status_t *status);
 
 #endif
