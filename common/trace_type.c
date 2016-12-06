@@ -21,7 +21,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include "trace_type.h"
+#include "trace_color.h"
 
 #define PACK(buf, type, ele) \
     *(type *) buf = ele; buf += sizeof(type)
@@ -55,6 +57,18 @@ if (len) { \
 }
 #define UNPACK_STR(buf, ele) UNPACK_STR_EX(buf, ele, strndup)
 #define UNPACK_SDS(buf, ele) UNPACK_STR_EX(buf, ele, sdsnewlen)
+
+/* TODO move outside this file */
+static int output_is_tty = -1;
+
+static int has_color(void)
+{
+    if (output_is_tty == -1) {
+        output_is_tty = isatty(1); /* STDOUT fd */
+    }
+
+    return output_is_tty == 1 ? 1 : 0;
+}
 
 /* pt_frame */
 size_t pt_type_len_frame(pt_frame_t *frame)
@@ -183,13 +197,16 @@ void pt_type_display_frame(pt_frame_t *frame, int indent, const char *format, ..
     }
 
     /* frame */
+    if (has_color()) {
+        printf(PTC_GREEN);
+    }
     if ((frame->functype & PT_FUNC_TYPES) == PT_FUNC_NORMAL ||
             frame->functype & PT_FUNC_TYPES & PT_FUNC_INCLUDES) {
-        printf("%s(", frame->function);
+        printf("%s", frame->function);
     } else if ((frame->functype & PT_FUNC_TYPES) == PT_FUNC_MEMBER) {
-        printf("%s->%s(", frame->class, frame->function);
+        printf("%s->%s", frame->class, frame->function);
     } else if ((frame->functype & PT_FUNC_TYPES) == PT_FUNC_STATIC) {
-        printf("%s::%s(", frame->class, frame->function);
+        printf("%s::%s", frame->class, frame->function);
     } else if ((frame->functype & PT_FUNC_TYPES) == PT_FUNC_EVAL) {
         printf("%s", frame->function);
         has_bracket = 0;
@@ -197,11 +214,21 @@ void pt_type_display_frame(pt_frame_t *frame, int indent, const char *format, ..
         printf("unknown");
         has_bracket = 0;
     }
+    if (has_color()) {
+        printf(PTC_RESET);
+    }
 
     /* arguments */
+    if (has_bracket) {
+        printf("(");
+    }
     if (frame->arg_count) {
         for (i = 0; i < frame->arg_count; i++) {
-            printf("%s", frame->args[i]);
+            if (has_color()) {
+                printf(PTC_MAGENTA "%s" PTC_RESET, frame->args[i]);
+            } else {
+                printf("%s", frame->args[i]);
+            }
             if (i < frame->arg_count - 1) {
                 printf(", ");
             }
@@ -213,11 +240,20 @@ void pt_type_display_frame(pt_frame_t *frame, int indent, const char *format, ..
 
     /* return value */
     if (frame->type == PT_FRAME_EXIT && frame->retval) {
-        printf(" = %s", frame->retval);
+        if (has_color()) {
+            printf(" = " PTC_MAGENTA "%s" PTC_RESET, frame->retval);
+        } else {
+            printf(" = %s", frame->retval);
+        }
     }
 
     /* TODO output relative filepath */
-    printf(" called at [%s:%d]", frame->filename, frame->lineno);
+    if (has_color()) {
+        printf(" called at [" PTC_BBLACK "%s:%d" PTC_RESET "]", frame->filename, frame->lineno);
+    } else {
+        printf(" called at [%s:%d]", frame->filename, frame->lineno);
+    }
+
     if (frame->type == PT_FRAME_EXIT) {
         printf(" wt: %.3f ct: %.3f\n",
                 ((frame->exit.wall_time - frame->entry.wall_time) / 1000000.0),
@@ -225,6 +261,117 @@ void pt_type_display_frame(pt_frame_t *frame, int indent, const char *format, ..
     } else {
         printf("\n");
     }
+}
+
+/* pt_request */
+size_t pt_type_len_request(pt_request_t *request)
+{
+    /* TODO support sds, str both */
+    int i;
+    size_t size = 0;
+
+    size += sizeof(uint8_t);                            /* type */
+    size += LEN_STR(request->sapi);                     /* sapi_name */
+    size += LEN_STR(request->script);                   /* script */
+
+    size += LEN_STR(request->method);                   /* method */
+    size += LEN_STR(request->uri);                      /* uri */
+
+    size += sizeof(uint32_t);                           /* argc */
+    for (i = 0; i < request->argc; i++) {
+        size += LEN_STR(request->argv[i]);              /* argv */
+    }
+
+    return size;
+}
+
+size_t pt_type_pack_request(pt_request_t *request, char *buf)
+{
+    /* TODO support sds, str both */
+    int i;
+    size_t len;
+    char *ori = buf;
+
+    PACK(buf, uint8_t,  request->type);
+    PACK_STR(buf,       request->sapi);
+    PACK_STR(buf,       request->script);
+
+    PACK_STR(buf,       request->method);
+    PACK_STR(buf,       request->uri);
+
+    PACK(buf, uint32_t, request->argc);
+    for (i = 0; i < request->argc; i++) {
+        PACK_STR(buf,   request->argv[i]);
+    }
+
+    return buf - ori;
+}
+
+size_t pt_type_unpack_request(pt_request_t *request, char *buf)
+{
+    int i;
+    size_t len;
+    char *ori = buf;
+
+    UNPACK(buf, uint8_t,  request->type);
+    UNPACK_SDS(buf,       request->sapi);
+    UNPACK_SDS(buf,       request->script);
+
+    UNPACK_SDS(buf,       request->method);
+    UNPACK_SDS(buf,       request->uri);
+
+    UNPACK(buf, uint32_t, request->argc);
+    if (request->argc > 0) {
+        request->argv = calloc(request->argc, sizeof(char *));
+    } else {
+        request->argv = NULL;
+    }
+    for (i = 0; i < request->argc; i++) {
+        UNPACK_SDS(buf,   request->argv[i]);
+    }
+
+    return buf - ori;
+}
+
+void pt_type_display_request(pt_request_t *request, const char *format, ...)
+{
+    int i;
+    va_list ap;
+
+    /* format */
+    if (format) {
+        va_start(ap, format);
+        vprintf(format, ap);
+        va_end(ap);
+    }
+
+    if (has_color()) {
+        printf(PTC_BBLACK "%s " PTC_RESET, request->sapi);
+    } else {
+        printf("%s ", request->sapi);
+    }
+
+    if (request->method) { /* http request */
+        if (has_color()) {
+            printf(PTC_YELLOW "%s " PTC_GREEN "%s" PTC_RESET, request->method, request->uri);
+        } else {
+            printf("%s %s", request->method, request->uri);
+        }
+    } else { /* probable cli mode */
+        if (has_color()) {
+            printf(PTC_YELLOW "php " PTC_RESET);
+        } else {
+            printf("php ");
+        }
+        for (i = 0; i < request->argc; i++) {
+            if (i == 0 && has_color()) {
+                printf(PTC_GREEN "%s " PTC_RESET, request->argv[i]);
+            } else {
+                printf("%s ", request->argv[i]);
+            }
+        }
+    }
+    printf("\n");
 }
 
 /* pt_status */

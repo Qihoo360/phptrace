@@ -21,8 +21,8 @@
 #include "sds/sds.h"
 
 /* pt_frame */
-#define PT_FRAME_ENTRY          1 /* function entry */
-#define PT_FRAME_EXIT           2 /* function exit */
+#define PT_FRAME_ENTRY          1 /* entry */
+#define PT_FRAME_EXIT           2 /* exit */
 #define PT_FRAME_STACK          3 /* backtrace stack */
 
 #define PT_FUNC_INTERNAL        0x80 /* function is ZEND_INTERNAL_FUNCTION */
@@ -73,6 +73,23 @@ size_t pt_type_len_frame(pt_frame_t *frame);
 size_t pt_type_pack_frame(pt_frame_t *frame, char *buf);
 size_t pt_type_unpack_frame(pt_frame_t *frame, char *buf);
 void pt_type_display_frame(pt_frame_t *frame, int indent, const char *format, ...);
+
+typedef struct {
+    uint8_t type;               /* request type, begin or end */
+    sds sapi;                   /* sapi name eg: fpm-fcgi */
+    sds script;                 /* request script */
+
+    sds method;                 /* request method */
+    sds uri;                    /* request uri */
+
+    int argc;                   /* arguments part, available in cli */
+    sds *argv;
+} pt_request_t;
+
+size_t pt_type_len_request(pt_request_t *request);
+size_t pt_type_pack_request(pt_request_t *request, char *buf);
+size_t pt_type_unpack_request(pt_request_t *request, char *buf);
+void pt_type_display_request(pt_request_t *request, const char *format, ...);
 
 /* pt_status
  * use sds to make pack, unpack reliable and uniform outside PHP */

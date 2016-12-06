@@ -33,6 +33,7 @@ extern zend_module_entry trace_module_entry;
 #endif
 
 #include "trace_ctrl.h"
+#include "trace_type.h"
 #include "trace_version.h"
 
 PHP_MINIT_FUNCTION(trace);
@@ -62,6 +63,8 @@ ZEND_BEGIN_MODULE_GLOBALS(trace)
 
     long                    ping;           /* last ping time (second) */
     long                    idle_timeout;   /* idle timeout, for current - last ping */
+
+    pt_request_t            request;        /* current request info */
 ZEND_END_MODULE_GLOBALS(trace)
 
 

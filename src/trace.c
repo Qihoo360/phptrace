@@ -33,6 +33,7 @@ static int trace_single_process(int fd, int times)
     int i, msg_type;
     pt_comm_message_t *msg;
     pt_frame_t framest;
+    pt_request_t requestst;
 
     for (i = 0; i < times; i++) {
         msg_type = pt_comm_recv_msg(fd, &msg);
@@ -49,13 +50,23 @@ static int trace_single_process(int fd, int times)
             case PT_MSG_EMPTY:
                 return 0;
 
-            case PT_MSG_RET:
+            case PT_MSG_FRAME:
                 pt_type_unpack_frame(&framest, msg->data);
                 printf("[pid %5u]", msg->pid);
                 if (framest.type == PT_FRAME_ENTRY) {
                     pt_type_display_frame(&framest, 1, "> ");
                 } else {
                     pt_type_display_frame(&framest, 1, "< ");
+                }
+                break;
+
+            case PT_MSG_REQ:
+                pt_type_unpack_request(&requestst, msg->data);
+                printf("[pid %5u]", msg->pid);
+                if (requestst.type == PT_FRAME_ENTRY) {
+                    pt_type_display_request(&requestst, "> ");
+                } else {
+                    pt_type_display_request(&requestst, "< ");
                 }
                 break;
 

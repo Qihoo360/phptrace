@@ -26,20 +26,24 @@
 #define PT_MSG_SIZE_MIN                 0
 #define PT_MSG_SIZE_MAX                 1024 * 1024
 
-/* Type codes of inner message */
-#define PT_MSG_EMPTY                    0x00000000
-#define PT_MSG_PEERDOWN                 0x00000001
-#define PT_MSG_ERR_SOCK                 0x00000002
-#define PT_MSG_ERR_BUF                  0x00000003
-#define PT_MSG_INVALID                  0x00000004
+enum {
+    /* Codes for inner message */
+    PT_MSG_EMPTY        = 0x00000000,
+    PT_MSG_PEERDOWN,
+    PT_MSG_ERR_SOCK,
+    PT_MSG_ERR_BUF,
+    PT_MSG_INVALID,
 
-/* Type codes of user defined message
- * Should >= 0x80000000 */
-#define PT_MSG_RET                      0x80000000
-#define PT_MSG_DO_BASE                  0x80010000
-#define PT_MSG_DO_TRACE                 (PT_MSG_DO_BASE + 1)
-#define PT_MSG_DO_STATUS                (PT_MSG_DO_BASE + 2)
-#define PT_MSG_DO_PING                  (PT_MSG_DO_BASE + 4)
+    /* Codes for user defined message. MUST >= 0x80000000 */
+    PT_MSG_USER         = 0x80000000,
+
+    PT_MSG_DO_TRACE,
+    PT_MSG_DO_STATUS,
+    PT_MSG_DO_PING,
+
+    PT_MSG_FRAME,
+    PT_MSG_REQ,
+};
 
 typedef struct {
     int32_t len;                /* message length */

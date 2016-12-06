@@ -101,6 +101,9 @@ static int pt_frame_send(pt_frame_t *frame TSRMLS_DC);
 static void pt_frame_set_retval(pt_frame_t *frame, zend_bool internal, zend_execute_data *ex, zend_fcall_info *fci TSRMLS_DC);
 #endif
 
+static void pt_request_build(pt_request_t *request TSRMLS_DC);
+static int pt_request_send(pt_request_t *request TSRMLS_DC);
+
 static void pt_status_build(pt_status_t *status, zend_bool internal, zend_execute_data *ex TSRMLS_DC);
 static void pt_status_destroy(pt_status_t *status TSRMLS_DC);
 static void pt_status_display(pt_status_t *status TSRMLS_DC);
@@ -296,11 +299,35 @@ PHP_RINIT_FUNCTION(trace)
     }
     PTG(level) = 0;
 
+    /* Build request */
+    if (PTG(dotrace)) {
+        pt_request_build(&PTG(request));
+        PTG(request).type = PT_FRAME_ENTRY;
+        if (PTG(dotrace) & TRACE_TO_TOOL) {
+            pt_request_send(&PTG(request) TSRMLS_CC);
+        }
+        if (PTG(dotrace) & TRACE_TO_OUTPUT) {
+            pt_type_display_request(&PTG(request), "> ");
+        }
+    }
+
     return SUCCESS;
 }
 
 PHP_RSHUTDOWN_FUNCTION(trace)
 {
+    /* Build request */
+    if (PTG(dotrace)) {
+        pt_request_build(&PTG(request));
+        PTG(request).type = PT_FRAME_EXIT;
+        if (PTG(dotrace) & TRACE_TO_TOOL) {
+            pt_request_send(&PTG(request) TSRMLS_CC);
+        }
+        if (PTG(dotrace) & TRACE_TO_OUTPUT) {
+            pt_type_display_request(&PTG(request), "< ");
+        }
+    }
+
     return SUCCESS;
 }
 
@@ -645,11 +672,54 @@ static int pt_frame_send(pt_frame_t *frame TSRMLS_DC)
 
     /* build */
     len = pt_type_len_frame(frame);
-    if (pt_comm_build_msg(&msg, len, PT_MSG_RET) == -1) {
+    if (pt_comm_build_msg(&msg, len, PT_MSG_FRAME) == -1) {
         php_error(E_WARNING, "Trace build message failed, size: %ld", len);
         return -1;
     }
     pt_type_pack_frame(frame, msg->data);
+    msg->pid = PTG(pid); /* TODO move to seperated init command */
+
+    /* send */
+    PTD("send message type: 0x%08x len: %d", msg->type, msg->len);
+    if (pt_comm_send_msg(PTG(sock_fd), msg) == -1) {
+        PTD("send message failed, errmsg: %s", strerror(errno));
+        return -1;
+    }
+
+    return 0;
+}
+
+
+/**
+ * Trace Manipulation of Request
+ * --------------------
+ */
+static void pt_request_build(pt_request_t *request TSRMLS_DC)
+{
+    request->sapi = sapi_module.name;
+    request->script = SG(request_info).path_translated;
+
+    /* http */
+    request->method = (char *) SG(request_info).request_method;
+    request->uri = SG(request_info).request_uri;
+
+    /* cli */
+    request->argc = SG(request_info).argc;
+    request->argv = SG(request_info).argv;
+}
+
+static int pt_request_send(pt_request_t *request TSRMLS_DC)
+{
+    size_t len;
+    pt_comm_message_t *msg;
+
+    /* build */
+    len = pt_type_len_request(request);
+    if (pt_comm_build_msg(&msg, len, PT_MSG_REQ) == -1) {
+        php_error(E_WARNING, "Trace build message failed, size: %ld", len);
+        return -1;
+    }
+    pt_type_pack_request(request, msg->data);
     msg->pid = PTG(pid); /* TODO move to seperated init command */
 
     /* send */
@@ -774,7 +844,7 @@ static int pt_status_send(pt_status_t *status TSRMLS_DC)
 
     /* build */
     len = pt_type_len_status(status);
-    if (pt_comm_build_msg(&msg, len, PT_MSG_RET) == -1) {
+    if (pt_comm_build_msg(&msg, len, PT_MSG_FRAME) == -1) {
         php_error(E_WARNING, "Trace build message failed, size: %ld", len);
         return -1;
     }
