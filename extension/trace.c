@@ -288,6 +288,10 @@ PHP_RINIT_FUNCTION(trace)
 #if PHP_VERSION_ID >= 70000 && defined(COMPILE_DL_TRACE) && defined(ZTS)
     ZEND_TSRMLS_CACHE_UPDATE();
 #endif
+    if (!PTG(enable)) {
+        return SUCCESS;
+    }
+
     /* Anything needs pid, init here */
     if (PTG(pid) == 0) {
         PTG(pid) = getpid();
@@ -316,6 +320,10 @@ PHP_RINIT_FUNCTION(trace)
 
 PHP_RSHUTDOWN_FUNCTION(trace)
 {
+    if (!PTG(enable)) {
+        return SUCCESS;
+    }
+
     /* Request process */
     if (PTG(dotrace)) {
         pt_request_build(&PTG(request), PT_FRAME_EXIT);
