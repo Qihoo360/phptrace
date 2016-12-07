@@ -5,7 +5,7 @@ phptrace
 
 [![Build Status](https://travis-ci.org/Qihoo360/phptrace.svg)](https://travis-ci.org/Qihoo360/phptrace)
 
-We have build another interesting project ![pika](https://github.com/Qihoo360/pika). Pika is a nosql compatible with redis protocol with huge storage space. You can have a try.
+We have build another interesting project [pika](https://github.com/Qihoo360/pika). Pika is a nosql compatible with redis protocol with huge storage space. You can have a try.
 
 phptrace is a low-overhead tracing tool for PHP.
 
