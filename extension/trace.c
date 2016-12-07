@@ -89,37 +89,37 @@ PHP_FUNCTION(trace_end);
 PHP_FUNCTION(trace_status);
 #endif
 
-static void pt_frame_build(pt_frame_t *frame, zend_bool internal, unsigned char type, zend_execute_data *caller, zend_execute_data *ex, zend_op_array *op_array TSRMLS_DC);
-static void pt_frame_destroy(pt_frame_t *frame TSRMLS_DC);
-static int pt_frame_send(pt_frame_t *frame TSRMLS_DC);
+static void frame_build(pt_frame_t *frame, zend_bool internal, unsigned char type, zend_execute_data *caller, zend_execute_data *ex, zend_op_array *op_array TSRMLS_DC);
+static void frame_destroy(pt_frame_t *frame TSRMLS_DC);
+static int frame_send(pt_frame_t *frame TSRMLS_DC);
 #if PHP_VERSION_ID < 70000
-static void pt_frame_set_retval(pt_frame_t *frame, zend_bool internal, zend_execute_data *ex, zend_fcall_info *fci TSRMLS_DC);
+static void frame_set_retval(pt_frame_t *frame, zend_bool internal, zend_execute_data *ex, zend_fcall_info *fci TSRMLS_DC);
 #endif
 
-static void pt_request_build(pt_request_t *request, unsigned char type TSRMLS_DC);
-static int pt_request_send(pt_request_t *request TSRMLS_DC);
+static void request_build(pt_request_t *request, unsigned char type TSRMLS_DC);
+static int request_send(pt_request_t *request TSRMLS_DC);
 
-static void pt_status_build(pt_status_t *status, zend_bool internal, zend_execute_data *ex TSRMLS_DC);
-static void pt_status_destroy(pt_status_t *status TSRMLS_DC);
-static int pt_status_send(pt_status_t *status TSRMLS_DC);
+static void status_build(pt_status_t *status, zend_bool internal, zend_execute_data *ex TSRMLS_DC);
+static void status_destroy(pt_status_t *status TSRMLS_DC);
+static int status_send(pt_status_t *status TSRMLS_DC);
 
-static sds pt_repr_zval(zval *zv, int limit TSRMLS_DC);
-static void pt_handle_error(TSRMLS_D);
-static void pt_handle_command(void);
+static sds repr_zval(zval *zv, int limit TSRMLS_DC);
+static void handle_error(TSRMLS_D);
+static void handle_command(void);
 
 #if PHP_VERSION_ID < 50500
-static void (*pt_ori_execute)(zend_op_array *op_array TSRMLS_DC);
-static void (*pt_ori_execute_internal)(zend_execute_data *execute_data_ptr, int return_value_used TSRMLS_DC);
+static void (*ori_execute)(zend_op_array *op_array TSRMLS_DC);
+static void (*ori_execute_internal)(zend_execute_data *execute_data_ptr, int return_value_used TSRMLS_DC);
 ZEND_API void pt_execute(zend_op_array *op_array TSRMLS_DC);
 ZEND_API void pt_execute_internal(zend_execute_data *execute_data, int return_value_used TSRMLS_DC);
 #elif PHP_VERSION_ID < 70000
-static void (*pt_ori_execute_ex)(zend_execute_data *execute_data TSRMLS_DC);
-static void (*pt_ori_execute_internal)(zend_execute_data *execute_data_ptr, zend_fcall_info *fci, int return_value_used TSRMLS_DC);
+static void (*ori_execute_ex)(zend_execute_data *execute_data TSRMLS_DC);
+static void (*ori_execute_internal)(zend_execute_data *execute_data_ptr, zend_fcall_info *fci, int return_value_used TSRMLS_DC);
 ZEND_API void pt_execute_ex(zend_execute_data *execute_data TSRMLS_DC);
 ZEND_API void pt_execute_internal(zend_execute_data *execute_data, zend_fcall_info *fci, int return_value_used TSRMLS_DC);
 #else
-static void (*pt_ori_execute_ex)(zend_execute_data *execute_data);
-static void (*pt_ori_execute_internal)(zend_execute_data *execute_data, zval *return_value);
+static void (*ori_execute_ex)(zend_execute_data *execute_data);
+static void (*ori_execute_internal)(zend_execute_data *execute_data, zval *return_value);
 ZEND_API void pt_execute_ex(zend_execute_data *execute_data);
 ZEND_API void pt_execute_internal(zend_execute_data *execute_data, zval *return_value);
 #endif
@@ -217,13 +217,13 @@ PHP_MINIT_FUNCTION(trace)
 
     /* Replace executor */
 #if PHP_VERSION_ID < 50500
-    pt_ori_execute = zend_execute;
+    ori_execute = zend_execute;
     zend_execute = pt_execute;
 #else
-    pt_ori_execute_ex = zend_execute_ex;
+    ori_execute_ex = zend_execute_ex;
     zend_execute_ex = pt_execute_ex;
 #endif
-    pt_ori_execute_internal = zend_execute_internal;
+    ori_execute_internal = zend_execute_internal;
     zend_execute_internal = pt_execute_internal;
 
     /* Init comm module */
@@ -262,11 +262,11 @@ PHP_MSHUTDOWN_FUNCTION(trace)
 
     /* Restore original executor */
 #if PHP_VERSION_ID < 50500
-    zend_execute = pt_ori_execute;
+    zend_execute = ori_execute;
 #else
-    zend_execute_ex = pt_ori_execute_ex;
+    zend_execute_ex = ori_execute_ex;
 #endif
-    zend_execute_internal = pt_ori_execute_internal;
+    zend_execute_internal = ori_execute_internal;
 
     /* Close ctrl module */
     PTD("Ctrl module close");
@@ -299,15 +299,15 @@ PHP_RINIT_FUNCTION(trace)
 
     /* Check ctrl module */
     if (CTRL_IS_ACTIVE()) {
-        pt_handle_command();
+        handle_command();
     }
 
     /* Request process */
     if (PTG(dotrace)) {
-        pt_request_build(&PTG(request), PT_FRAME_ENTRY);
+        request_build(&PTG(request), PT_FRAME_ENTRY);
 
         if (PTG(dotrace) & TRACE_TO_TOOL) {
-            pt_request_send(&PTG(request) TSRMLS_CC);
+            request_send(&PTG(request) TSRMLS_CC);
         }
         if (PTG(dotrace) & TRACE_TO_OUTPUT) {
             pt_type_display_request(&PTG(request), "> ");
@@ -325,10 +325,10 @@ PHP_RSHUTDOWN_FUNCTION(trace)
 
     /* Request process */
     if (PTG(dotrace)) {
-        pt_request_build(&PTG(request), PT_FRAME_EXIT);
+        request_build(&PTG(request), PT_FRAME_EXIT);
 
         if (PTG(dotrace) & TRACE_TO_TOOL) {
-            pt_request_send(&PTG(request) TSRMLS_CC);
+            request_send(&PTG(request) TSRMLS_CC);
         }
         if (PTG(dotrace) & TRACE_TO_OUTPUT) {
             pt_type_display_request(&PTG(request), "< ");
@@ -367,9 +367,9 @@ PHP_FUNCTION(trace_status)
 {
     pt_status_t status;
 
-    pt_status_build(&status, 1, EG(current_execute_data) TSRMLS_CC);
+    status_build(&status, 1, EG(current_execute_data) TSRMLS_CC);
     pt_type_display_status(&status);
-    pt_status_destroy(&status TSRMLS_CC);
+    status_destroy(&status TSRMLS_CC);
 }
 #endif
 
@@ -378,7 +378,7 @@ PHP_FUNCTION(trace_status)
  * Trace Manipulation of Frame
  * --------------------
  */
-static void pt_frame_build(pt_frame_t *frame, zend_bool internal, unsigned char type, zend_execute_data *caller, zend_execute_data *ex, zend_op_array *op_array TSRMLS_DC)
+static void frame_build(pt_frame_t *frame, zend_bool internal, unsigned char type, zend_execute_data *caller, zend_execute_data *ex, zend_op_array *op_array TSRMLS_DC)
 {
     unsigned int i;
     zval **args;
@@ -473,7 +473,7 @@ static void pt_frame_build(pt_frame_t *frame, zend_bool internal, unsigned char 
 
 #if PHP_VERSION_ID < 70000
         for (i = 0; i < frame->arg_count; i++) {
-            frame->args[i] = pt_repr_zval(args[i], 32 TSRMLS_CC);
+            frame->args[i] = repr_zval(args[i], 32 TSRMLS_CC);
         }
 #else
         if (frame->arg_count) {
@@ -484,13 +484,13 @@ static void pt_frame_build(pt_frame_t *frame, zend_bool internal, unsigned char 
 
                 if (first_extra_arg && frame->arg_count > first_extra_arg) {
                     while (i < first_extra_arg) {
-                        frame->args[i++] = pt_repr_zval(p++, 32);
+                        frame->args[i++] = repr_zval(p++, 32);
                     }
                     p = ZEND_CALL_VAR_NUM(ex, ex->func->op_array.last_var + ex->func->op_array.T);
                 }
             }
             while(i < frame->arg_count) {
-                frame->args[i++] = pt_repr_zval(p++, 32);
+                frame->args[i++] = repr_zval(p++, 32);
             }
         }
 #endif
@@ -621,7 +621,7 @@ static void pt_frame_build(pt_frame_t *frame, zend_bool internal, unsigned char 
     }
 }
 
-static void pt_frame_destroy(pt_frame_t *frame TSRMLS_DC)
+static void frame_destroy(pt_frame_t *frame TSRMLS_DC)
 {
     int i;
 
@@ -638,7 +638,7 @@ static void pt_frame_destroy(pt_frame_t *frame TSRMLS_DC)
 }
 
 #if PHP_VERSION_ID < 70000
-static void pt_frame_set_retval(pt_frame_t *frame, zend_bool internal, zend_execute_data *ex, zend_fcall_info *fci TSRMLS_DC)
+static void frame_set_retval(pt_frame_t *frame, zend_bool internal, zend_execute_data *ex, zend_fcall_info *fci TSRMLS_DC)
 {
     zval *retval = NULL;
 
@@ -668,12 +668,12 @@ static void pt_frame_set_retval(pt_frame_t *frame, zend_bool internal, zend_exec
     }
 
     if (retval) {
-        frame->retval = pt_repr_zval(retval, 32 TSRMLS_CC);
+        frame->retval = repr_zval(retval, 32 TSRMLS_CC);
     }
 }
 #endif
 
-static int pt_frame_send(pt_frame_t *frame TSRMLS_DC)
+static int frame_send(pt_frame_t *frame TSRMLS_DC)
 {
     size_t len;
     pt_comm_message_t *msg;
@@ -702,7 +702,7 @@ static int pt_frame_send(pt_frame_t *frame TSRMLS_DC)
  * Trace Manipulation of Request
  * --------------------
  */
-static void pt_request_build(pt_request_t *request, unsigned char type TSRMLS_DC)
+static void request_build(pt_request_t *request, unsigned char type TSRMLS_DC)
 {
     request->type = type;
     request->sapi = sapi_module.name;
@@ -717,7 +717,7 @@ static void pt_request_build(pt_request_t *request, unsigned char type TSRMLS_DC
     request->argv = SG(request_info).argv;
 }
 
-static int pt_request_send(pt_request_t *request TSRMLS_DC)
+static int request_send(pt_request_t *request TSRMLS_DC)
 {
     size_t len;
     pt_comm_message_t *msg;
@@ -746,7 +746,7 @@ static int pt_request_send(pt_request_t *request TSRMLS_DC)
  * Trace Manipulation of Status
  * --------------------
  */
-static void pt_status_build(pt_status_t *status, zend_bool internal, zend_execute_data *ex TSRMLS_DC)
+static void status_build(pt_status_t *status, zend_bool internal, zend_execute_data *ex TSRMLS_DC)
 {
     int i;
     zend_execute_data *ex_ori = ex;
@@ -764,7 +764,7 @@ static void pt_status_build(pt_status_t *status, zend_bool internal, zend_execut
     status->mempeak_real = zend_memory_peak_usage(1 TSRMLS_CC);
 
     /* request */
-    pt_request_build(&status->request, PT_FRAME_STACK);
+    request_build(&status->request, PT_FRAME_STACK);
 
     /* frame */
     for (i = 0; ex; ex = ex->prev_execute_data, i++) ; /* calculate stack depth */
@@ -772,7 +772,7 @@ static void pt_status_build(pt_status_t *status, zend_bool internal, zend_execut
     if (status->frame_count) {
         status->frames = calloc(status->frame_count, sizeof(pt_frame_t));
         for (i = 0, ex = ex_ori; i < status->frame_count && ex; i++, ex = ex->prev_execute_data) {
-            pt_frame_build(status->frames + i, internal, PT_FRAME_STACK, ex, ex, NULL TSRMLS_CC);
+            frame_build(status->frames + i, internal, PT_FRAME_STACK, ex, ex, NULL TSRMLS_CC);
             status->frames[i].level = 1;
         }
     } else {
@@ -780,19 +780,19 @@ static void pt_status_build(pt_status_t *status, zend_bool internal, zend_execut
     }
 }
 
-static void pt_status_destroy(pt_status_t *status TSRMLS_DC)
+static void status_destroy(pt_status_t *status TSRMLS_DC)
 {
     int i;
 
     if (status->frames && status->frame_count) {
         for (i = 0; i < status->frame_count; i++) {
-            pt_frame_destroy(status->frames + i TSRMLS_CC);
+            frame_destroy(status->frames + i TSRMLS_CC);
         }
         free(status->frames);
     }
 }
 
-static int pt_status_send(pt_status_t *status TSRMLS_DC)
+static int status_send(pt_status_t *status TSRMLS_DC)
 {
     size_t len;
     pt_comm_message_t *msg;
@@ -821,7 +821,7 @@ static int pt_status_send(pt_status_t *status TSRMLS_DC)
  * Trace Misc Function
  * --------------------
  */
-static sds pt_repr_zval(zval *zv, int limit TSRMLS_DC)
+static sds repr_zval(zval *zv, int limit TSRMLS_DC)
 {
     int tlen = 0;
     char buf[256], *tstr = NULL;
@@ -876,7 +876,7 @@ static sds pt_repr_zval(zval *zv, int limit TSRMLS_DC)
 #else
             class_name = Z_OBJ_HANDLER_P(zv, get_class_name)(Z_OBJ_P(zv));
             result = sdscatprintf(sdsempty(), "object(%s)#%d", P7_STR(class_name), Z_OBJ_HANDLE_P(zv));
-			zend_string_release(class_name);
+            zend_string_release(class_name);
 #endif
             return result;
         case IS_RESOURCE:
@@ -894,7 +894,7 @@ static sds pt_repr_zval(zval *zv, int limit TSRMLS_DC)
     }
 }
 
-static void pt_handle_error(TSRMLS_D)
+static void handle_error(TSRMLS_D)
 {
     /* retry once if ctrl bit still ON */
     if (PTG(sock_fd) != -1 && CTRL_IS_ACTIVE()) {
@@ -921,7 +921,7 @@ static void pt_handle_error(TSRMLS_D)
     }
 }
 
-static void pt_handle_command(void)
+static void handle_command(void)
 {
     int msg_type;
     pt_comm_message_t *msg;
@@ -932,7 +932,7 @@ static void pt_handle_command(void)
         PTG(sock_fd) = pt_comm_connect(PTG(sock_addr));
         if (PTG(sock_fd) == -1) {
             PTD("Connect to %s failed, errmsg: %s", PTG(sock_addr), strerror(errno));
-            pt_handle_error(TSRMLS_C);
+            handle_error(TSRMLS_C);
             return;
         }
     }
@@ -948,7 +948,7 @@ static void pt_handle_command(void)
             case PT_MSG_ERR_BUF:
             case PT_MSG_INVALID:
                 PTD("recv message error errno: %d errmsg: %s", errno, strerror(errno));
-                pt_handle_error(TSRMLS_C);
+                handle_error(TSRMLS_C);
                 return;
 
             case PT_MSG_EMPTY:
@@ -963,9 +963,9 @@ static void pt_handle_command(void)
             case PT_MSG_DO_STATUS:
                 PTD("handle DO_STATUS");
                 pt_status_t status;
-                pt_status_build(&status, 1, EG(current_execute_data) TSRMLS_CC);
-                pt_status_send(&status TSRMLS_CC);
-                pt_status_destroy(&status TSRMLS_CC);
+                status_build(&status, 1, EG(current_execute_data) TSRMLS_CC);
+                status_send(&status TSRMLS_CC);
+                status_destroy(&status TSRMLS_CC);
                 break;
 
             default:
@@ -1013,9 +1013,9 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zva
 
     /* Check ctrl module */
     if (CTRL_IS_ACTIVE()) {
-        pt_handle_command();
+        handle_command();
     } else if (PTG(sock_fd) != -1) { /* comm socket still opend */
-        pt_handle_error(TSRMLS_C);
+        handle_error(TSRMLS_C);
     }
 
     /* Assigning to a LOCAL VARIABLE at begining to prevent value changed
@@ -1028,9 +1028,9 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zva
 
     if (dotrace) {
 #if PHP_VERSION_ID < 50500
-        pt_frame_build(&frame, internal, PT_FRAME_ENTRY, caller, execute_data, op_array TSRMLS_CC);
+        frame_build(&frame, internal, PT_FRAME_ENTRY, caller, execute_data, op_array TSRMLS_CC);
 #else
-        pt_frame_build(&frame, internal, PT_FRAME_ENTRY, caller, execute_data, NULL TSRMLS_CC);
+        frame_build(&frame, internal, PT_FRAME_ENTRY, caller, execute_data, NULL TSRMLS_CC);
 #endif
 
         /* Register return value ptr */
@@ -1048,7 +1048,7 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zva
 
         /* Send frame message */
         if (dotrace & TRACE_TO_TOOL) {
-            pt_frame_send(&frame TSRMLS_CC);
+            frame_send(&frame TSRMLS_CC);
         }
         if (dotrace & TRACE_TO_OUTPUT) {
             pt_type_display_frame(&frame, 1, "> ");
@@ -1063,33 +1063,33 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zva
     zend_try {
 #if PHP_VERSION_ID < 50500
         if (internal) {
-            if (pt_ori_execute_internal) {
-                pt_ori_execute_internal(execute_data, rvu TSRMLS_CC);
+            if (ori_execute_internal) {
+                ori_execute_internal(execute_data, rvu TSRMLS_CC);
             } else {
                 execute_internal(execute_data, rvu TSRMLS_CC);
             }
         } else {
-            pt_ori_execute(op_array TSRMLS_CC);
+            ori_execute(op_array TSRMLS_CC);
         }
 #elif PHP_VERSION_ID < 70000
         if (internal) {
-            if (pt_ori_execute_internal) {
-                pt_ori_execute_internal(execute_data, fci, rvu TSRMLS_CC);
+            if (ori_execute_internal) {
+                ori_execute_internal(execute_data, fci, rvu TSRMLS_CC);
             } else {
                 execute_internal(execute_data, fci, rvu TSRMLS_CC);
             }
         } else {
-            pt_ori_execute_ex(execute_data TSRMLS_CC);
+            ori_execute_ex(execute_data TSRMLS_CC);
         }
 #else
         if (internal) {
-            if (pt_ori_execute_internal) {
-                pt_ori_execute_internal(execute_data, return_value);
+            if (ori_execute_internal) {
+                ori_execute_internal(execute_data, return_value);
             } else {
                 execute_internal(execute_data, return_value);
             }
         } else {
-            pt_ori_execute_ex(execute_data);
+            ori_execute_ex(execute_data);
         }
 #endif
     } zend_catch {
@@ -1103,14 +1103,14 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zva
 
         if (!dobailout) {
 #if PHP_VERSION_ID < 50500
-            pt_frame_set_retval(&frame, internal, execute_data, NULL TSRMLS_CC);
+            frame_set_retval(&frame, internal, execute_data, NULL TSRMLS_CC);
 #elif PHP_VERSION_ID < 70000
-            pt_frame_set_retval(&frame, internal, execute_data, fci TSRMLS_CC);
+            frame_set_retval(&frame, internal, execute_data, fci TSRMLS_CC);
 #else
             if (return_value) { /* internal */
-                frame.retval = pt_repr_zval(return_value, 32);
+                frame.retval = repr_zval(return_value, 32);
             } else if (execute_data->return_value) { /* user function */
-                frame.retval = pt_repr_zval(execute_data->return_value, 32);
+                frame.retval = repr_zval(execute_data->return_value, 32);
             }
 #endif
         }
@@ -1118,7 +1118,7 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zva
 
         /* Send frame message */
         if (PTG(dotrace) & TRACE_TO_TOOL & dotrace) {
-            pt_frame_send(&frame TSRMLS_CC);
+            frame_send(&frame TSRMLS_CC);
         }
         if (PTG(dotrace) & TRACE_TO_OUTPUT & dotrace) {
             pt_type_display_frame(&frame, 1, "< ");
@@ -1132,7 +1132,7 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zva
         }
 #endif
 
-        pt_frame_destroy(&frame TSRMLS_CC);
+        frame_destroy(&frame TSRMLS_CC);
     }
 
     PTG(level)--;
