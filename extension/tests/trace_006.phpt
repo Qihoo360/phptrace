@@ -38,21 +38,21 @@ $o->callNormal();
 trace_end(); ?>
 --EXPECTF--
 > require(%s) called at [%s:3]
-    < require(%s) = 1 called at [%s:3] wt: %f
+    < require(%s) = 1 called at [%s:3] ~ %fs %fs
     > Trace\Test\call_normal() called at [%s:5]
-    < Trace\Test\call_normal() = NULL called at [%s:5] wt: %f
+    < Trace\Test\call_normal() = NULL called at [%s:5] ~ %fs %fs
     > Trace\Test\TestClass->callNormal() called at [%s:7]
-    < Trace\Test\TestClass->callNormal() = NULL called at [%s:7] wt: %f
+    < Trace\Test\TestClass->callNormal() = NULL called at [%s:7] ~ %fs %fs
     > Trace\Test\call_normal() called at [%s:9]
-    < Trace\Test\call_normal() = NULL called at [%s:9] wt: %f
+    < Trace\Test\call_normal() = NULL called at [%s:9] ~ %fs %fs
     > Trace\Test\TestClass->callNormal() called at [%s:11]
-    < Trace\Test\TestClass->callNormal() = NULL called at [%s:11] wt: %f
+    < Trace\Test\TestClass->callNormal() = NULL called at [%s:11] ~ %fs %fs
     > Trace\Test\call_normal() called at [%s:14]
-    < Trace\Test\call_normal() = NULL called at [%s:14] wt: %f
+    < Trace\Test\call_normal() = NULL called at [%s:14] ~ %fs %fs
     > Trace\Test\TestClass->callNormal() called at [%s:16]
-    < Trace\Test\TestClass->callNormal() = NULL called at [%s:16] wt: %f
+    < Trace\Test\TestClass->callNormal() = NULL called at [%s:16] ~ %fs %fs
     > Trace\Test\TestClass->callNormal() called at [%s:20]
-    < Trace\Test\TestClass->callNormal() = NULL called at [%s:20] wt: %f
+    < Trace\Test\TestClass->callNormal() = NULL called at [%s:20] ~ %fs %fs
     > Trace\Test\TestClass->callNormal() called at [%s:24]
-    < Trace\Test\TestClass->callNormal() = NULL called at [%s:24] wt: %f
+    < Trace\Test\TestClass->callNormal() = NULL called at [%s:24] ~ %fs %fs
     > trace_end() called at [%s:26]

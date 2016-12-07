@@ -21,7 +21,7 @@ declare (ticks = 1) { $a = null; }
 trace_end(); ?>
 --EXPECTF--
 > register_tick_function("handler_for_tick") called at [%s:5]
-    < register_tick_function("handler_for_tick") = true called at [%s:5] wt: %f
+    < register_tick_function("handler_for_tick") = true called at [%s:5] ~ %fs %fs
     > handler_for_tick() called at [%s:7]
-    < handler_for_tick() = NULL called at [%s:7] wt: %f
+    < handler_for_tick() = NULL called at [%s:7] ~ %fs %fs
     > trace_end() called at [%s:9]

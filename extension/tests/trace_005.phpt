@@ -22,11 +22,11 @@ declare (ticks = 1) {
 trace_end(); ?>
 --EXPECTF--
 > pcntl_signal(1, "handler_for_signal") called at [%s:4]
-    < pcntl_signal(1, "handler_for_signal") = true called at [%s:4] wt: %f
+    < pcntl_signal(1, "handler_for_signal") = true called at [%s:4] ~ %fs %fs
     > getmypid() called at [%s:5]
-    < getmypid() = %d called at [%s:5] wt: %f
+    < getmypid() = %d called at [%s:5] ~ %fs %fs
     > system("kill -HUP %d") called at [%s:7]
-    < system("kill -HUP %d") = "" called at [%s:7] wt: %f
+    < system("kill -HUP %d") = "" called at [%s:7] ~ %fs %fs
     > handler_for_signal(1) called at [%s:7]
-    < handler_for_signal(1) = NULL called at [%s:7] wt: %f
+    < handler_for_signal(1) = NULL called at [%s:7] ~ %fs %fs
     > trace_end() called at [%s:10]

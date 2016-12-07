@@ -199,6 +199,9 @@ static void php_trace_init_globals(zend_trace_globals *ptg)
     ptg->pid = ptg->level = 0;
 
     memset(&ptg->request, 0, sizeof(ptg->request));
+
+    ptg->exc_time_table = NULL;
+    ptg->exc_time_len = 0;
 }
 
 
@@ -244,6 +247,14 @@ PHP_MINIT_FUNCTION(trace)
         PTG(dotrace) = 0;
     }
 
+    /* Init exclusive time table */
+    PTG(exc_time_len) = 4096;
+    PTG(exc_time_table) = calloc(PTG(exc_time_len), sizeof(long));
+    if (PTG(exc_time_table) == NULL) {
+        php_error(E_ERROR, "Trace exclusive time table init failed");
+        return FAILURE;
+    }
+
 #if TRACE_DEBUG
     /* always do trace in debug mode */
     PTG(dotrace) |= TRACE_TO_NULL;
@@ -267,6 +278,11 @@ PHP_MSHUTDOWN_FUNCTION(trace)
     zend_execute_ex = ori_execute_ex;
 #endif
     zend_execute_internal = ori_execute_internal;
+
+    /* Destroy exclusive time table */
+    if (PTG(exc_time_table) != NULL) {
+        free(PTG(exc_time_table));
+    }
 
     /* Close ctrl module */
     PTD("Ctrl module close");
@@ -1100,6 +1116,14 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zva
 
     if (dotrace) {
         PROFILING_SET(frame.exit);
+
+        /* Calculate exclusive time */
+        frame.exit.inc_time = frame.exit.wall_time - frame.entry.wall_time;
+        if (PTG(level) + 1 < PTG(exc_time_len)) {
+            PTG(exc_time_table)[PTG(level)] += frame.exit.inc_time;
+            frame.exit.exc_time = frame.exit.inc_time - PTG(exc_time_table)[PTG(level) + 1];
+            PTG(exc_time_table)[PTG(level) + 1] = 0;
+        }
 
         if (!dobailout) {
 #if PHP_VERSION_ID < 50500

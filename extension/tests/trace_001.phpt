@@ -27,38 +27,38 @@ call_normal(null, 1234, 1.234, true, false, array(), 'hello', tmpfile(), DUMMYCO
 > cli php %s
 > {main}() called at [%s:2]
     > define("DUMMYCONST", "this is a const string") called at [%s:4]
-    < define("DUMMYCONST", "this is a const string") = true called at [%s:4] wt: %f
+    < define("DUMMYCONST", "this is a const string") = true called at [%s:4] ~ %fs %fs
     > call_normal(NULL) called at [%s:7]
-    < call_normal(NULL) = NULL called at [%s:7] wt: %f
+    < call_normal(NULL) = NULL called at [%s:7] ~ %fs %fs
     > call_normal(1234) called at [%s:8]
-    < call_normal(1234) = NULL called at [%s:8] wt: %f
+    < call_normal(1234) = NULL called at [%s:8] ~ %fs %fs
     > call_normal(1.234) called at [%s:9]
-    < call_normal(1.234) = NULL called at [%s:9] wt: %f
+    < call_normal(1.234) = NULL called at [%s:9] ~ %fs %fs
     > call_normal(true) called at [%s:10]
-    < call_normal(true) = NULL called at [%s:10] wt: %f
+    < call_normal(true) = NULL called at [%s:10] ~ %fs %fs
     > call_normal(false) called at [%s:11]
-    < call_normal(false) = NULL called at [%s:11] wt: %f
+    < call_normal(false) = NULL called at [%s:11] ~ %fs %fs
     > call_normal(array(2)) called at [%s:12]
-    < call_normal(array(2)) = NULL called at [%s:12] wt: %f
+    < call_normal(array(2)) = NULL called at [%s:12] ~ %fs %fs
     > call_normal("hello") called at [%s:13]
-    < call_normal("hello") = NULL called at [%s:13] wt: %f
+    < call_normal("hello") = NULL called at [%s:13] ~ %fs %fs
     > str_repeat("hello", 1024) called at [%s:14]
-    < str_repeat("hello", 1024) = "hellohellohellohellohellohellohe"... called at [%s:14] wt: %f
+    < str_repeat("hello", 1024) = "hellohellohellohellohellohellohe"... called at [%s:14] ~ %fs %fs
     > call_normal("hellohellohellohellohellohellohe"...) called at [%s:14]
-    < call_normal("hellohellohellohellohellohellohe"...) = NULL called at [%s:14] wt: %f
+    < call_normal("hellohellohellohellohellohellohe"...) = NULL called at [%s:14] ~ %fs %fs
     > tmpfile() called at [%s:15]
-    < tmpfile() = resource(stream)#%d called at [%s:15] wt: %f
+    < tmpfile() = resource(stream)#%d called at [%s:15] ~ %fs %fs
     > call_normal(resource(stream)#%d) called at [%s:15]
-    < call_normal(resource(stream)#%d) = NULL called at [%s:15] wt: %f
+    < call_normal(resource(stream)#%d) = NULL called at [%s:15] ~ %fs %fs
     > call_normal("this is a const string") called at [%s:16]
-    < call_normal("this is a const string") = NULL called at [%s:16] wt: %f
+    < call_normal("this is a const string") = NULL called at [%s:16] ~ %fs %fs
     > call_normal(object(DummyClass)#1) called at [%s:17]
-    < call_normal(object(DummyClass)#1) = NULL called at [%s:17] wt: %f
+    < call_normal(object(DummyClass)#1) = NULL called at [%s:17] ~ %fs %fs
     > call_normal(NULL) called at [%s:18]
-    < call_normal(NULL) = NULL called at [%s:18] wt: %f
+    < call_normal(NULL) = NULL called at [%s:18] ~ %fs %fs
     > tmpfile() called at [%s:19]
-    < tmpfile() = resource(stream)#%d called at [%s:19] wt: %f
+    < tmpfile() = resource(stream)#%d called at [%s:19] ~ %fs %fs
     > call_normal(NULL, 1234, 1.234, true, false, array(0), "hello", resource(stream)#%d, "this is a const string", object(DummyClass)#1) called at [%s:19]
-    < call_normal(NULL, 1234, 1.234, true, false, array(0), "hello", resource(stream)#%d, "this is a const string", object(DummyClass)#1) = NULL called at [%s:19] wt: %f
-< {main}() = 1 called at [%s:2] wt: %f
+    < call_normal(NULL, 1234, 1.234, true, false, array(0), "hello", resource(stream)#%d, "this is a const string", object(DummyClass)#1) = NULL called at [%s:19] ~ %fs %fs
+< {main}() = 1 called at [%s:2] ~ %fs %fs
 < cli php %s

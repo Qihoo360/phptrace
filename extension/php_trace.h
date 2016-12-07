@@ -62,6 +62,9 @@ ZEND_BEGIN_MODULE_GLOBALS(trace)
     long                    level;          /* nesting level */
 
     pt_request_t            request;        /* current request info */
+
+    long                   *exc_time_table; /* exclusive time table */
+    size_t                  exc_time_len;   /* length of time table */
 ZEND_END_MODULE_GLOBALS(trace)
 
 

@@ -100,6 +100,9 @@ size_t pt_type_len_frame(pt_frame_t *frame)
     size += sizeof(int64_t);                                  /* mem */
     size += sizeof(int64_t);                                  /* mempeak */
 
+    size += sizeof(int64_t);                                  /* inc_time */
+    size += sizeof(int64_t);                                  /* exc_time */
+
     return size;
 }
 
@@ -131,6 +134,9 @@ size_t pt_type_pack_frame(pt_frame_t *frame, char *buf)
     PACK(buf, int64_t, frame->exit.wall_time);
     PACK(buf, int64_t,  frame->exit.mem);
     PACK(buf, int64_t,  frame->exit.mempeak);
+
+    PACK(buf, int64_t, frame->exit.inc_time);
+    PACK(buf, int64_t, frame->exit.exc_time);
 
     return buf - ori;
 }
@@ -169,6 +175,9 @@ size_t pt_type_unpack_frame(pt_frame_t *frame, char *buf)
     UNPACK(buf, int64_t, frame->exit.wall_time);
     UNPACK(buf, int64_t,  frame->exit.mem);
     UNPACK(buf, int64_t,  frame->exit.mempeak);
+
+    UNPACK(buf, int64_t, frame->exit.inc_time);
+    UNPACK(buf, int64_t, frame->exit.exc_time);
 
     return buf - ori;
 }
@@ -249,8 +258,7 @@ void pt_type_display_frame(pt_frame_t *frame, int indent, const char *format, ..
     }
 
     if (frame->type == PT_FRAME_EXIT) {
-        printf(" wt: %.3f\n",
-                (frame->exit.wall_time - frame->entry.wall_time) / 1000000.0);
+        printf(" ~ %.3fs %.3fs\n", frame->exit.inc_time / 1000000.0, frame->exit.exc_time / 1000000.0);
     } else {
         printf("\n");
     }

@@ -26,8 +26,8 @@ trace_end(); ?>
 --EXPECTF--
 > TestClass::undefineMethod() called at [%s:9]
         > TestClass::__callStatic("undefineMethod", array(0)) called at [%s:9]
-        < TestClass::__callStatic("undefineMethod", array(0)) = NULL called at [%s:9] wt: %f
-    < TestClass::undefineMethod() = NULL called at [%s:9] wt: %f
+        < TestClass::__callStatic("undefineMethod", array(0)) = NULL called at [%s:9] ~ %fs %fs
+    < TestClass::undefineMethod() = NULL called at [%s:9] ~ %fs %fs
     > TestClass->__invoke() called at [%s:11]
-    < TestClass->__invoke() = NULL called at [%s:11] wt: %f
+    < TestClass->__invoke() = NULL called at [%s:11] ~ %fs %fs
     > trace_end() called at [%s:13]
