@@ -1,6 +1,6 @@
 # phptrace-CLI:begin
 
-ptcli_objects = ../src/cli.lo ../src/trace.lo ../src/status.lo common/trace_comm.lo common/trace_ctrl.lo common/trace_mmap.lo common/trace_type.lo deps/sds/sds.lo
+ptcli_objects = ../src/cli.lo ../src/trace.lo ../src/status.lo ../src/ptrace.lo common/trace_comm.lo common/trace_ctrl.lo common/trace_mmap.lo common/trace_type.lo deps/sds/sds.lo
 
 ptcli_dir = $(builddir)/../src
 
@@ -42,6 +42,9 @@ build-cli: $(ptcli_executable)
 
 ../src/status.lo: $(ptcli_dir)/status.c
 	$(LIBTOOL) --mode=compile $(CC) -I. -I$(ptcli_dir) $(COMMON_FLAGS) $(CFLAGS_CLEAN) $(EXTRA_CFLAGS) -c $(ptcli_dir)/status.c -o $(ptcli_dir)/status.lo
+
+../src/ptrace.lo: $(ptcli_dir)/ptrace.c
+	$(LIBTOOL) --mode=compile $(CC) -I. -I$(ptcli_dir) $(COMMON_FLAGS) $(CFLAGS_CLEAN) $(EXTRA_CFLAGS) -c $(ptcli_dir)/ptrace.c -o $(ptcli_dir)/ptrace.lo
 
 ../src/phptrace: $(ptcli_objects) $(TRACE_SHARED_DEPENDENCIES)
 	$(LIBTOOL) --mode=link $(CC) $(COMMON_FLAGS) $(CFLAGS_CLEAN) $(EXTRA_CFLAGS) $(LDFLAGS) -o $@ -avoid-version $(EXTRA_LDFLAGS) $(ptcli_objects) $(TRACE_SHARED_LIBADD)

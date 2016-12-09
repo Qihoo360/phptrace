@@ -63,6 +63,32 @@ static int ptrace_fetch_str(pid_t pid, void *addr, char *buf, size_t size)
 #define fetch_str(addr, buf, size)  ptrace_fetch_str(pid, (void *) addr, buf, size)
 #define fetch_zstr(addr, buf)       fetch_str(addr + 24, buf, fetch_long(addr + 16))
 
+static pt_ptrace_preset_t presets[] = {
+    {
+        70012, 1, (void *) 0xf5a060, (void *) 0xf59e20, (void *) 0xf5a340,
+        0, 40, 8, 48, 140, 144,/**/480, 0, 56, 24, 32,/**/8, 16, 120, 8, 20, 24,
+    }, {
+        50619, 0, (void *) 0xa45760, (void *) 0xa458a0, (void *) 0xa45fc0,
+        0, 40, 8, 48, 140, 144,/**/1120, 0, 48, 8, 32,/**/8, 16, 152, 8, 32, 40,
+    }, {
+        50533, 0, (void *) 0xa51640, (void *) 0xa51780, (void *) 0xa51e60,
+        0, 64, 8, 72, 156, 160,/**/1120, 0, 48, 8, 32,/**/8, 16, 152, 8, 32, 40,
+    },
+};
+
+pt_ptrace_preset_t *pt_ptrace_preset(int version)
+{
+    int i;
+
+    for (i = 0; i < sizeof(presets); i++) {
+        if (version >= presets[i].version) {
+            return &presets[i];
+        }
+    }
+
+    return NULL;
+}
+
 long pt_ptrace_attach(pid_t pid)
 {
     return ptrace(PTRACE_ATTACH, pid, NULL, NULL);
@@ -73,13 +99,14 @@ long pt_ptrace_detach(pid_t pid)
     return ptrace(PTRACE_DETACH, pid, NULL, NULL);
 }
 
-void *pt_ptrace_fetch_current_ex(void *addr_executor_globals, pid_t pid)
+void *pt_ptrace_fetch_current_ex(pt_ptrace_preset_t *preset, pid_t pid)
 {
-    return fetch_ptr(addr_executor_globals + 480); /* NULL means PHP is in-active */
+    /* NULL means PHP is in-active */
+    return fetch_ptr(preset->executor_globals + preset->EG_current_execute_data);
 }
 
-int pt_ptrace_build_status(pt_status_t *status, void *addr_root_ex, 
-        void *addr_sapi_module, void *addr_sapi_globals, pid_t pid)
+int pt_ptrace_build_status(pt_status_t *status, pt_ptrace_preset_t *preset,
+        pid_t pid, void *addr_root_ex)
 {
     int i;
     void *addr_current_ex;
@@ -87,19 +114,19 @@ int pt_ptrace_build_status(pt_status_t *status, void *addr_root_ex,
     memset(status, 0, sizeof(pt_status_t));
 
     /* request */
-    pt_ptrace_build_request(&status->request, addr_sapi_module, addr_sapi_globals, pid);
+    pt_ptrace_build_request(&status->request, preset, pid);
 
     /* calculate stack depth */
     for (i = 0, addr_current_ex = addr_root_ex; addr_current_ex; i++) {
-        addr_current_ex = fetch_ptr(addr_current_ex + 56); /* prev */
+        addr_current_ex = fetch_ptr(addr_current_ex + preset->EX_prev_execute_data); /* prev */
     }
     status->frame_count = i;
 
     if (status->frame_count) {
         status->frames = calloc(status->frame_count, sizeof(pt_frame_t));
         for (i = 0, addr_current_ex = addr_root_ex; i < status->frame_count && addr_current_ex; i++) {
-            pt_ptrace_build_frame(status->frames + i, addr_current_ex, pid);
-            addr_current_ex = fetch_ptr(addr_current_ex + 56); /* prev */
+            pt_ptrace_build_frame(status->frames + i, preset, pid, addr_current_ex);
+            addr_current_ex = fetch_ptr(addr_current_ex + preset->EX_prev_execute_data); /* prev */
         }
     } else {
         status->frames = NULL;
@@ -108,8 +135,8 @@ int pt_ptrace_build_status(pt_status_t *status, void *addr_root_ex,
     return 0;
 }
 
-int pt_ptrace_build_request(pt_request_t *request, void *addr_sapi_module, 
-        void *addr_sapi_globals, pid_t pid)
+int pt_ptrace_build_request(pt_request_t *request, pt_ptrace_preset_t *preset,
+        pid_t pid)
 {
     int i;
     void *addr;
@@ -121,38 +148,38 @@ int pt_ptrace_build_request(pt_request_t *request, void *addr_sapi_module,
     request->type = PT_FRAME_STACK;
 
     /* sapi_module.name */
-    addr = fetch_ptr(addr_sapi_module + 0);
+    addr = fetch_ptr(preset->sapi_module + preset->SM_name);
     if (addr != NULL) {
         fetch_str(addr, buf, sizeof(buf));
         request->sapi = sdsnew(buf);
     }
 
     /* sapi_globals request_info->path_translated */
-    addr = fetch_ptr(addr_sapi_globals + 40);
+    addr = fetch_ptr(preset->sapi_globals + preset->SG_request_info_path_translated);
     if (addr != NULL) {
         fetch_str(addr, buf, sizeof(buf));
         request->script = sdsnew(buf);
     }
 
     /* sapi_globals request_info->request_method */
-    addr = fetch_ptr(addr_sapi_globals + 8);
+    addr = fetch_ptr(preset->sapi_globals + preset->SG_request_info_request_method);
     if (addr != NULL) {
         fetch_str(addr, buf, sizeof(buf));
         request->method = sdsnew(buf);
     }
 
     /* sapi_globals request_info->request_uri */
-    addr = fetch_ptr(addr_sapi_globals + 48);
+    addr = fetch_ptr(preset->sapi_globals + preset->SG_request_info_request_uri);
     if (addr != NULL) {
         fetch_str(addr, buf, sizeof(buf));
         request->uri = sdsnew(buf);
     }
 
     /* argc, argv */
-    request->argc = fetch_int(addr_sapi_globals + 140);
+    request->argc = fetch_int(preset->sapi_globals + preset->SG_request_info_argc);
     if (request->argc) {
         request->argv = calloc(request->argc, sizeof(sds));
-        addr = fetch_ptr(addr_sapi_globals + 144);
+        addr = fetch_ptr(preset->sapi_globals + preset->SG_request_info_argv);
         for (i = 0; i < request->argc; i++) {
             fetch_str(addr + sizeof(char *) * i, buf, sizeof(buf));
             request->argv[i] = sdsnew(buf);
@@ -162,7 +189,8 @@ int pt_ptrace_build_request(pt_request_t *request, void *addr_sapi_module,
     return 0;
 }
 
-int pt_ptrace_build_frame(pt_frame_t *frame, void *addr_current_ex, pid_t pid)
+int pt_ptrace_build_frame(pt_frame_t *frame, pt_ptrace_preset_t *preset,
+        pid_t pid, void *addr_current_ex)
 {
     static char buf[4096];
 
@@ -177,29 +205,38 @@ int pt_ptrace_build_frame(pt_frame_t *frame, void *addr_current_ex, pid_t pid)
     frame->arg_count = 0;
     frame->args = NULL;
 
-    void *addr_prev_ex = fetch_ptr(addr_current_ex + 56);
+    void *addr_prev_ex = fetch_ptr(addr_current_ex + preset->EX_prev_execute_data);
 
-    void *addr_ex_func = fetch_ptr(addr_current_ex + 24);
-    void *addr_ex_func_name = fetch_ptr(addr_ex_func + 8);
-    void *addr_ex_func_scope = fetch_ptr(addr_ex_func + 16);
-    void *addr_ex_This = fetch_ptr(addr_current_ex + 32);
+    void *addr_ex_func = fetch_ptr(addr_current_ex + preset->EX_func);
+    void *addr_ex_func_name = fetch_ptr(addr_ex_func + preset->EX_FUNC_name);
+    void *addr_ex_func_scope = fetch_ptr(addr_ex_func + preset->EX_FUNC_scope);
+    void *addr_ex_This = fetch_ptr(addr_current_ex + preset->EX_This);
 
     void *addr_caller_ex = addr_prev_ex ? addr_prev_ex : addr_current_ex;
-    void *addr_caller_ex_opline = fetch_ptr(addr_caller_ex + 0);
-    void *addr_caller_ex_func = fetch_ptr(addr_caller_ex + 24);
-    void *addr_caller_ex_func_oparray_filename = fetch_ptr(addr_caller_ex_func + 120);
+    void *addr_caller_ex_opline = fetch_ptr(addr_caller_ex + preset->EX_opline);
+    void *addr_caller_ex_func = fetch_ptr(addr_caller_ex + preset->EX_func);
+    void *addr_caller_ex_func_oparray_filename = fetch_ptr(addr_caller_ex_func +
+            preset->EX_FUNC_oparray_filename);
 
     /* names */
     if (addr_ex_func_name) {
         /* function name */
-        fetch_zstr(addr_ex_func_name, buf);
+        if (preset->has_zend_string) {
+            fetch_zstr(addr_ex_func_name, buf);
+        } else {
+            fetch_str(addr_ex_func_name, buf, sizeof(buf));
+        }
         frame->function = sdsnew(buf);
 
         /*  functype, class name */
         if (addr_ex_func_scope) {
-            void *addr_ex_func_scope_name = fetch_ptr(addr_ex_func_scope + 8);
+            void *addr_ex_func_scope_name = fetch_ptr(addr_ex_func_scope + preset->EX_FUNC_SCOPE_name);
 
-            fetch_zstr(addr_ex_func_scope_name, buf);
+            if (preset->has_zend_string) {
+                fetch_zstr(addr_ex_func_scope_name, buf);
+            } else {
+                fetch_str(addr_ex_func_scope_name, buf, sizeof(buf));
+            }
             frame->class = sdsnew(buf);
 
             frame->functype |= addr_ex_This ? PT_FUNC_MEMBER : PT_FUNC_STATIC;
@@ -210,7 +247,7 @@ int pt_ptrace_build_frame(pt_frame_t *frame, void *addr_current_ex, pid_t pid)
         long ev = 0;
 
         if (addr_caller_ex && addr_caller_ex_opline) {
-            ev = fetch_long(addr_caller_ex_opline + 20);
+            ev = fetch_long(addr_caller_ex_opline + preset->EX_OPLINE_extended_value);
         }
 
         /* special user function */
@@ -246,7 +283,7 @@ int pt_ptrace_build_frame(pt_frame_t *frame, void *addr_current_ex, pid_t pid)
 
     /* lineno */
     if (addr_caller_ex && addr_caller_ex_opline) {
-        frame->lineno = fetch_int(addr_caller_ex_opline + 24);
+        frame->lineno = fetch_int(addr_caller_ex_opline + preset->EX_OPLINE_lineno);
     } else {
         frame->lineno = 0;
     }
@@ -254,7 +291,11 @@ int pt_ptrace_build_frame(pt_frame_t *frame, void *addr_current_ex, pid_t pid)
     /* filename */
     unsigned char caller_func_type = fetch_long(addr_caller_ex_func + 0) & 0xFF;
     if (addr_caller_ex_func_oparray_filename && ZEND_USER_CODE(caller_func_type)) {
-        fetch_zstr(addr_caller_ex_func_oparray_filename, buf);
+        if (preset->has_zend_string) {
+            fetch_zstr(addr_caller_ex_func_oparray_filename, buf);
+        } else {
+            fetch_str(addr_caller_ex_func_oparray_filename, buf, sizeof(buf));
+        }
         frame->filename = sdsnew(buf);
     } else {
         frame->filename = NULL;

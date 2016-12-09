@@ -26,6 +26,7 @@ typedef struct {
     int verbose;
 
     int pid;
+    int ptrace;
 } pt_context_t;
 
 /* make it accessable, global variables declared in cli.c */

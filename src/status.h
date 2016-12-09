@@ -17,6 +17,7 @@
 #ifndef TRACE_STATUS_H
 #define TRACE_STATUS_H
 
+int pt_status_ptrace(void);
 int pt_status_main(void);
 
 #endif

@@ -91,7 +91,6 @@ PHP_FUNCTION(trace_dump_address);
 #endif
 
 static void frame_build(pt_frame_t *frame, zend_bool internal, unsigned char type, zend_execute_data *caller, zend_execute_data *ex, zend_op_array *op_array TSRMLS_DC);
-static void frame_destroy(pt_frame_t *frame TSRMLS_DC);
 static int frame_send(pt_frame_t *frame TSRMLS_DC);
 #if PHP_VERSION_ID < 70000
 static void frame_set_retval(pt_frame_t *frame, zend_bool internal, zend_execute_data *ex, zend_fcall_info *fci TSRMLS_DC);
@@ -101,7 +100,6 @@ static void request_build(pt_request_t *request, unsigned char type TSRMLS_DC);
 static int request_send(pt_request_t *request TSRMLS_DC);
 
 static void status_build(pt_status_t *status, zend_bool internal, zend_execute_data *ex TSRMLS_DC);
-static void status_destroy(pt_status_t *status TSRMLS_DC);
 static int status_send(pt_status_t *status TSRMLS_DC);
 
 static sds repr_zval(zval *zv, int limit TSRMLS_DC);
@@ -387,88 +385,132 @@ PHP_FUNCTION(trace_status)
 
     status_build(&status, 1, EG(current_execute_data) TSRMLS_CC);
     pt_type_display_status(&status);
-    status_destroy(&status TSRMLS_CC);
+    pt_type_destroy_status(&status, 0);
 }
 
 PHP_FUNCTION(trace_dump_address)
 {
-    zend_printf("PHP_VERSION: %s\n", PHP_VERSION);
+    zend_printf("PHP_VERSION = %s\n", PHP_VERSION);
 
+#if PHP_VERSION_ID < 50500
+    zend_printf("not supported < PHP 5.5\n");
+    RETURN_NULL();
+#else
     /* sapi module */
-    zend_printf("sapi_module: 0x%lx\n", &sapi_module);
-    zend_printf("    .name: %ld\n", (long) &sapi_module.name - (long) &sapi_module);
+    zend_printf("sapi_module = 0x%lx\n", &sapi_module);
+    zend_printf("    .name = %ld\n", (long) &sapi_module.name - (long) &sapi_module);
 
     /* sapi globals */
-    zend_printf("sapi_globals: 0x%lx\n", &sapi_globals);
-    zend_printf("    .request_info.path_translated: %ld\n",
+    zend_printf("sapi_globals = 0x%lx\n", &sapi_globals);
+    zend_printf("    .request_info.path_translated = %ld\n",
             (long) &sapi_globals.request_info.path_translated - (long) &sapi_globals);
-    zend_printf("    .request_info.request_method: %ld\n",
+    zend_printf("    .request_info.request_method = %ld\n",
             (long) &sapi_globals.request_info.request_method - (long) &sapi_globals);
-    zend_printf("    .request_info.request_uri: %ld\n",
+    zend_printf("    .request_info.request_uri = %ld\n",
             (long) &sapi_globals.request_info.request_uri - (long) &sapi_globals);
-    zend_printf("    .request_info.argc: %ld\n",
+    zend_printf("    .request_info.argc = %ld\n",
             (long) &sapi_globals.request_info.argc - (long) &sapi_globals);
-    zend_printf("    .request_info.argv: %ld\n",
+    zend_printf("    .request_info.argv = %ld\n",
             (long) &sapi_globals.request_info.argv - (long) &sapi_globals);
 
     /* executor_globals */
-    zend_printf("executor_globals: 0x%lx\n", &executor_globals);
-    zend_printf("    .current_execute_data: %ld\n",
+    zend_printf("executor_globals = 0x%lx\n", &executor_globals);
+    zend_printf("    .current_execute_data = %ld\n",
             (long) &executor_globals.current_execute_data - (long) &executor_globals);
 
     /* execute_data */
-    zend_printf("executor_globals.current_execute_data: 0x%lx\n",
+    zend_printf("executor_globals.current_execute_data = 0x%lx\n",
             executor_globals.current_execute_data);
-    zend_printf("    .opline: %ld\n",
+    zend_printf("    .opline = %ld\n",
             (long) &executor_globals.current_execute_data->opline -
             (long) executor_globals.current_execute_data);
-    zend_printf("    .prev_execute_data: %ld\n",
+    zend_printf("    .prev_execute_data = %ld\n",
             (long) &executor_globals.current_execute_data->prev_execute_data -
             (long) executor_globals.current_execute_data);
-    zend_printf("    .func: %ld\n",
+#endif
+
+#if PHP_VERSION_ID < 50500
+#elif PHP_VERSION_ID < 70000
+    zend_printf("    .function_state.function = %ld\n",
+            (long) &executor_globals.current_execute_data->function_state.function -
+            (long) executor_globals.current_execute_data);
+    zend_printf("    .object = %ld\n",
+            (long) &executor_globals.current_execute_data->object -
+            (long) executor_globals.current_execute_data);
+
+    /* func */
+    zend_printf("executor_globals.current_execute_data->function_state.function = 0x%lx\n",
+            executor_globals.current_execute_data->function_state.function);
+    zend_printf("    .type = %ld\n",
+            (long) &executor_globals.current_execute_data->function_state.function->common.type -
+            (long) executor_globals.current_execute_data->function_state.function);
+    zend_printf("    .op_array = %ld\n",
+            (long) &executor_globals.current_execute_data->function_state.function->op_array -
+            (long) executor_globals.current_execute_data->function_state.function);
+    zend_printf("    .function_name = %ld\n",
+            (long) &executor_globals.current_execute_data->function_state.function->common.function_name -
+            (long) executor_globals.current_execute_data->function_state.function);
+    zend_printf("    .scope = %ld\n",
+            (long) &executor_globals.current_execute_data->function_state.function->common.scope -
+            (long) executor_globals.current_execute_data->function_state.function);
+
+    zend_printf("executor_globals.current_execute_data->function_state.function.op_array = 0x%lx\n",
+            (long) &executor_globals.current_execute_data->function_state.function->op_array);
+    zend_printf("    .filename = %ld\n",
+            (long) &executor_globals.current_execute_data->function_state.function->op_array.filename -
+            (long) &executor_globals.current_execute_data->function_state.function->op_array);
+
+    zend_printf("executor_globals.current_execute_data->function_state.function.scope = 0x%lx\n",
+            (long) executor_globals.current_execute_data->function_state.function->common.scope);
+    zend_printf("    .name = %ld\n",
+            (long) &executor_globals.current_execute_data->function_state.function->common.scope->name -
+            (long) executor_globals.current_execute_data->function_state.function->common.scope);
+#else
+    zend_printf("    .func = %ld\n",
             (long) &executor_globals.current_execute_data->func -
             (long) executor_globals.current_execute_data);
-    zend_printf("    .This: %ld\n",
+    zend_printf("    .This = %ld\n",
             (long) &executor_globals.current_execute_data->This -
             (long) executor_globals.current_execute_data);
 
-    /* opline */
-    zend_printf("executor_globals.current_execute_data->opline: 0x%lx\n",
-            executor_globals.current_execute_data->opline);
-    zend_printf("    .extended_value: %ld\n",
-            (long) &executor_globals.current_execute_data->opline->extended_value -
-            (long) executor_globals.current_execute_data->opline);
-    zend_printf("    .lineno: %ld\n",
-            (long) &executor_globals.current_execute_data->opline->lineno -
-            (long) executor_globals.current_execute_data->opline);
-
     /* func */
-    zend_printf("executor_globals.current_execute_data->func: 0x%lx\n",
+    zend_printf("executor_globals.current_execute_data->func = 0x%lx\n",
             executor_globals.current_execute_data->func);
-    zend_printf("    .op_array: %ld\n",
-            (long) &executor_globals.current_execute_data->func->op_array -
-            (long) executor_globals.current_execute_data->func);
-    zend_printf("    .function_name: %ld\n",
-            (long) &executor_globals.current_execute_data->func->common.function_name -
-            (long) executor_globals.current_execute_data->func);
-    zend_printf("    .scope: %ld\n",
-            (long) &executor_globals.current_execute_data->func->common.scope -
-            (long) executor_globals.current_execute_data->func);
-    zend_printf("    .type: %ld\n",
+    zend_printf("    .type = %ld\n",
             (long) &executor_globals.current_execute_data->func->common.type -
             (long) executor_globals.current_execute_data->func);
+    zend_printf("    .op_array = %ld\n",
+            (long) &executor_globals.current_execute_data->func->op_array -
+            (long) executor_globals.current_execute_data->func);
+    zend_printf("    .function_name = %ld\n",
+            (long) &executor_globals.current_execute_data->func->common.function_name -
+            (long) executor_globals.current_execute_data->func);
+    zend_printf("    .scope = %ld\n",
+            (long) &executor_globals.current_execute_data->func->common.scope -
+            (long) executor_globals.current_execute_data->func);
 
-    zend_printf("executor_globals.current_execute_data->func.op_array: 0x%lx\n",
+    zend_printf("executor_globals.current_execute_data->func.op_array = 0x%lx\n",
             (long) &executor_globals.current_execute_data->func->op_array);
-    zend_printf("    .filename: %ld\n",
+    zend_printf("    .filename = %ld\n",
             (long) &executor_globals.current_execute_data->func->op_array.filename -
             (long) &executor_globals.current_execute_data->func->op_array);
 
-    zend_printf("executor_globals.current_execute_data->func.scope: 0x%lx\n",
+    zend_printf("executor_globals.current_execute_data->func.scope = 0x%lx\n",
             (long) executor_globals.current_execute_data->func->common.scope);
-    zend_printf("    .name: %ld\n",
+    zend_printf("    .name = %ld\n",
             (long) &executor_globals.current_execute_data->func->common.scope->name -
             (long) executor_globals.current_execute_data->func->common.scope);
+#endif
+
+    /* opline */
+    zend_printf("executor_globals.current_execute_data->opline = 0x%lx\n",
+            executor_globals.current_execute_data->opline);
+    zend_printf("    .extended_value = %ld\n",
+            (long) &executor_globals.current_execute_data->opline->extended_value -
+            (long) executor_globals.current_execute_data->opline);
+    zend_printf("    .lineno = %ld\n",
+            (long) &executor_globals.current_execute_data->opline->lineno -
+            (long) executor_globals.current_execute_data->opline);
 }
 #endif
 
@@ -720,22 +762,6 @@ static void frame_build(pt_frame_t *frame, zend_bool internal, unsigned char typ
     }
 }
 
-static void frame_destroy(pt_frame_t *frame TSRMLS_DC)
-{
-    int i;
-
-    sdsfree(frame->filename);
-    sdsfree(frame->class);
-    sdsfree(frame->function);
-    if (frame->args && frame->arg_count) {
-        for (i = 0; i < frame->arg_count; i++) {
-            sdsfree(frame->args[i]);
-        }
-        free(frame->args);
-    }
-    sdsfree(frame->retval);
-}
-
 #if PHP_VERSION_ID < 70000
 static void frame_set_retval(pt_frame_t *frame, zend_bool internal, zend_execute_data *ex, zend_fcall_info *fci TSRMLS_DC)
 {
@@ -854,7 +880,7 @@ static void status_build(pt_status_t *status, zend_bool internal, zend_execute_d
     memset(status, 0, sizeof(pt_status_t));
 
     /* common */
-    status->php_version = PHP_VERSION;
+    status->php_version = sdsnew(PHP_VERSION);
 
     /* profile */
     status->mem = zend_memory_usage(0 TSRMLS_CC);
@@ -876,18 +902,6 @@ static void status_build(pt_status_t *status, zend_bool internal, zend_execute_d
         }
     } else {
         status->frames = NULL;
-    }
-}
-
-static void status_destroy(pt_status_t *status TSRMLS_DC)
-{
-    int i;
-
-    if (status->frames && status->frame_count) {
-        for (i = 0; i < status->frame_count; i++) {
-            frame_destroy(status->frames + i TSRMLS_CC);
-        }
-        free(status->frames);
     }
 }
 
@@ -1064,7 +1078,7 @@ static void handle_command(void)
                 pt_status_t status;
                 status_build(&status, 1, EG(current_execute_data) TSRMLS_CC);
                 status_send(&status TSRMLS_CC);
-                status_destroy(&status TSRMLS_CC);
+                pt_type_destroy_status(&status, 0);
                 break;
 
             default:
@@ -1239,7 +1253,7 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zva
         }
 #endif
 
-        frame_destroy(&frame TSRMLS_CC);
+        pt_type_destroy_frame(&frame);
     }
 
     PTG(level)--;

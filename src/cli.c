@@ -60,7 +60,6 @@ static void sighandler(int signal)
 
 void pt_log(int level, char *filename, int lineno, const char *format, ...)
 {
-    int ret;
     va_list ap;
 
     if (level > clictx.verbose) {
@@ -78,7 +77,7 @@ void pt_log(int level, char *filename, int lineno, const char *format, ...)
     }
 
     va_start(ap, format);
-    ret = vfprintf(stderr, format, ap);
+    vfprintf(stderr, format, ap);
     va_end(ap);
 
     if (errno) {
@@ -99,6 +98,7 @@ void context_init(void)
     clictx.verbose = PT_ERROR;
 
     clictx.pid = PT_PID_INVALID;
+    clictx.ptrace = 0;
 }
 
 void context_show(void)
@@ -119,6 +119,7 @@ void context_show(void)
     pt_info("command = %s", cmdname);
     pt_info("verbose = %d", clictx.verbose);
     pt_info("pid = %d", clictx.pid);
+    pt_info("ptrace = %d", clictx.ptrace);
 }
 
 void usage(void)
@@ -144,6 +145,7 @@ void usage_full(void)
 "    version             Show version\n"
 "\n"
 "Options:\n"
+"        --ptrace        Fetch data using ptrace, only in status mode\n"
 "    -p, --pid           Process id\n"
 "    -h, --help          Show this screen\n"
 "    -v, --verbose\n"
@@ -160,6 +162,7 @@ void parse_args(int argc, char **argv)
         {"pid",     required_argument,  NULL, 'p'},
         {"help",    no_argument,        NULL, 'h'},
         {"verbose", no_argument,        NULL, 'v'},
+        {"ptrace",  no_argument,        NULL, 0},
         {0, 0, 0, 0}
     };
 
@@ -211,6 +214,12 @@ void parse_args(int argc, char **argv)
                 ++clictx.verbose;
                 break;
 
+            case 0:
+                if (long_index == 3) { /* --ptrace */
+                    clictx.ptrace = 1;
+                }
+                break;
+
             default:
                 usage();
                 break;
@@ -251,7 +260,11 @@ int main(int argc, char **argv)
             break;
 
         case CMD_STATUS:
-            status = pt_status_main();
+            if (clictx.ptrace) {
+                status = pt_status_ptrace();
+            } else {
+                status = pt_status_main();
+            }
             break;
 
         default:

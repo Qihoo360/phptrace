@@ -182,6 +182,22 @@ size_t pt_type_unpack_frame(pt_frame_t *frame, char *buf)
     return buf - ori;
 }
 
+void pt_type_destroy_frame(pt_frame_t *frame)
+{
+    int i;
+
+    sdsfree(frame->filename);
+    sdsfree(frame->class);
+    sdsfree(frame->function);
+    if (frame->args && frame->arg_count) {
+        for (i = 0; i < frame->arg_count; i++) {
+            sdsfree(frame->args[i]);
+        }
+        free(frame->args);
+    }
+    sdsfree(frame->retval);
+}
+
 void pt_type_display_frame(pt_frame_t *frame, int indent, const char *format, ...)
 {
     int i, has_bracket = 1;
@@ -323,7 +339,7 @@ size_t pt_type_unpack_request(pt_request_t *request, char *buf)
 
     UNPACK(buf, uint32_t, request->argc);
     if (request->argc > 0) {
-        request->argv = calloc(request->argc, sizeof(char *));
+        request->argv = calloc(request->argc, sizeof(sds));
     } else {
         request->argv = NULL;
     }
@@ -332,6 +348,24 @@ size_t pt_type_unpack_request(pt_request_t *request, char *buf)
     }
 
     return buf - ori;
+}
+
+void pt_type_destroy_request(pt_request_t *request)
+{
+    int i;
+
+    sdsfree(request->sapi);
+    sdsfree(request->script);
+
+    sdsfree(request->method);
+    sdsfree(request->uri);
+
+    if (request->argc && request->argv) {
+        for (i = 0; i < request->argc; i++) {
+            sdsfree(request->argv[i]);
+        }
+        free(request->argv);
+    }
 }
 
 void pt_type_display_request(pt_request_t *request, const char *format, ...)
@@ -441,7 +475,7 @@ size_t pt_type_unpack_status(pt_status_t *status, char *buf)
 
     UNPACK(buf, uint32_t, status->frame_count);
     if (status->frame_count > 0) {
-        status->frames = calloc(status->frame_count, sizeof(pt_status_t));
+        status->frames = calloc(status->frame_count, sizeof(pt_frame_t));
     } else {
         status->frames = NULL;
     }
@@ -451,6 +485,24 @@ size_t pt_type_unpack_status(pt_status_t *status, char *buf)
     }
 
     return buf - ori;
+}
+
+void pt_type_destroy_status(pt_status_t *status, int free_request)
+{
+    int i;
+
+    sdsfree(status->php_version);
+
+    if (free_request) {
+        pt_type_destroy_request(&status->request);
+    }
+
+    if (status->frames && status->frame_count) {
+        for (i = 0; i < status->frame_count; i++) {
+            pt_type_destroy_frame(status->frames + i);
+        }
+        free(status->frames);
+    }
 }
 
 /* TODO improve display format */
