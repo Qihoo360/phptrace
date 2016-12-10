@@ -66,13 +66,13 @@ void pt_log(int level, char *filename, int lineno, const char *format, ...)
     }
 
     if (level == PT_ERROR) {
-        fputs("trace_cli.ERROR: ", stderr);
+        fputs("ERROR: ", stderr);
     } else if (level == PT_WARNING) {
-        fputs("trace_cli.WARN:  ", stderr);
+        fputs("WARN:  ", stderr);
     } else if (level == PT_INFO) {
-        fputs("trace_cli.INFO:  ", stderr);
+        fputs("INFO:  ", stderr);
     } else if (level == PT_DEBUG) {
-        fputs("trace_cli.DEBUG: ", stderr);
+        fputs("DEBUG: ", stderr);
     }
 
     va_start(ap, format);
