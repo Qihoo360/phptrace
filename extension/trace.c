@@ -47,13 +47,6 @@
 #define CTRL_IS_ACTIVE()    pt_ctrl_is_active(&PTG(ctrl), PTG(pid))
 #define CTRL_SET_INACTIVE() pt_ctrl_set_inactive(&PTG(ctrl), PTG(pid))
 
-/* Profiling */
-#define PROFILING_SET(p) do { \
-    p.wall_time = pt_time_usec(); \
-    p.mem = zend_memory_usage(0 TSRMLS_CC); \
-    p.mempeak = zend_memory_peak_usage(0 TSRMLS_CC); \
-} while (0);
-
 /* Flags of dotrace */
 #define TRACE_TO_OUTPUT (1 << 0)
 #define TRACE_TO_TOOL   (1 << 1)
@@ -1167,7 +1160,7 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zva
             pt_type_display_frame(&frame, 1, "> ");
         }
 
-        PROFILING_SET(frame.entry);
+        frame.inc_time = pt_time_usec();
     }
 
     /* Call original under zend_try. baitout will be called when exit(), error
@@ -1212,13 +1205,12 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zva
     } zend_end_try();
 
     if (dotrace) {
-        PROFILING_SET(frame.exit);
+        frame.inc_time = pt_time_usec() - frame.inc_time;
 
         /* Calculate exclusive time */
-        frame.exit.inc_time = frame.exit.wall_time - frame.entry.wall_time;
         if (PTG(level) + 1 < PTG(exc_time_len)) {
-            PTG(exc_time_table)[PTG(level)] += frame.exit.inc_time;
-            frame.exit.exc_time = frame.exit.inc_time - PTG(exc_time_table)[PTG(level) + 1];
+            PTG(exc_time_table)[PTG(level)] += frame.inc_time;
+            frame.exc_time = frame.inc_time - PTG(exc_time_table)[PTG(level) + 1];
             PTG(exc_time_table)[PTG(level) + 1] = 0;
         }
 

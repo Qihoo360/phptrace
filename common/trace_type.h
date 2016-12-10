@@ -54,20 +54,8 @@ typedef struct {
     sds *args;                  /* arguments represent string */
     sds retval;                 /* return value represent string */
 
-    struct {
-        int64_t wall_time;      /* wall time */
-        int64_t mem;            /* memory usage */
-        int64_t mempeak;        /* memory peak */
-    } entry;
-
-    struct {
-        int64_t wall_time;      /* TODO remove? wall time */
-        int64_t mem;            /* TODO remove? memory usage */
-        int64_t mempeak;        /* TODO remove? memory peak */
-
-        int64_t inc_time;       /* inclusive wall time */
-        int64_t exc_time;       /* exclusive wall time */
-    } exit;
+    int64_t inc_time;           /* inclusive wall time */
+    int64_t exc_time;           /* exclusive wall time */
 } pt_frame_t;
 
 size_t pt_type_len_frame(pt_frame_t *frame);
