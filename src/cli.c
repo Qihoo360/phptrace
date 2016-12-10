@@ -24,7 +24,6 @@
 #include <sys/types.h>
 #include <libgen.h>
 
-#include "trace_ctrl.h"
 #include "trace_version.h"
 
 #include "cli.h"
@@ -99,6 +98,12 @@ void context_init(void)
 
     clictx.pid = PT_PID_INVALID;
     clictx.ptrace = 0;
+
+    memset(&clictx.ctrl, 0, sizeof(clictx.ctrl));
+    memset(clictx.ctrl_file, 0, sizeof(clictx.ctrl_file));
+
+    clictx.sfd = -1;
+    memset(clictx.listen_addr, 0, sizeof(clictx.listen_addr));
 }
 
 void context_show(void)
@@ -120,6 +125,9 @@ void context_show(void)
     pt_info("verbose = %d", clictx.verbose);
     pt_info("pid = %d", clictx.pid);
     pt_info("ptrace = %d", clictx.ptrace);
+    pt_info("ctrl_file = %s", clictx.ctrl_file);
+    pt_info("sfd = %d", clictx.sfd);
+    pt_info("listen_addr = %s", clictx.listen_addr);
 }
 
 void usage(void)
@@ -233,7 +241,7 @@ void parse_args(int argc, char **argv)
 
     /* all process only in trace mode */
     if (clictx.command != CMD_TRACE && clictx.pid == PT_PID_ALL) {
-        pt_error("All process only in trace mode");
+        pt_error("Access all process only available in trace mode");
         exit(EXIT_FAILURE);
     }
 }
@@ -246,14 +254,25 @@ int main(int argc, char **argv)
 
     parse_args(argc, argv);
 
-    if (clictx.verbose > 0) {
-        context_show();
-    }
-
     if (signal(SIGINT, sighandler) == SIG_ERR || signal(SIGTERM, sighandler) == SIG_ERR) {
         pt_error("Register signal handler failed");
-        exit(EXIT_FAILURE);
+        return EXIT_FAILURE;
     }
+
+    strcpy(clictx.ctrl_file, "/tmp/" PT_CTRL_FILENAME);
+    if (pt_ctrl_open(&clictx.ctrl, clictx.ctrl_file) == -1) {
+        pt_error("Control module open failed");
+        return EXIT_FAILURE;
+    }
+
+    strcpy(clictx.listen_addr, "/tmp/" PT_COMM_FILENAME);
+    clictx.sfd = pt_comm_listen(clictx.listen_addr);
+    if (clictx.sfd == -1) {
+        pt_error("Socket listen failed");
+        return EXIT_FAILURE;
+    }
+
+    context_show();
 
     status = 0;
     switch (clictx.command) {
@@ -266,17 +285,17 @@ int main(int argc, char **argv)
             break;
 
         case CMD_STATUS:
-            if (clictx.ptrace) {
-                status = pt_status_ptrace();
-            } else {
-                status = pt_status_main();
-            }
+            status = pt_status_main();
             break;
 
         default:
             usage();
             break;
     }
+
+    pt_comm_close(clictx.sfd, clictx.listen_addr);
+
+    pt_ctrl_close(&clictx.ctrl);
 
     return status;
 }

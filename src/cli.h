@@ -20,6 +20,9 @@
 #define PT_PID_INVALID  -1
 #define PT_PID_ALL      0xF0000001
 
+#include "trace_ctrl.h"
+#include "trace_comm.h"
+
 /* Context */
 typedef struct {
     int command;
@@ -27,6 +30,12 @@ typedef struct {
 
     int pid;
     int ptrace;
+
+    pt_ctrl_t ctrl;         /* control module */
+    char ctrl_file[256];    /* ctrl filename */
+
+    int sfd;                /* cli-tool socket fd */
+    char listen_addr[256];  /* listen address */
 } pt_context_t;
 
 /* make it accessable, global variables declared in cli.c */

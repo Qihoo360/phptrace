@@ -32,6 +32,8 @@
 #include "trace.h"
 #include "ptrace.h"
 
+#define DEINIT_RETURN(code) ret = code; goto deinit;
+
 struct php_info {
     sds binary;
     int version;
@@ -58,6 +60,7 @@ static int get_php_info(struct php_info *info, pid_t pid)
     pt_info("PHP binary: %s", info->binary);
 
     /* PHP version */
+    /* FIXME this command will exec any given binary */
     sprintf(buf, "%s -v | awk 'NR == 1 {print $2}'", info->binary);
     pt_debug("popen commmand: %s", buf);
     if ((fp = popen(buf, "r")) == NULL) {
@@ -116,8 +119,9 @@ static int get_php_info(struct php_info *info, pid_t pid)
     return 0;
 }
 
-int pt_status_ptrace(void)
+static int status_ptrace(void)
 {
+    int ret;
     void *addr_current_ex;
     struct php_info info;
     pt_status_t statusst;
@@ -144,94 +148,76 @@ int pt_status_ptrace(void)
     addr_current_ex = pt_ptrace_fetch_current_ex(preset, clictx.pid);
     if (addr_current_ex == NULL) {
         pt_error("Process %d not active", clictx.pid);
-        return -1;
+        DEINIT_RETURN(-1);
     }
 
     /* Fetch status */
     if (pt_ptrace_build_status(&statusst, preset, clictx.pid, addr_current_ex) != 0) {
         pt_error("Status fetch failed");
-        return -1;
+        DEINIT_RETURN(-1);
     }
     pt_type_display_status(&statusst);
     pt_type_destroy_status(&statusst, 1);
+    DEINIT_RETURN(0);
 
+deinit:
     if (pt_ptrace_detach(clictx.pid) == -1) {
         pt_error("ptrace detach failed");
         return -1;
     }
     pt_info("ptrace detach success");
 
-    return 0;
+    return ret;
 }
 
-int pt_status_main(void)
+static int status_ext(void)
 {
-    int sfd, cfd, ret, msg_type;
+    int cfd, ret, msg_type;
     fd_set read_fds;
     struct timeval timeout;
 
-    pt_ctrl_t ctrlst;
     pt_comm_message_t *msg;
     pt_status_t statusst;
 
-    /* control prepare */
-    if (pt_ctrl_open(&ctrlst, "/tmp/" PT_CTRL_FILENAME) == -1) {
-        pt_error("ctrl open failed");
-        return -1;
-    }
-
-    /* socket prepare */
-    sfd = pt_comm_listen("/tmp/" PT_COMM_FILENAME);
-    if (sfd == -1) {
-        pt_error("socket listen failed");
-        return -1;
-    }
-
-    pt_ctrl_set_active(&ctrlst, clictx.pid);
-
-    /* select prepare */
     FD_ZERO(&read_fds);
-    FD_SET(sfd, &read_fds);
-    timeout.tv_sec = 3;
+    FD_SET(clictx.sfd, &read_fds);
+    timeout.tv_sec = 2;
     timeout.tv_usec = 0;
 
+    pt_ctrl_set_active(&clictx.ctrl, clictx.pid);
+
     /* Waiting connect */
-    ret = select(sfd + 1, &read_fds, NULL, NULL, &timeout);
+    ret = select(clictx.sfd + 1, &read_fds, NULL, NULL, &timeout);
     if (ret == -1) {
-        pt_error("Waiting client connect failed");
+        pt_error("Waiting for client connect failed");
         return -1;
     } else if (ret == 0) {
-        pt_warning("Waiting client connect timeout");
-        pt_comm_close(sfd, "/tmp/" PT_COMM_FILENAME);
-        return 0;
+        pt_warning("Waiting for client connect timeout");
+        return -2; /* timeout */
     }
 
-    /* client accept */
-    cfd = pt_comm_accept(sfd);
+    /* Client accept & send command */
+    cfd = pt_comm_accept(clictx.sfd);
     pt_info("client accepted fd:%d", cfd);
-    pt_comm_close(sfd, "/tmp/" PT_COMM_FILENAME);
 
-    /* send do_trace */
-    pt_debug("send do_status");
     if (pt_comm_send_type(cfd, PT_MSG_DO_STATUS) == -1) {
-        pt_error("Operation sending failed");
-        pt_comm_close(cfd, NULL);
-        return -1;
+        pt_error("Command sending failed");
+        DEINIT_RETURN(-1);
     }
 
-    /* wait message */
     FD_ZERO(&read_fds);
     FD_SET(cfd, &read_fds);
     timeout.tv_sec = 2;
     timeout.tv_usec = 0;
+
+    /* Waiting recv */
     ret = select(cfd + 1, &read_fds, NULL, NULL, &timeout);
     if (ret == -1) {
-        pt_error("Waiting client send failed");
-        return -1;
+        pt_error("Waiting for client send failed");
+        DEINIT_RETURN(-1);
     } else if (ret == 0) {
-        pt_warning("Waiting client send timeout");
-        pt_comm_close(cfd, NULL);
-        return 0;
+        pt_warning("Waiting for client send timeout");
+        DEINIT_RETURN(-2); /* timeout */
     }
 
     /* recv message */
@@ -241,13 +227,44 @@ int pt_status_main(void)
         pt_type_unpack_status(&statusst, msg->data);
         pt_type_display_status(&statusst);
         pt_type_destroy_status(&statusst, 1);
+        DEINIT_RETURN(0);
     } else {
         pt_error("unknown message received with type 0x%08x", msg_type);
-        pt_comm_close(cfd, NULL);
-        return -1;
+        DEINIT_RETURN(-1);
     }
 
+deinit:
     pt_comm_close(cfd, NULL);
 
-    return 0;
+    return ret;
+}
+
+int pt_status_main(void)
+{
+    int ret, try_ptrace;
+
+    try_ptrace = 0;
+
+    if (!clictx.ptrace) {
+        ret = status_ext();
+
+        if (ret == -1) {
+            printf("Fetch status error\n");
+            try_ptrace = 1;
+        } else if (ret == -2) {
+            printf("Operation timed out, no response received, "
+                   "make sure PHP process is active and extension already installed.\n");
+            try_ptrace = 1;
+        }
+    }
+
+    if (try_ptrace) {
+        printf("Retry with ptrace...\n");
+    }
+
+    if (clictx.ptrace || try_ptrace) {
+        ret = status_ptrace();
+    }
+
+    return ret;
 }
