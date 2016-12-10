@@ -29,7 +29,6 @@
 #include "trace_type.h"
 
 #include "cli.h"
-#include "trace.h"
 #include "ptrace.h"
 
 #define DEINIT_RETURN(code) ret = code; goto deinit;
@@ -179,6 +178,7 @@ static int status_ext(void)
     pt_comm_message_t *msg;
     pt_status_t statusst;
 
+    cfd = 0;
     FD_ZERO(&read_fds);
     FD_SET(clictx.sfd, &read_fds);
     timeout.tv_sec = 2;
@@ -189,11 +189,15 @@ static int status_ext(void)
     /* Waiting connect */
     ret = select(clictx.sfd + 1, &read_fds, NULL, NULL, &timeout);
     if (ret == -1) {
-        pt_error("Waiting for client connect failed");
-        return -1;
+        if (errno == EINTR) {
+            DEINIT_RETURN(0);
+        } else {
+            pt_error("Waiting for client connect failed");
+            DEINIT_RETURN(-1);
+        }
     } else if (ret == 0) {
         pt_warning("Waiting for client connect timeout");
-        return -2; /* timeout */
+        DEINIT_RETURN(-2); /* timeout */
     }
 
     /* Client accept & send command */
@@ -213,8 +217,12 @@ static int status_ext(void)
     /* Waiting recv */
     ret = select(cfd + 1, &read_fds, NULL, NULL, &timeout);
     if (ret == -1) {
-        pt_error("Waiting for client send failed");
-        DEINIT_RETURN(-1);
+        if (errno == EINTR) {
+            DEINIT_RETURN(0);
+        } else {
+            pt_error("Waiting for client send failed");
+            DEINIT_RETURN(-1);
+        }
     } else if (ret == 0) {
         pt_warning("Waiting for client send timeout");
         DEINIT_RETURN(-2); /* timeout */
@@ -234,7 +242,10 @@ static int status_ext(void)
     }
 
 deinit:
-    pt_comm_close(cfd, NULL);
+    if (cfd) {
+        pt_comm_close(cfd, NULL);
+    }
+    pt_ctrl_set_inactive(&clictx.ctrl, clictx.pid);
 
     return ret;
 }

@@ -28,6 +28,8 @@
 #include "cli.h"
 #include "trace.h"
 
+#define DEINIT_RETURN(code) ret = code; goto deinit;
+
 static int trace_single_process(int fd, int times)
 {
     int i, msg_type;
@@ -76,95 +78,67 @@ static int trace_single_process(int fd, int times)
         }
     }
 
-    return i;
+    return 0;
 }
 
-int pt_trace_main(void)
+static int trace_ext(void)
 {
-    int sfd, cfd, maxfd, retval;
+    int cfd, maxfd, ret;
     fd_set client_fds, read_fds;
     struct timeval timeout;
 
-    pt_ctrl_t ctrlst;
-
-    /* socket prepare */
-    maxfd = sfd = pt_comm_listen("/tmp/" PT_COMM_FILENAME);
-    if (sfd == -1) {
-        pt_error("socket listen failed");
-        return -1;
-    }
-
-    /* control prepare */
-    if (pt_ctrl_open(&ctrlst, "/tmp/" PT_CTRL_FILENAME) == -1) {
-        pt_error("ctrl open failed");
-        return -1;
-    }
-    if (clictx.pid == PT_PID_ALL) {
-        pt_ctrl_set_all(&ctrlst, PT_CTRL_ACTIVE);
-    } else {
-        pt_ctrl_set_active(&ctrlst, clictx.pid);
-    }
-
-    /* select prepare */
+    maxfd = clictx.sfd;
     FD_ZERO(&client_fds);
     FD_ZERO(&read_fds);
 
     for (;;) {
         if (interrupted) {
-            break;
+            DEINIT_RETURN(0);
         }
 
-        /* select */
         memcpy(&read_fds, &client_fds, sizeof(fd_set));
-        FD_SET(sfd, &read_fds);
+        FD_SET(clictx.sfd, &read_fds);
         timeout.tv_sec = 0;
         timeout.tv_usec = 100000;
-        retval = select(maxfd + 1, &read_fds, NULL, NULL, &timeout);
-        if (retval == -1) {
+
+        /* Waiting connect */
+        ret = select(maxfd + 1, &read_fds, NULL, NULL, &timeout);
+        if (ret == -1) {
             if (errno == EINTR) {
                 continue; /* leave interrupted to deal */
             } else {
-                pt_warning("select error");
-                return -1;
+                pt_error("Waiting for client connect failed");
+                DEINIT_RETURN(-1);
             }
-        } else if (retval == 0) {
+        } else if (ret == 0) {
             continue; /* timeout */
         }
 
-        /* client connected */
-        if (FD_ISSET(sfd, &read_fds)) {
-            /* accept */
-            cfd = pt_comm_accept(sfd);
-            if (cfd == -1) {
-                pt_error("accept return error");
-                continue;
-            }
-
-            FD_SET(cfd, &client_fds);
+        /* Client accept & send command */
+        if (FD_ISSET(clictx.sfd, &read_fds)) {
+            cfd = pt_comm_accept(clictx.sfd);
             printf("process attached\n");
 
-            /* max fd */
+            FD_SET(cfd, &client_fds);
             if (cfd > maxfd) {
                 maxfd = cfd;
-                pt_info("maxfd update to %d", cfd);
+                pt_info("maxfd increase to %d", maxfd);
             }
 
-            /* send do_trace */
             if (pt_comm_send_type(cfd, PT_MSG_DO_TRACE) == -1) {
-                pt_error("send do_trace error");
+                pt_error("Command sending failed");
             }
 
             continue; /* accept first */
         }
 
-        /* read trace data */
-        for (cfd = sfd + 1; cfd <= maxfd; cfd++) {
+        /* recv trace data */
+        for (cfd = clictx.sfd + 1; cfd <= maxfd; cfd++) {
             if (!FD_ISSET(cfd, &read_fds)) {
                 continue;
             }
 
             if (trace_single_process(cfd, 10) == -1) {
-                /* client disconnect */
                 FD_CLR(cfd, &client_fds);
                 pt_comm_close(cfd, NULL);
                 printf("process detached\n");
@@ -172,9 +146,39 @@ int pt_trace_main(void)
         }
     }
 
-    pt_ctrl_clear_all(&ctrlst);
-    pt_info("clear all ctrl bits");
-    pt_comm_close(sfd, "/tmp/" PT_COMM_FILENAME);
+deinit:
+    for (cfd = clictx.sfd + 1; cfd <= maxfd; cfd++) {
+        if (!FD_ISSET(cfd, &client_fds)) {
+            continue;
+        }
+        pt_comm_close(cfd, NULL);
+        printf("process detached\n");
+    }
 
-    return 0;
+    return ret;
+}
+
+int pt_trace_main(void)
+{
+    int ret;
+
+    /* Control switch on */
+    if (clictx.pid == PT_PID_ALL) {
+        pt_ctrl_set_all(&clictx.ctrl, PT_CTRL_ACTIVE);
+    } else {
+        pt_ctrl_set_active(&clictx.ctrl, clictx.pid);
+    }
+    pt_debug("Control switch on");
+
+    ret = trace_ext();
+
+    /* Control switch off */
+    if (clictx.pid == PT_PID_ALL) {
+        pt_ctrl_clear_all(&clictx.ctrl);
+    } else {
+        pt_ctrl_set_inactive(&clictx.ctrl, clictx.pid);
+    }
+    pt_debug("Control switch off");
+
+    return ret;
 }
