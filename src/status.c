@@ -29,7 +29,10 @@
 #include "trace_type.h"
 
 #include "cli.h"
+
+#ifdef PT_PTRACE_ENABLE
 #include "ptrace.h"
+#endif
 
 #define DEINIT_RETURN(code) ret = code; goto deinit;
 
@@ -125,6 +128,7 @@ static int get_php_info(struct php_info *info, pid_t pid)
     return 0;
 }
 
+#ifdef PT_PTRACE_ENABLE
 static int status_ptrace(void)
 {
     int ret;
@@ -178,6 +182,14 @@ deinit:
 
     return ret;
 }
+#else
+static int status_ptrace(void)
+{
+    pt_error("ptrace supported only on Linux");
+
+    return -1;
+}
+#endif
 
 static int status_ext(void)
 {
@@ -279,9 +291,13 @@ int pt_status_main(void)
         }
     }
 
+#ifdef PT_PTRACE_ENABLE
     if (try_ptrace) {
         printf("Retry with ptrace...\n");
     }
+#else
+    try_ptrace = 0;
+#endif
 
     if (clictx.ptrace || try_ptrace) {
         ret = status_ptrace();
