@@ -23,6 +23,7 @@
 #include <string.h>
 #include <unistd.h>
 #include "trace_type.h"
+#include "trace_time.h"
 #include "trace_color.h"
 
 #define PACK(buf, type, ele) \
@@ -266,6 +267,7 @@ size_t pt_type_len_request(pt_request_t *request)
     size += sizeof(uint8_t);                            /* type */
     size += LEN_STR(request->sapi);                     /* sapi_name */
     size += LEN_STR(request->script);                   /* script */
+    size += sizeof(uint64_t);                           /* time */
 
     size += LEN_STR(request->method);                   /* method */
     size += LEN_STR(request->uri);                      /* uri */
@@ -288,6 +290,7 @@ size_t pt_type_pack_request(pt_request_t *request, char *buf)
     PACK(buf, uint8_t,  request->type);
     PACK_STR(buf,       request->sapi);
     PACK_STR(buf,       request->script);
+    PACK(buf, uint64_t, request->time);
 
     PACK_STR(buf,       request->method);
     PACK_STR(buf,       request->uri);
@@ -309,6 +312,7 @@ size_t pt_type_unpack_request(pt_request_t *request, char *buf)
     UNPACK(buf, uint8_t,  request->type);
     UNPACK_SDS(buf,       request->sapi);
     UNPACK_SDS(buf,       request->script);
+    UNPACK(buf, uint64_t, request->time);
 
     UNPACK_SDS(buf,       request->method);
     UNPACK_SDS(buf,       request->uri);
@@ -484,11 +488,18 @@ void pt_type_destroy_status(pt_status_t *status, int free_request)
 void pt_type_display_status(pt_status_t *status)
 {
     int i;
+    long elapse;
+
+    /* calculate elapse time */
+    elapse = status->request.time ? pt_time_usec() - status->request.time : 0;
 
     printf("------------------------------- Status --------------------------------\n");
     printf("PHP Version:       %s\n", status->php_version);
     printf("SAPI:              %s\n", status->request.sapi);
     printf("script:            %s\n", status->request.script);
+    if (elapse) {
+    printf("elapse:            %.3fs\n", elapse / 1000000.0);
+    }
 
     if (status->mem || status->mempeak || status->mem_real || status->mempeak_real) {
     printf("memory:            %.2fm\n", status->mem / 1048576.0);

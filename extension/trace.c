@@ -405,6 +405,8 @@ PHP_FUNCTION(trace_dump_address)
             (long) &sapi_globals.request_info.argc - (long) &sapi_globals);
     zend_printf("    .request_info.argv = %ld\n",
             (long) &sapi_globals.request_info.argv - (long) &sapi_globals);
+    zend_printf("    .global_request_time = %ld\n",
+            (long) &sapi_globals.global_request_time - (long) &sapi_globals);
 
     /* executor_globals */
     zend_printf("executor_globals = 0x%lx\n", &executor_globals);
@@ -825,6 +827,7 @@ static void request_build(pt_request_t *request, unsigned char type TSRMLS_DC)
     request->type = type;
     request->sapi = sapi_module.name;
     request->script = SG(request_info).path_translated;
+    request->time = (long) SG(global_request_time) * PT_USEC_PER_SEC;
 
     /* http */
     request->method = (char *) SG(request_info).request_method;

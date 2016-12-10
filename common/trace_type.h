@@ -68,6 +68,7 @@ typedef struct {
     uint8_t type;               /* request type, begin or end */
     sds sapi;                   /* sapi name eg: fpm-fcgi */
     sds script;                 /* request script */
+    int64_t time;               /* request time */
 
     sds method;                 /* request method */
     sds uri;                    /* request uri */

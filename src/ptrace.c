@@ -71,9 +71,9 @@ static inline long ptrace_fetch_long(pid_t pid, void *addr)
 
 /* TODO store presets in local file */
 static pt_ptrace_preset_t presets[] = {
-    {70012, 1,/**/0, 40, 8, 48, 140, 144,/**/480, 0, 56, 24, 32,/**/8, 16, 120, 8, 20, 24},
-    {50619, 0,/**/0, 40, 8, 48, 140, 144,/**/1120, 0, 48, 8, 32,/**/8, 16, 152, 8, 32, 40},
-    {50533, 0,/**/0, 64, 8, 72, 156, 160,/**/1120, 0, 48, 8, 32,/**/8, 16, 152, 8, 32, 40},
+    {70012, 1,/**/0, 40, 8, 48, 140, 144, 440,/**/480, 0, 56, 24, 32,/**/8, 16, 120, 8, 20, 24},
+    {50619, 0,/**/0, 40, 8, 48, 140, 144, 440,/**/1120, 0, 48, 8, 32,/**/8, 16, 152, 8, 32, 40},
+    {50533, 0,/**/0, 64, 8, 72, 156, 160, 448,/**/1120, 0, 48, 8, 32,/**/8, 16, 152, 8, 32, 40},
 };
 
 pt_ptrace_preset_t *pt_ptrace_preset(int version, void *addr_sapi_module,
@@ -148,6 +148,7 @@ int pt_ptrace_build_request(pt_request_t *request, pt_ptrace_preset_t *preset,
         pid_t pid)
 {
     int i;
+    long val;
     void *addr;
     static char buf[4096];
 
@@ -194,6 +195,10 @@ int pt_ptrace_build_request(pt_request_t *request, pt_ptrace_preset_t *preset,
             request->argv[i] = sdsnew(buf);
         }
     }
+
+    /* sapi_globals global_request_time */
+    val = fetch_long(preset->sapi_globals + preset->SG_global_request_time);
+    request->time = (long) (*(double *) &val) * 1000000l;
 
     return 0;
 }

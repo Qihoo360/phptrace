@@ -33,6 +33,7 @@ typedef struct {
     long SG_request_info_request_uri;
     long SG_request_info_argc;
     long SG_request_info_argv;
+    long SG_global_request_time;
 
     long EG_current_execute_data;
     long EX_opline;
