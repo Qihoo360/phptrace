@@ -56,10 +56,17 @@ static int get_php_info(struct php_info *info, pid_t pid)
         return -1;
     }
     info->binary = sdsnewlen(buf, len);
-    pt_info("PHP binary: %s", info->binary);
+
+    if (info->binary[len - 3] == 'p' &&
+        info->binary[len - 2] == 'h' &&
+        info->binary[len - 1] == 'p') {
+        pt_info("PHP binary: %s", info->binary);
+    } else {
+        pt_error("\"%s\" looks not like a PHP binary", info->binary);
+        return -1;
+    }
 
     /* PHP version */
-    /* FIXME this command will exec any given binary */
     sprintf(buf, "%s -v | awk 'NR == 1 {print $2}'", info->binary);
     pt_debug("popen commmand: %s", buf);
     if ((fp = popen(buf, "r")) == NULL) {
