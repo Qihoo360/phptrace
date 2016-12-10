@@ -4,8 +4,8 @@ ptcli_objects = ../src/cli.lo ../src/trace.lo ../src/status.lo common/trace_comm
 
 ptcli_unames := $(shell uname -s)
 ifeq ($(ptcli_unames),Linux)
-	ptcli_objects = $(ptcli_objects) ../src/ptrace.lo
-	CFLAGS_CLEAN = $(CFLAGS_CLEAN) -DPT_PTRACE_ENABLE
+	ptcli_objects += ../src/ptrace.lo
+	CFLAGS_CLEAN += -DPT_PTRACE_ENABLE
 endif
 
 ptcli_dir = $(builddir)/../src

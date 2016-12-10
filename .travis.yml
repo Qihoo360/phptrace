@@ -1,5 +1,9 @@
 language: c
 
+compiler:
+    - clang
+    - gcc
+
 env:
     - PT_PHP_VERSION=5.2.17
     - PT_PHP_VERSION=5.3.29
