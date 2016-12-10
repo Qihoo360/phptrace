@@ -152,7 +152,10 @@ static int status_ptrace(void)
 
     /* Fetch current_execute_data */
     addr_current_ex = pt_ptrace_fetch_current_ex(preset, clictx.pid);
-    if (addr_current_ex == NULL) {
+    if (addr_current_ex == (void *) -1) {
+        pt_error("ptrace peek failed");
+        DEINIT_RETURN(-1);
+    } else if (addr_current_ex == NULL) {
         pt_error("Process %d not active", clictx.pid);
         DEINIT_RETURN(-1);
     }

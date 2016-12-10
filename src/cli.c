@@ -260,7 +260,7 @@ int main(int argc, char **argv)
     }
 
     strcpy(clictx.ctrl_file, "/tmp/" PT_CTRL_FILENAME);
-    if (pt_ctrl_open(&clictx.ctrl, clictx.ctrl_file) == -1) {
+    if (pt_ctrl_create(&clictx.ctrl, clictx.ctrl_file) == -1) {
         pt_error("Control module open failed");
         return EXIT_FAILURE;
     }

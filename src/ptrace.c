@@ -55,8 +55,14 @@ static int ptrace_fetch_str(pid_t pid, void *addr, char *buf, size_t size)
     return i;
 }
 
+static inline long ptrace_fetch_long(pid_t pid, void *addr)
+{
+    /* some debug code here, just this... */
+    return ptrace(PTRACE_PEEKDATA, pid, (void *) addr, NULL);
+}
+
 /* quick ptrace fetch */
-#define fetch_long(addr)    ptrace(PTRACE_PEEKDATA, pid, (void *) addr, NULL)
+#define fetch_long(addr)    ptrace_fetch_long(pid, (void *) addr)
 #define fetch_int(addr)     (int) (fetch_long(addr) & 0xFFFFFFFF)
 #define fetch_ptr(addr)     (void *) fetch_long(addr)
 
