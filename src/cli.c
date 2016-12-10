@@ -230,6 +230,12 @@ void parse_args(int argc, char **argv)
     if (clictx.command == CMD_UNKNOWN && clictx.pid != PT_PID_INVALID) {
         clictx.command = CMD_TRACE;
     }
+
+    /* all process only in trace mode */
+    if (clictx.command != CMD_TRACE && clictx.pid == PT_PID_ALL) {
+        pt_error("All process only in trace mode");
+        exit(EXIT_FAILURE);
+    }
 }
 
 int main(int argc, char **argv)

@@ -23,10 +23,6 @@ typedef struct {
     int version;
     int has_zend_string;
 
-    void *sapi_module;
-    void *sapi_globals;
-    void *executor_globals;
-
     /* The naming convention for offset of a element in struct:
      * for SG_request_info_argc
      * SG is a abbr for sapi_globals, is the struct, MUST be capital
@@ -50,9 +46,14 @@ typedef struct {
     long EX_FUNC_SCOPE_name;
     long EX_OPLINE_extended_value;
     long EX_OPLINE_lineno;
+
+    void *sapi_module;
+    void *sapi_globals;
+    void *executor_globals;
 } pt_ptrace_preset_t;
 
-pt_ptrace_preset_t *pt_ptrace_preset(int version);
+pt_ptrace_preset_t *pt_ptrace_preset(int version, void *addr_sapi_module,
+        void *addr_sapi_globals, void *addr_executor_globals);
 
 long pt_ptrace_attach(pid_t pid);
 

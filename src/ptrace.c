@@ -63,25 +63,24 @@ static int ptrace_fetch_str(pid_t pid, void *addr, char *buf, size_t size)
 #define fetch_str(addr, buf, size)  ptrace_fetch_str(pid, (void *) addr, buf, size)
 #define fetch_zstr(addr, buf)       fetch_str(addr + 24, buf, fetch_long(addr + 16))
 
+/* TODO store presets in local file */
 static pt_ptrace_preset_t presets[] = {
-    {
-        70012, 1, (void *) 0xf5a060, (void *) 0xf59e20, (void *) 0xf5a340,
-        0, 40, 8, 48, 140, 144,/**/480, 0, 56, 24, 32,/**/8, 16, 120, 8, 20, 24,
-    }, {
-        50619, 0, (void *) 0xa45760, (void *) 0xa458a0, (void *) 0xa45fc0,
-        0, 40, 8, 48, 140, 144,/**/1120, 0, 48, 8, 32,/**/8, 16, 152, 8, 32, 40,
-    }, {
-        50533, 0, (void *) 0xa51640, (void *) 0xa51780, (void *) 0xa51e60,
-        0, 64, 8, 72, 156, 160,/**/1120, 0, 48, 8, 32,/**/8, 16, 152, 8, 32, 40,
-    },
+    {70012, 1,/**/0, 40, 8, 48, 140, 144,/**/480, 0, 56, 24, 32,/**/8, 16, 120, 8, 20, 24},
+    {50619, 0,/**/0, 40, 8, 48, 140, 144,/**/1120, 0, 48, 8, 32,/**/8, 16, 152, 8, 32, 40},
+    {50533, 0,/**/0, 64, 8, 72, 156, 160,/**/1120, 0, 48, 8, 32,/**/8, 16, 152, 8, 32, 40},
 };
 
-pt_ptrace_preset_t *pt_ptrace_preset(int version)
+pt_ptrace_preset_t *pt_ptrace_preset(int version, void *addr_sapi_module,
+        void *addr_sapi_globals, void *addr_executor_globals)
 {
     int i;
 
     for (i = 0; i < sizeof(presets); i++) {
         if (version >= presets[i].version) {
+            presets[i].sapi_module = addr_sapi_module;
+            presets[i].sapi_globals = addr_sapi_globals;
+            presets[i].executor_globals = addr_executor_globals;
+
             return &presets[i];
         }
     }
