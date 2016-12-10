@@ -62,7 +62,7 @@ long pt_ptrace_detach(pid_t pid);
 void *pt_ptrace_fetch_current_ex(pt_ptrace_preset_t *preset, pid_t pid);
 
 int pt_ptrace_build_status(pt_status_t *status, pt_ptrace_preset_t *preset,
-        pid_t pid, void *addr_root_ex);
+        pid_t pid, void *addr_root_ex, int version_id);
 
 int pt_ptrace_build_request(pt_request_t *request, pt_ptrace_preset_t *preset,
         pid_t pid);

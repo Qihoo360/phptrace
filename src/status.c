@@ -52,6 +52,8 @@ static int get_php_info(struct php_info *info, pid_t pid)
     ssize_t len;
     char path[128], buf[BUFSIZ];
 
+    memset(info, 0, sizeof(struct php_info));
+
     /* PHP binary path */
     sprintf(path, "/proc/%d/exe", pid);
     len = readlink(path, buf, PATH_MAX);
@@ -140,6 +142,7 @@ static int status_ptrace(void)
         pt_error("Fetching PHP info failed");
         return -1;
     }
+    sdsfree(info.binary);
 
     pt_ptrace_preset_t *preset = pt_ptrace_preset(info.version, info.sapi_module,
             info.sapi_globals, info.executor_globals);
@@ -165,7 +168,8 @@ static int status_ptrace(void)
     }
 
     /* Fetch status */
-    if (pt_ptrace_build_status(&statusst, preset, clictx.pid, addr_current_ex) != 0) {
+    if (pt_ptrace_build_status(&statusst, preset, clictx.pid, addr_current_ex,
+                               info.version) != 0) {
         pt_error("Status fetch failed");
         DEINIT_RETURN(-1);
     }

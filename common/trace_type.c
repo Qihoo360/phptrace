@@ -505,7 +505,6 @@ void pt_type_destroy_status(pt_status_t *status, int free_request)
     }
 }
 
-/* TODO improve display format */
 void pt_type_display_status(pt_status_t *status)
 {
     int i;
@@ -515,17 +514,21 @@ void pt_type_display_status(pt_status_t *status)
     printf("SAPI:              %s\n", status->request.sapi);
     printf("script:            %s\n", status->request.script);
 
+    if (status->mem || status->mempeak || status->mem_real || status->mempeak_real) {
     printf("memory:            %.2fm\n", status->mem / 1048576.0);
     printf("memory peak:       %.2fm\n", status->mempeak / 1048576.0);
     printf("real-memory:       %.2fm\n", status->mem_real / 1048576.0);
     printf("real-memory peak   %.2fm\n", status->mempeak_real / 1048576.0);
+    }
 
+    if (status->request.method || status->request.uri) {
     printf("------------------------------- Request -------------------------------\n");
     if (status->request.method) {
     printf("request method:    %s\n", status->request.method);
     }
     if (status->request.uri) {
     printf("request uri:       %s\n", status->request.uri);
+    }
     }
 
     if (status->request.argc) {

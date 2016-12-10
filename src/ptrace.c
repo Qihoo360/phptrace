@@ -111,12 +111,16 @@ void *pt_ptrace_fetch_current_ex(pt_ptrace_preset_t *preset, pid_t pid)
 }
 
 int pt_ptrace_build_status(pt_status_t *status, pt_ptrace_preset_t *preset,
-        pid_t pid, void *addr_root_ex)
+        pid_t pid, void *addr_root_ex, int version_id)
 {
     int i;
     void *addr_current_ex;
 
     memset(status, 0, sizeof(pt_status_t));
+
+    /* version */
+    status->php_version = sdscatprintf(sdsempty(), "%d.%d.%d",
+            version_id / 10000, version_id % 10000 / 100, version_id % 100);
 
     /* request */
     pt_ptrace_build_request(&status->request, preset, pid);
