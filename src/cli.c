@@ -23,8 +23,10 @@
 #include <signal.h>
 #include <sys/types.h>
 #include <libgen.h>
+#include <limits.h>
 
 #include "trace_version.h"
+#include "trace_filter.h"
 
 #include "cli.h"
 #include "trace.h"
@@ -104,6 +106,11 @@ void context_init(void)
 
     clictx.sfd = -1;
     memset(clictx.listen_addr, 0, sizeof(clictx.listen_addr));
+
+    pt_filter_ctr(&clictx.pft);
+
+    clictx.limit.frame = PT_LIMIT_UNLIMITED; 
+    clictx.limit.request = PT_LIMIT_UNLIMITED; 
 }
 
 void context_show(void)
@@ -157,6 +164,8 @@ void usage_full(void)
 "    -p, --pid           Process id\n"
 "    -h, --help          Show this screen\n"
 "    -v, --verbose\n"
+"    -f, --filter        Filter data by type [function,class] and content\n"
+"    -l, --limit         Limit output count\n"
     );
     exit(EXIT_SUCCESS);
 }
@@ -165,13 +174,31 @@ void parse_args(int argc, char **argv)
 {
     int c, long_index;
     char *end;
+    char *limit_end;
+    char *sub_value;
+	char *subopts;
+    int limit = 0;
 
     struct option long_opts[] = {
         {"pid",     required_argument,  NULL, 'p'},
+        {"filter",  required_argument,  NULL, 'f'},
+        {"limit",   required_argument,  NULL, 'l'},
         {"help",    no_argument,        NULL, 'h'},
         {"verbose", no_argument,        NULL, 'v'},
         {"ptrace",  no_argument,        NULL, 0},
         {0, 0, 0, 0}
+    };
+
+    enum {
+        FILTER_TYPE = 0,
+        FILTER_CONTENT,
+        FILTER_COUNT,
+    };
+
+    char *const filter_token[] = {
+        [FILTER_TYPE]       = "type",
+        [FILTER_CONTENT]    = "content",
+		NULL
     };
 
     if (argc < 2) {
@@ -192,7 +219,7 @@ void parse_args(int argc, char **argv)
     }
 
     /* options */
-    while ((c = getopt_long(argc, argv, "vhp:", long_opts, &long_index)) != -1) {
+    while ((c = getopt_long(argc, argv, "vhp:f:l:", long_opts, &long_index)) != -1) {
         switch (c) {
             case 'p':
                 if (strcmp("all", optarg) == 0) {
@@ -213,7 +240,44 @@ void parse_args(int argc, char **argv)
                 }
 
                 break;
+            case 'f':
+				subopts = optarg;
+                while (*subopts != '\0') {
+                    switch (getsubopt(&subopts, filter_token, &sub_value)) {
+                        case FILTER_TYPE:
+                            if (sub_value == NULL) {
+                                pt_error("Invalid filter type");
+                                exit(EXIT_FAILURE);
+                            }
+                            pt_filter_search_filter_type(sub_value, &(clictx.pft.type));
+                            break;
+                        case FILTER_CONTENT:
+                            if (strlen(sub_value) >= MAX_FILTER_LENGTH - 1) {
+                               pt_error("Invalid filter content size overflow");
+                               exit(EXIT_FAILURE);
+                            }
+                            sdscpy(clictx.pft.content, sub_value);
+                            break;
+                        default:
+                            pt_error("Invalid filter param \"%s\"", sub_value);
+                            exit(EXIT_FAILURE);
+                    }
+                }
 
+                if (sdslen(clictx.pft.content) == 0 || clictx.pft.type == PT_FILTER_EMPTY) {
+                    pt_error("Invalid filter param , content or type is empty");
+                    exit(EXIT_FAILURE);
+                } 
+
+                break;
+            case 'l':
+                limit = (int) strtol(optarg, &limit_end, 10);
+                if (errno || *limit_end != '\0' || limit < PT_LIMIT_UNLIMITED) {
+                    pt_error("Invalid limit \"%s\"", optarg);
+                    exit(EXIT_FAILURE);
+                }
+                
+                break;
             case 'h':
                 usage_full();
                 break;
@@ -243,6 +307,15 @@ void parse_args(int argc, char **argv)
     if (clictx.command != CMD_TRACE && clictx.pid == PT_PID_ALL) {
         pt_error("Access all process only available in trace mode");
         exit(EXIT_FAILURE);
+    }
+
+    /* set limit */
+    if (limit != 0) {
+        if (clictx.pft.type & PT_FILTER_URL) {
+            clictx.limit.request = limit;
+        } else {
+            clictx.limit.frame = limit; 
+        }
     }
 }
 
@@ -296,6 +369,8 @@ int main(int argc, char **argv)
     pt_comm_close(clictx.sfd, clictx.listen_addr);
 
     pt_ctrl_close(&clictx.ctrl);
+
+    pt_filter_dtr(&clictx.pft);
 
     return status;
 }

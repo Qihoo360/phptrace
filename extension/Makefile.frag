@@ -1,6 +1,6 @@
 # phptrace-CLI:begin
 
-ptcli_objects = ../src/cli.lo ../src/trace.lo ../src/status.lo common/trace_comm.lo common/trace_ctrl.lo common/trace_mmap.lo common/trace_type.lo deps/sds/sds.lo
+ptcli_objects = ../src/cli.lo ../src/trace.lo ../src/status.lo common/trace_comm.lo common/trace_ctrl.lo common/trace_mmap.lo common/trace_filter.lo common/trace_type.lo deps/sds/sds.lo
 
 ptcli_unames := $(shell uname -s)
 ifeq ($(ptcli_unames),Linux)

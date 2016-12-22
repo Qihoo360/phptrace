@@ -20,19 +20,28 @@
 #include <sys/select.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <unistd.h>
 
 #include "trace_comm.h"
 #include "trace_ctrl.h"
 #include "trace_type.h"
+#include "trace_filter.h"
 
 #include "cli.h"
 #include "trace.h"
 
 #define DEINIT_RETURN(code) ret = code; goto deinit;
+#define DETERMINE_STOP(type, msg) do {           \
+    PT_DECR_LIMIT(type);                         \
+    if (PT_STOP_MATCH(type)) {                   \
+        pt_type_destroy_##type(msg);               \
+        return -2;                               \
+    }                                            \
+}while(0)
 
 static int trace_single_process(int fd, int times)
 {
-    int i, msg_type;
+    int i, msg_type, indent=1;
     pt_comm_message_t *msg;
     pt_frame_t framest;
     pt_request_t requestst;
@@ -53,14 +62,23 @@ static int trace_single_process(int fd, int times)
                 return 0;
 
             case PT_MSG_FRAME:
-                pt_type_unpack_frame(&framest, msg->data);
-                printf("[pid %5u]", msg->pid);
-                if (framest.type == PT_FRAME_ENTRY) {
-                    pt_type_display_frame(&framest, 1, "> ");
-                } else {
-                    pt_type_display_frame(&framest, 1, "< ");
-                }
-                break;
+               	pt_type_unpack_frame(&framest, msg->data);
+               	printf("[pid %5u]", msg->pid);
+               	if (clictx.pft.type & (PT_FILTER_FUNCTION_NAME | PT_FILTER_CLASS_NAME)) {
+                   	indent = 0;
+               	}
+               	if (framest.type == PT_FRAME_ENTRY) {
+                   	pt_type_display_frame(&framest, indent, "> ");
+               	} else {
+                   	pt_type_display_frame(&framest, indent, "< ");
+                   	DETERMINE_STOP(frame, &framest);
+               	}
+
+                /* TODO low performance one frame one sds free, there 
+                 * are twice buffer copy --- from kernel to buf, from 
+                 * buf to frame, here we will optimize just one copy */
+                pt_type_destroy_frame(&framest);
+               	break;
 
             case PT_MSG_REQ:
                 pt_type_unpack_request(&requestst, msg->data);
@@ -69,13 +87,36 @@ static int trace_single_process(int fd, int times)
                     pt_type_display_request(&requestst, "> ");
                 } else {
                     pt_type_display_request(&requestst, "< ");
+                    DETERMINE_STOP(request, &requestst);
                 }
+                pt_type_destroy_request(&requestst);
                 break;
 
             default:
                 pt_error("unknown message received with type 0x%08x", msg_type);
                 break;
         }
+    }
+
+    return 0;
+}
+
+static int pt_send_msg(int fd) 
+{
+    if (clictx.pft.type != PT_FILTER_EMPTY) {
+        pt_comm_message_t *msg;
+        if (pt_comm_build_msg(&msg, PT_FILTER_SIZE, PT_MSG_DO_FILTER) == -1) {
+            return -1;
+        }
+        pt_filter_pack_filter_msg(&clictx.pft, msg->data);
+	    if (pt_comm_send_msg(fd, msg) == -1) {
+            return -1;
+        }
+    }
+
+    /* Filter url do not start trace right now */
+    if (clictx.pft.type != PT_FILTER_URL) {
+        return pt_comm_send_type(fd, PT_MSG_DO_TRACE);
     }
 
     return 0;
@@ -125,7 +166,8 @@ static int trace_ext(void)
                 pt_info("maxfd increase to %d", maxfd);
             }
 
-            if (pt_comm_send_type(cfd, PT_MSG_DO_TRACE) == -1) {
+            /* send do_trace */
+            if (pt_send_msg(cfd) == -1) {
                 pt_error("Command sending failed");
             }
 
@@ -138,11 +180,18 @@ static int trace_ext(void)
                 continue;
             }
 
-            if (trace_single_process(cfd, 10) == -1) {
+            ret = trace_single_process(cfd, 10);
+
+            if (ret == -1) {
                 FD_CLR(cfd, &client_fds);
                 pt_comm_close(cfd, NULL);
                 printf("process detached\n");
             }
+            
+            if (ret == -2) {
+                DEINIT_RETURN(-2);
+            }
+
         }
     }
 
