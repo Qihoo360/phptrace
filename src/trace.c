@@ -62,23 +62,23 @@ static int trace_single_process(int fd, int times)
                 return 0;
 
             case PT_MSG_FRAME:
-               	pt_type_unpack_frame(&framest, msg->data);
-               	printf("[pid %5u]", msg->pid);
-               	if (clictx.pft.type & (PT_FILTER_FUNCTION_NAME | PT_FILTER_CLASS_NAME)) {
-                   	indent = 0;
-               	}
-               	if (framest.type == PT_FRAME_ENTRY) {
-                   	pt_type_display_frame(&framest, indent, "> ");
-               	} else {
-                   	pt_type_display_frame(&framest, indent, "< ");
-                   	DETERMINE_STOP(frame, &framest);
-               	}
+                pt_type_unpack_frame(&framest, msg->data);
+                printf("[pid %5u]", msg->pid);
+                if (clictx.pft.type & (PT_FILTER_FUNCTION_NAME | PT_FILTER_CLASS_NAME)) {
+                    indent = 0;
+                }
+                if (framest.type == PT_FRAME_ENTRY) {
+                    pt_type_display_frame(&framest, indent, "> ");
+                } else {
+                    pt_type_display_frame(&framest, indent, "< ");
+                    DETERMINE_STOP(frame, &framest);
+                }
 
                 /* TODO low performance one frame one sds free, there 
                  * are twice buffer copy --- from kernel to buf, from 
                  * buf to frame, here we will optimize just one copy */
                 pt_type_destroy_frame(&framest);
-               	break;
+                break;
 
             case PT_MSG_REQ:
                 pt_type_unpack_request(&requestst, msg->data);
@@ -109,7 +109,7 @@ static int pt_send_msg(int fd)
             return -1;
         }
         pt_filter_pack_filter_msg(&clictx.pft, msg->data);
-	    if (pt_comm_send_msg(fd, msg) == -1) {
+        if (pt_comm_send_msg(fd, msg) == -1) {
             return -1;
         }
     }

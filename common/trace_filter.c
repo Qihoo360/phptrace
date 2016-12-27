@@ -1,5 +1,5 @@
 /**
- * Copyright 2016 silkCut 
+ * Copyright 2016 Bing Bai <silkcutbeta@gmail.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,9 +29,9 @@ filter_map_t filter_name_map_type[] = {
 
 void pt_filter_search_filter_type(char *type_name, uint8_t *filter_type)
 {
-	if (type_name != NULL && type_name[0] == '\0') {
-		return;	
-	}
+    if (type_name != NULL && type_name[0] == '\0') {
+        return; 
+    }
     size_t n = sizeof(filter_name_map_type)/sizeof(filter_map_t);
     int i = 0;
     for (i = 0; i < n; i++) {
@@ -61,17 +61,17 @@ int pt_filter_unpack_filter_msg(pt_filter_t *filter, char *buf)
 
 void pt_filter_ctr(pt_filter_t *filter) 
 {
-	filter->type = PT_FILTER_EMPTY;
+    filter->type = PT_FILTER_EMPTY;
     if (filter->content == NULL) {
-	    filter->content = sdsempty();	
+        filter->content = sdsempty();   
     }
 }
 
 void pt_filter_dtr(pt_filter_t *filter) 
 {
-	if (filter->content != NULL) {
-		sdsfree(filter->content);	
-	}
+    if (filter->content != NULL) {
+        sdsfree(filter->content);   
+    }
     filter->content = NULL;
-	filter->type = PT_FILTER_EMPTY;
+    filter->type = PT_FILTER_EMPTY;
 }

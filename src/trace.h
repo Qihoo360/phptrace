@@ -18,10 +18,5 @@
 #define TRACE_TRACE_H
 
 int pt_trace_main(void);
-int pt_send_msg_normal(int fd);
-int pt_send_msg_filter(int fd);
-int pt_trace_no_stop(int msg_type, uint8_t type);
-int pt_trace_stop_limit(int msg_type, uint8_t type);
-int pt_trace_stop_filter_url(int msg_type, uint8_t type);
 
 #endif

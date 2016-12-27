@@ -176,7 +176,7 @@ void parse_args(int argc, char **argv)
     char *end;
     char *limit_end;
     char *sub_value;
-	char *subopts;
+    char *subopts;
     int limit = 0;
 
     struct option long_opts[] = {
@@ -198,7 +198,7 @@ void parse_args(int argc, char **argv)
     char *const filter_token[] = {
         [FILTER_TYPE]       = "type",
         [FILTER_CONTENT]    = "content",
-		NULL
+        NULL
     };
 
     if (argc < 2) {
@@ -241,7 +241,7 @@ void parse_args(int argc, char **argv)
 
                 break;
             case 'f':
-				subopts = optarg;
+                subopts = optarg;
                 while (*subopts != '\0') {
                     switch (getsubopt(&subopts, filter_token, &sub_value)) {
                         case FILTER_TYPE:

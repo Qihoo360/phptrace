@@ -81,8 +81,8 @@ typedef unsigned long zend_uintptr_t;
 
 #if TRACE_DEBUG
 ZEND_BEGIN_ARG_INFO(trace_set_filter_arginfo, 0)
-		ZEND_ARG_INFO(0, filter_type)
-		ZEND_ARG_INFO(0, filter_content)
+        ZEND_ARG_INFO(0, filter_type)
+        ZEND_ARG_INFO(0, filter_content)
 ZEND_END_ARG_INFO()
 
 
@@ -147,7 +147,7 @@ const zend_function_entry trace_functions[] = {
     PHP_FE(trace_end, NULL)
     PHP_FE(trace_status, NULL)
     PHP_FE(trace_dump_address, NULL)
-	PHP_FE(trace_set_filter, trace_set_filter_arginfo)
+    PHP_FE(trace_set_filter, trace_set_filter_arginfo)
 #endif
 #ifdef PHP_FE_END
     PHP_FE_END  /* Must be the last line in trace_functions[] */
@@ -207,7 +207,7 @@ static void php_trace_init_globals(zend_trace_globals *ptg)
     ptg->exc_time_table = NULL;
     ptg->exc_time_len = 0;
 
-	pt_filter_ctr(&(ptg->pft));
+    pt_filter_ctr(&(ptg->pft));
 }
 
 
@@ -265,11 +265,11 @@ PHP_MINIT_FUNCTION(trace)
     /* always do trace in debug mode */
     PTG(dotrace) |= TRACE_TO_NULL;
 
-	/* register filter const */
-	REGISTER_LONG_CONSTANT("PT_FILTER_EMPTY", PT_FILTER_EMPTY, CONST_CS | CONST_PERSISTENT);
-	REGISTER_LONG_CONSTANT("PT_FILTER_URL", PT_FILTER_URL, CONST_CS | CONST_PERSISTENT);
-	REGISTER_LONG_CONSTANT("PT_FILTER_FUNCTION_NAME", PT_FILTER_FUNCTION_NAME, CONST_CS | CONST_PERSISTENT);
-	REGISTER_LONG_CONSTANT("PT_FILTER_CLASS_NAME", PT_FILTER_CLASS_NAME, CONST_CS | CONST_PERSISTENT);
+    /* register filter const */
+    REGISTER_LONG_CONSTANT("PT_FILTER_EMPTY", PT_FILTER_EMPTY, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("PT_FILTER_URL", PT_FILTER_URL, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("PT_FILTER_FUNCTION_NAME", PT_FILTER_FUNCTION_NAME, CONST_CS | CONST_PERSISTENT);
+    REGISTER_LONG_CONSTANT("PT_FILTER_CLASS_NAME", PT_FILTER_CLASS_NAME, CONST_CS | CONST_PERSISTENT);
 #endif
 
     return SUCCESS;
@@ -334,14 +334,14 @@ PHP_RINIT_FUNCTION(trace)
     }
     
     /* Filter url */
-	if (PTG(pft).type & PT_FILTER_URL) {
-	    if (strstr(SG(request_info).request_uri, PTG(pft.content)) != NULL) {
+    if (PTG(pft).type & PT_FILTER_URL) {
+        if (strstr(SG(request_info).request_uri, PTG(pft.content)) != NULL) {
             PTG(dotrace) |= TRACE_TO_TOOL;
-	    } else {
+        } else {
             PTG(dotrace) &= ~TRACE_TO_TOOL;
         }
     }
-	
+    
 
     /* Request process */
     if (PTG(dotrace)) {
@@ -542,29 +542,29 @@ PHP_FUNCTION(trace_dump_address)
 
 PHP_FUNCTION(trace_set_filter)
 {
-	long filter_type = PT_FILTER_EMPTY;
+    long filter_type = PT_FILTER_EMPTY;
 #if PHP_VERSION_ID < 70000
-	char *filter_content;
-	int filter_content_len;
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "ls", &filter_type, &filter_content, &filter_content_len) == FAILURE) {
-		RETURN_FALSE;	
-	}
+    char *filter_content;
+    int filter_content_len;
+    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "ls", &filter_type, &filter_content, &filter_content_len) == FAILURE) {
+        RETURN_FALSE;   
+    }
 #else
-	zend_string *filter_content;
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "lS", &filter_type, &filter_content) == FAILURE) {
-		RETURN_FALSE;	
-	}
+    zend_string *filter_content;
+    if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "lS", &filter_type, &filter_content) == FAILURE) {
+        RETURN_FALSE;   
+    }
 
 #endif
 
-	if (filter_type == PT_FILTER_EMPTY) {
-		RETURN_FALSE;	
-	}	
+    if (filter_type == PT_FILTER_EMPTY) {
+        RETURN_FALSE;   
+    }   
 
-	pt_filter_ctr(&PTG(pft));
-	PTG(pft).type = filter_type;
-	PTG(pft).content = sdsnewlen(P7_STR(filter_content), P7_STR_LEN(filter_content));
-	RETURN_TRUE;
+    pt_filter_ctr(&PTG(pft));
+    PTG(pft).type = filter_type;
+    PTG(pft).content = sdsnewlen(P7_STR(filter_content), P7_STR_LEN(filter_content));
+    RETURN_TRUE;
 }
 #endif
 
@@ -572,23 +572,23 @@ PHP_FUNCTION(trace_set_filter)
 static int check_frame_send_flag(pt_frame_t *frame, zend_function *zf) 
 {
     int ret = 0;
-	if (PTG(pft).type & (PT_FILTER_FUNCTION_NAME | PT_FILTER_CLASS_NAME)) {
-		ret = -1;
+    if (PTG(pft).type & (PT_FILTER_FUNCTION_NAME | PT_FILTER_CLASS_NAME)) {
+        ret = -1;
 
         /* filter function */
-		if ((PTG(pft).type & PT_FILTER_FUNCTION_NAME)) {
-			if((zf->common.function_name) && strstr(P7_STR(zf->common.function_name), PTG(pft).content) != NULL) {
-			    ret = 0;
-			}
-		}
+        if ((PTG(pft).type & PT_FILTER_FUNCTION_NAME)) {
+            if((zf->common.function_name) && strstr(P7_STR(zf->common.function_name), PTG(pft).content) != NULL) {
+                ret = 0;
+            }
+        }
 
         /* filter class */
-		if ((PTG(pft).type & PT_FILTER_CLASS_NAME)) {
-			if ( (zf->common.scope)  && (zf->common.scope->name) && (strstr(P7_STR(zf->common.scope->name), PTG(pft).content) != NULL)) {
-			    ret = 0;
-			}
-		}
-	}
+        if ((PTG(pft).type & PT_FILTER_CLASS_NAME)) {
+            if ( (zf->common.scope)  && (zf->common.scope->name) && (strstr(P7_STR(zf->common.scope->name), PTG(pft).content) != NULL)) {
+                ret = 0;
+            }
+        }
+    }
     return ret;
 }
 
@@ -628,8 +628,8 @@ static int frame_build(pt_frame_t *frame, zend_bool internal, unsigned char type
     frame->arg_count = 0;
     frame->args = NULL;
 
-	/* Filter function or class name */
-	if (check_frame_send_flag(frame, zf) != 0) {
+    /* Filter function or class name */
+    if (check_frame_send_flag(frame, zf) != 0) {
         return -1;
     }
 
@@ -1163,7 +1163,7 @@ static void handle_command(void)
 
             case PT_MSG_DO_FILTER:
                 PTD("hanle DO_FILTER");
-				pt_filter_dtr(&PTG(pft));
+                pt_filter_dtr(&PTG(pft));
                 pt_filter_unpack_filter_msg(&(PTG(pft)), msg->data);
                 break;
 
@@ -1240,9 +1240,9 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zva
 #else
         send_frame = frame_build(&frame, internal, PT_FRAME_ENTRY, caller, execute_data, NULL TSRMLS_CC);
 #endif
-		if (send_frame != 0) {
-			goto exec_ori;	
-		}
+        if (send_frame != 0) {
+            goto exec_ori;  
+        }
 
         /* Register return value ptr */
 #if PHP_VERSION_ID < 70000

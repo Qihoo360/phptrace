@@ -1,5 +1,5 @@
 /**
- * Copyright 2016 Qihoo 360
+ * Copyright 2016 Bing Bai <silkcutbeta@gmail.com> 
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,9 +24,9 @@
 #define PT_FILTER_SIZE          sizeof(pt_filter_t)
 
 /* Type codes of filter*/
-#define PT_FILTER_EMPTY			    (0x01<<0)
-#define PT_FILTER_URL			    (0x01<<1)
-#define PT_FILTER_FUNCTION_NAME		(0x01<<2)
+#define PT_FILTER_EMPTY             (0x01<<0)
+#define PT_FILTER_URL               (0x01<<1)
+#define PT_FILTER_FUNCTION_NAME     (0x01<<2)
 #define PT_FILTER_CLASS_NAME        (0x01<<3)
 
 /* Filter name map filter type */
