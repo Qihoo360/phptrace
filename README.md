@@ -109,6 +109,34 @@ Usage
     #3    run() at [sample.php:12]
     ```
 
+* Filter frame by url/class/function
+    
+    ```
+    $ ./phptrace -p 3600 -f type=class,content=simple
+    [pid 3600]> simple() called at [/mnt/windows/php-trace/optimize/bench1.php:83]
+    [pid 3600]< simple() = NULL called at [/mnt/windows/php-trace/optimize/bench1.php:83] ~ 0.226s 0.226s
+    [pid 3600]> simplecall() called at [/mnt/windows/php-trace/optimize/bench1.php:85]
+    [pid 3600]< simplecall() = NULL called at [/mnt/windows/php-trace/optimize/bench1.php:85] ~ 0.612s 0.612s
+    [pid 3600]> simpleucall() called at [/mnt/windows/php-trace/optimize/bench1.php:87]
+    [pid 3600]< simpleucall() = NULL called at [/mnt/windows/php-trace/optimize/bench1.php:87] ~ 0.610s 0.610s
+    [pid 3600]> simpleudcall() called at [/mnt/windows/php-trace/optimize/bench1.php:89]
+    [pid 3600]< simpleudcall() = NULL called at [/mnt/windows/php-trace/optimize/bench1.php:89] ~ 0.633s 0.633s
+    ```
+* Limit frame/url display count
+
+    ```
+    $ ./phptrace -p 3600 -l 3
+    [pid 3600]> {main}() called at [/mnt/windows/php-trace/optimize/bench1.php:2]
+    [pid 3600]    > function_exists("date_default_timezone_set") called at [/mnt/windows/php-trace/optimize/bench1.php:2]
+    [pid 3600]    < function_exists("date_default_timezone_set") = true called at [/mnt/windows/php-trace/optimize/bench1.php:2] ~ 0.000s 0.000s
+    [pid 3600]    > date_default_timezone_set("UTC") called at [/mnt/windows/php-trace/optimize/bench1.php:3]
+    [pid 3600]    < date_default_timezone_set("UTC") = true called at [/mnt/windows/php-trace/optimize/bench1.php:3] ~ 0.000s 0.000s
+    [pid 3600]    > start_test() called at [/mnt/windows/php-trace/optimize/bench1.php:82]
+    [pid 3600]        > ob_start() called at [/mnt/windows/php-trace/optimize/bench1.php:54]
+    [pid 3600]        < ob_start() = true called at [/mnt/windows/php-trace/optimize/bench1.php:54] ~ 0.000s 0.000s
+    ```
+
+
 
 Comparison
 ------------------------------
