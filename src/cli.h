@@ -17,7 +17,6 @@
 #ifndef TRACE_CLI_H
 #define TRACE_CLI_H
 
-
 #define PT_PID_INVALID      -1
 #define PT_PID_ALL          0xF0000001
 #define PT_LIMIT_UNLIMITED  -1
@@ -42,14 +41,14 @@ typedef struct {
     pt_ctrl_t ctrl;         /* control module */
     char ctrl_file[256];    /* ctrl filename */
 
-    int sfd;                    /* cli-tool socket fd */
-    char listen_addr[256];      /* listen address */
+    int sfd;                /* cli-tool socket fd */
+    char listen_addr[256];  /* listen address */
 
     pt_filter_t pft;
 
-    struct _limit {
-        int frame;              /* frame limit */
-        int request;            /* request limit */
+    struct {
+        int frame;          /* frame limit */
+        int request;        /* request limit */
     }limit;
 } pt_context_t;
 

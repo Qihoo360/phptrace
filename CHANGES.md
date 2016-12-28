@@ -1,4 +1,4 @@
-Version 0.6.0-dev (2016-12-26)
+Version 1.0.0-beta (2016-12-26)
 ------------------------------
 
 ### Added
@@ -6,10 +6,12 @@ Version 0.6.0-dev (2016-12-26)
 - Add support for Linux environment ptrace
 - Add support for MacOS
 - Add filter by url/class/function name
-- Add limit ouput count
+- Add limit output count
 
 ### Changed
-- optimize the format and color of ouput
+
+- Refactoring extensions and tool-side information interaction
+- Optimize format and color of the output
 - Remove unused messages such as wall_time、memory records
 - Improve display status module
 

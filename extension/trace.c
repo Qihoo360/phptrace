@@ -93,7 +93,7 @@ PHP_FUNCTION(trace_dump_address);
 PHP_FUNCTION(trace_set_filter);
 #endif
 
-static int frame_build(pt_frame_t *frame, zend_bool internal, unsigned char type, zend_execute_data *caller, zend_execute_data *ex, zend_op_array *op_array TSRMLS_DC);
+static void frame_build(pt_frame_t *frame, zend_bool internal, unsigned char type, zend_execute_data *caller, zend_execute_data *ex, zend_op_array *op_array TSRMLS_DC);
 static int frame_send(pt_frame_t *frame TSRMLS_DC);
 #if PHP_VERSION_ID < 70000
 static void frame_set_retval(pt_frame_t *frame, zend_bool internal, zend_execute_data *ex, zend_fcall_info *fci TSRMLS_DC);
@@ -125,7 +125,8 @@ static void (*ori_execute_internal)(zend_execute_data *execute_data, zval *retur
 ZEND_API void pt_execute_ex(zend_execute_data *execute_data);
 ZEND_API void pt_execute_internal(zend_execute_data *execute_data, zval *return_value);
 #endif
-static int check_frame_send_flag(pt_frame_t *frame, zend_function *zf);
+static inline zend_function *obtain_zend_function(zend_bool internal, zend_execute_data *ex, zend_op_array *op_array TSRMLS_DC);
+static long filter_frame(zend_bool internal, zend_execute_data *ex, zend_op_array *op_array TSRMLS_DC);
 
 /**
  * PHP Extension Init
@@ -341,7 +342,6 @@ PHP_RINIT_FUNCTION(trace)
             PTG(dotrace) &= ~TRACE_TO_TOOL;
         }
     }
-    
 
     /* Request process */
     if (PTG(dotrace)) {
@@ -568,35 +568,62 @@ PHP_FUNCTION(trace_set_filter)
 }
 #endif
 
-/* check frame send flag */
-static int check_frame_send_flag(pt_frame_t *frame, zend_function *zf) 
+/**
+ * Obtain zend function
+ * -------------------
+ */
+static inline zend_function *obtain_zend_function(zend_bool internal, zend_execute_data *ex, zend_op_array *op_array TSRMLS_DC)
 {
-    int ret = 0;
-    if (PTG(pft).type & (PT_FILTER_FUNCTION_NAME | PT_FILTER_CLASS_NAME)) {
-        ret = -1;
+#if PHP_VERSION_ID < 50500
+    if (internal || ex) {
+        return ex->function_state.function;
+    } else {
+        return (zend_function *) op_array;
+    }
+#elif PHP_VERSION_ID < 70000
+    return ex->function_state.function;
+#else
+    return ex->func;
+#endif
+}
 
-        /* filter function */
+/** 
+ * Filter frame by functin and class name
+ * -------------------
+ */
+static long filter_frame(zend_bool internal, zend_execute_data *ex, zend_op_array *op_array TSRMLS_DC)
+{
+    long dotrace = PTG(dotrace); 
+    
+    if (PTG(pft).type & (PT_FILTER_FUNCTION_NAME | PT_FILTER_CLASS_NAME)) {
+
+        zend_function *zf = obtain_zend_function(internal, ex, op_array);
+        
+        dotrace = 0;
+        
+        /* Filter function */
         if ((PTG(pft).type & PT_FILTER_FUNCTION_NAME)) {
             if((zf->common.function_name) && strstr(P7_STR(zf->common.function_name), PTG(pft).content) != NULL) {
-                ret = 0;
+                dotrace = PTG(dotrace);
             }
         }
 
-        /* filter class */
+        /* Filter class */
         if ((PTG(pft).type & PT_FILTER_CLASS_NAME)) {
             if ( (zf->common.scope)  && (zf->common.scope->name) && (strstr(P7_STR(zf->common.scope->name), PTG(pft).content) != NULL)) {
-                ret = 0;
+                dotrace = PTG(dotrace);
             }
         }
     }
-    return ret;
+
+    return dotrace;
 }
 
 /**
  * Trace Manipulation of Frame
  * --------------------
  */
-static int frame_build(pt_frame_t *frame, zend_bool internal, unsigned char type, zend_execute_data *caller, zend_execute_data *ex, zend_op_array *op_array TSRMLS_DC)
+static void frame_build(pt_frame_t *frame, zend_bool internal, unsigned char type, zend_execute_data *caller, zend_execute_data *ex, zend_op_array *op_array TSRMLS_DC)
 {
     unsigned int i;
     zval **args;
@@ -608,15 +635,11 @@ static int frame_build(pt_frame_t *frame, zend_bool internal, unsigned char type
 #if PHP_VERSION_ID < 50500
     if (internal || ex) {
         op_array = ex->op_array;
-        zf = ex->function_state.function;
-    } else {
-        zf = (zend_function *) op_array;
     }
-#elif PHP_VERSION_ID < 70000
-    zf = ex->function_state.function;
-#else
-    zf = ex->func;
 #endif
+
+    /* zend function */
+    zf = obtain_zend_function(internal, ex, op_array);
 
     /* types, level */
     frame->type = type;
@@ -627,11 +650,6 @@ static int frame_build(pt_frame_t *frame, zend_bool internal, unsigned char type
     args = NULL;
     frame->arg_count = 0;
     frame->args = NULL;
-
-    /* Filter function or class name */
-    if (check_frame_send_flag(frame, zf) != 0) {
-        return -1;
-    }
 
     /* names */
     if (zf->common.function_name) {
@@ -842,8 +860,6 @@ static int frame_build(pt_frame_t *frame, zend_bool internal, unsigned char type
     } else {
         frame->filename = NULL;
     }
-
-    return 0;
 }
 
 #if PHP_VERSION_ID < 70000
@@ -1162,7 +1178,7 @@ static void handle_command(void)
                 break;
 
             case PT_MSG_DO_FILTER:
-                PTD("hanle DO_FILTER");
+                PTD("handle DO_FILTER");
                 pt_filter_dtr(&PTG(pft));
                 pt_filter_unpack_filter_msg(&(PTG(pft)), msg->data);
                 break;
@@ -1204,7 +1220,6 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zva
     zval retval;
 #endif
     pt_frame_t frame;
-    int send_frame = 0;
 
 #if PHP_VERSION_ID >= 70000
     if (execute_data->prev_execute_data) {
@@ -1230,19 +1245,22 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zva
      * during executing. And whether send frame mesage back is controlled by
      * GLOBAL VALUE and LOCAL VALUE both because comm-module may be closed in
      * recursion and sending on exit point will be affected. */
-    dotrace = PTG(dotrace);
+
+    /* Filter frame by class and function name*/
+#if PHP_VERSION_ID < 50500
+    dotrace = filter_frame(internal, execute_data, op_array TSRMLS_CC);
+#else
+    dotrace = filter_frame(internal, execute_data, NULL TSRMLS_CC);
+#endif
 
     PTG(level)++;
 
     if (dotrace) {
 #if PHP_VERSION_ID < 50500
-        send_frame = frame_build(&frame, internal, PT_FRAME_ENTRY, caller, execute_data, op_array TSRMLS_CC);
+        frame_build(&frame, internal, PT_FRAME_ENTRY, caller, execute_data, op_array TSRMLS_CC);
 #else
-        send_frame = frame_build(&frame, internal, PT_FRAME_ENTRY, caller, execute_data, NULL TSRMLS_CC);
+        frame_build(&frame, internal, PT_FRAME_ENTRY, caller, execute_data, NULL TSRMLS_CC);
 #endif
-        if (send_frame != 0) {
-            goto exec_ori;  
-        }
 
         /* Register return value ptr */
 #if PHP_VERSION_ID < 70000
@@ -1268,8 +1286,6 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zva
         frame.inc_time = pt_time_usec();
     }
 
-
-exec_ori:
     /* Call original under zend_try. baitout will be called when exit(), error
      * occurs, exception thrown and etc, so we have to catch it and free our
      * resources. */
@@ -1311,7 +1327,7 @@ exec_ori:
          * send message. */
     } zend_end_try();
 
-    if (dotrace && send_frame == 0) {
+    if (dotrace) {
         frame.inc_time = pt_time_usec() - frame.inc_time;
 
         /* Calculate exclusive time */

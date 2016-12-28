@@ -34,7 +34,7 @@
 #define DETERMINE_STOP(type, msg) do {           \
     PT_DECR_LIMIT(type);                         \
     if (PT_STOP_MATCH(type)) {                   \
-        pt_type_destroy_##type(msg);               \
+        pt_type_destroy_##type(msg);             \
         return -2;                               \
     }                                            \
 }while(0)

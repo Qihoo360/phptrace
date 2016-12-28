@@ -17,6 +17,7 @@ environments, especially in production environments.
 Features:
 * low-overhead, when extension loaded and trace is off
 * stable, running on [Qihoo 360](http://www.360safe.com/) and tested on main-stream frameworks
+* trace PHP run-time status, even PHP do not install the extension of phptrace
 
 Download the latest version: https://pecl.php.net/package/trace
 
@@ -71,6 +72,19 @@ Building
     1431681727.365848      usleep(10000) at [Command line code:1]
     ```
 
+Command line options
+-----------------------------
+
+* trace     trace running php process(default)
+* status    display php process status
+* version   show version
+* -p        specify php process id ('all' to trace all processes)
+* -h        show helper
+* -v        same as version
+* -f        filter data by type(url,function,class) and content
+* -l        limit output count
+* --ptrace  in status mode fetch data using ptrace
+
 
 Usage
 ------------------------------
@@ -110,7 +124,7 @@ Usage
     ```
 
 * Filter frame by url/class/function
-    
+
     ```
     $ ./phptrace -p 3600 -f type=class,content=simple
     [pid 3600]> simple() called at [/mnt/windows/php-trace/optimize/bench1.php:83]

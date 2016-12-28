@@ -164,7 +164,7 @@ void usage_full(void)
 "    -p, --pid           Process id\n"
 "    -h, --help          Show this screen\n"
 "    -v, --verbose\n"
-"    -f, --filter        Filter data by type [function,class] and content\n"
+"    -f, --filter        Filter data by type [url,function,class] and content\n"
 "    -l, --limit         Limit output count\n"
     );
     exit(EXIT_SUCCESS);
