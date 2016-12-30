@@ -28,8 +28,8 @@
 *.x86_64
 *.hex
 
-# Cmdtool
-cmdtool/phptrace
+# Cli
+src/phptrace
 
 # Extension
 extension/.deps
@@ -42,6 +42,7 @@ extension/acinclude.m4
 extension/aclocal.m4
 extension/autom4te.cache
 extension/build
+extension/deps
 extension/common
 extension/confdefs.h
 extension/config.cache

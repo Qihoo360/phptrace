@@ -1,5 +1,5 @@
 /**
- * Copyright 2015 Qihoo 360
+ * Copyright 2016 Yuchen Wang <phobosw@gmail.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,19 +14,11 @@
  * limitations under the License.
  */
 
-#ifndef TRACE_LOG_H
-#define TRACE_LOG_H
+#ifndef TRACE_VERSION_H
+#define TRACE_VERSION_H
 
-#define MAX_LOGMSG_LEN 1024
-
-#define LL_DEBUG   0
-#define LL_INFO    1
-#define LL_NOTICE  2
-#define LL_ERROR   3
-
-void log_level_set(int level);
-int log_level_get();
-void log_msg(int level, const char *msg);
-void log_printf(int level, const char *fmt, ...);
+#define TRACE_VERSION "0.4.0-dev"
+#define TRACE_CLI_VERSION "0.4.0-dev"
+#define TRACE_EXT_VERSION "0.4.0-dev"
 
 #endif

@@ -1,5 +1,5 @@
 /**
- * Copyright 2015 Qihoo 360
+ * Copyright 2016 Qihoo 360
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -72,6 +72,7 @@ typedef struct {
 size_t pt_type_len_frame(pt_frame_t *frame);
 size_t pt_type_pack_frame(pt_frame_t *frame, char *buf);
 size_t pt_type_unpack_frame(pt_frame_t *frame, char *buf);
+void pt_type_display_frame(pt_frame_t *frame, int indent, const char *format, ...);
 
 /* pt_status
  * use sds to make pack, unpack reliable and uniform outside PHP */

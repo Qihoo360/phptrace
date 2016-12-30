@@ -1,5 +1,5 @@
 /**
- * Copyright 2015 Qihoo 360
+ * Copyright 2016 Qihoo 360
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,6 @@
 extern zend_module_entry trace_module_entry;
 #define phpext_trace_ptr &trace_module_entry
 
-#define PHP_TRACE_VERSION "0.3.1-dev"
-
 #ifdef PHP_WIN32
 #   define PHP_TRACE_API __declspec(dllexport)
 #elif defined(__GNUC__) && __GNUC__ >= 4
@@ -34,8 +32,8 @@ extern zend_module_entry trace_module_entry;
 #include "TSRM.h"
 #endif
 
-#include "trace_comm.h"
 #include "trace_ctrl.h"
+#include "trace_version.h"
 
 PHP_MINIT_FUNCTION(trace);
 PHP_MSHUTDOWN_FUNCTION(trace);
@@ -56,8 +54,8 @@ ZEND_BEGIN_MODULE_GLOBALS(trace)
     pt_ctrl_t               ctrl;           /* ctrl module */
     char                    ctrl_file[256]; /* ctrl filename */
 
-    pt_comm_socket_t        comm;           /* comm module */
-    char                    comm_file[256]; /* comm filename */
+    int                     sock_fd;        /* comm socket */
+    char                    sock_addr[256]; /* comm address */
 
     pid_t                   pid;            /* process id */
     long                    level;          /* nesting level */

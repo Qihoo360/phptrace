@@ -1,5 +1,5 @@
 /**
- * Copyright 2015 Qihoo 360
+ * Copyright 2016 Qihoo 360
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,23 +17,21 @@
 #ifndef TRACE_COMM_H
 #define TRACE_COMM_H
 
-#include <stdint.h>
-#include "trace_mmap.h"
-#include "trace_type.h"
+#define PT_COMM_FILENAME                "phptrace.sock"
+#define PT_COMM_MAXRECV                 10
+#define PT_COMM_BACKLOG                 128
 
-#define PT_MAGIC_NUMBER                 0x6563617274706870 /* Ascii codes of "phptrace" */
-
-#define PT_COMM_FILENAME                "phptrace.comm"
-#define PT_COMM_SEQMAX                  1000
-#define PT_COMM_T2E_SIZE                1048576 * 4  /* tool -> extension buffer size */
-#define PT_COMM_E2T_SIZE                1048576 * 64 /* tool <- extension buffer size */
+#define PT_MSG_HEADER_SIZE              sizeof(pt_comm_message_t)
+#define PT_MSG_SIZE(msg)                sizeof(pt_comm_message_t) + msg->len
+#define PT_MSG_SIZE_MIN                 0
+#define PT_MSG_SIZE_MAX                 1024 * 1024
 
 /* Type codes of inner message */
 #define PT_MSG_EMPTY                    0x00000000
-#define PT_MSG_ROTATE                   0x00000001
-#define PT_MSG_RESEQ                    0x00000002
-#define PT_MSG_INVALID                  0x00000003
-#define PT_MSG_NORMAL                   0x10000000
+#define PT_MSG_PEERDOWN                 0x00000001
+#define PT_MSG_ERR_SOCK                 0x00000002
+#define PT_MSG_ERR_BUF                  0x00000003
+#define PT_MSG_INVALID                  0x00000004
 
 /* Type codes of user defined message
  * Should >= 0x80000000 */
@@ -44,57 +42,20 @@
 #define PT_MSG_DO_PING                  (PT_MSG_DO_BASE + 4)
 
 typedef struct {
-    uint64_t size;              /* buffer size */
-    void *head;                 /* head of buffer */
-    void *current;              /* current pointer */
-    uint32_t sequence;          /* current sequence */
-} pt_comm_handler_t;
-
-typedef struct {
-    uint32_t seq;               /* message sequence */
-    uint32_t type;              /* message type */
-    uint32_t len;               /* message length */
+    int32_t len;                /* message length */
+    int32_t type;               /* message type */
+    int32_t pid;                /* pid TODO to be moved out */
     char data[];                /* scaleable data */
 } pt_comm_message_t;
 
-typedef struct {
-    int8_t active;              /* active status */
-    pt_segment_t seg;           /* mmap segment */
-    char *filename;
-    pt_comm_handler_t send_handler;
-    pt_comm_handler_t recv_handler;
-} pt_comm_socket_t;
-
-typedef struct {
-    uint64_t magic;
-    size_t s2c_size;            /* server -> client handler size */
-    size_t c2s_size;            /* server <- client handler size */
-} pt_comm_socket_meta_t;
-
-/* Some socket like functions */
-#define pt_comm_swrite_begin(s, size)       pt_comm_write_begin(&(s)->send_handler, size)
-#define pt_comm_swrite_end(s, type, msg)    pt_comm_write_end(&(s)->send_handler, type, msg)
-#define pt_comm_swrite(s, type, buf, size)  pt_comm_write(&(s)->send_handler, type, buf, size)
-#define pt_comm_sread(s, msgp, next)        pt_comm_read(&(s)->recv_handler, msgp, next)
-#define pt_comm_sread_type(s)               (((pt_comm_message_t *) ((s)->recv_handler.current))->type)
-
-#define pt_comm_offset(handler, msg) \
-    (size_t) ((void *) msg - (handler)->head)
-#define pt_comm_freesize(handler) \
-    (size_t) ((handler)->size - ((handler)->current - (handler)->head)) - (size_t) sizeof(pt_comm_message_t)
-
-int pt_comm_screate(pt_comm_socket_t *sock, const char *filename, int crossover, size_t s2c_size, size_t c2s_size);
-int pt_comm_sopen(pt_comm_socket_t *sock, const char *filename, int crossover);
-void pt_comm_sclose(pt_comm_socket_t *sock, int delfile);
-void pt_comm_init(pt_comm_handler_t *handler, void *head, size_t size);
-void pt_comm_uninit(pt_comm_handler_t *handler);
-void pt_comm_clear(pt_comm_handler_t *handler);
-pt_comm_message_t *pt_comm_next(pt_comm_handler_t *handler);
-pt_comm_message_t *pt_comm_write_begin(pt_comm_handler_t *handler, size_t size);
-void pt_comm_write_end(pt_comm_handler_t *handler, unsigned int type, pt_comm_message_t *msg);
-pt_comm_message_t *pt_comm_write(pt_comm_handler_t *handler, unsigned int type, void *buf, size_t size);
-unsigned int pt_comm_read(pt_comm_handler_t *handler, pt_comm_message_t **msg_ptr, int movenext);
-
-pt_comm_message_t *pt_comm_write_message(uint32_t seq, uint32_t type, uint32_t len, pt_frame_t *f, void *buf);
+/* function declation */
+int pt_comm_connect(const char *addrstr);
+int pt_comm_listen(const char *addrstr);
+int pt_comm_accept(int fd);
+int pt_comm_recv_msg(int fd, pt_comm_message_t **msg_ptr);
+int pt_comm_build_msg(pt_comm_message_t **msg_ptr, size_t size, int type);
+int pt_comm_send_type(int fd, int type);
+int pt_comm_send_msg(int fd, pt_comm_message_t *msg);
+int pt_comm_close(int fd);
 
 #endif
