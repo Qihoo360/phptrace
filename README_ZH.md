@@ -13,6 +13,7 @@ phptrace是一个低开销的用于跟踪、分析PHP运行情况的工具。
 它具有以下特性：
 * 低开销，在只加载模块不开启Trace功能时对性能影响极低
 * 稳定性，已经稳定运行在[Qihoo 360](http://360.cn)线上服务中，并针对主流框架进行测试
+* PHP没有安装phptrace扩展，phptrace也能够追踪PHP运行状态
 
 [介绍及使用Wiki](https://github.com/Qihoo360/phptrace/wiki)
 
@@ -70,6 +71,19 @@ phptrace是一个低开销的用于跟踪、分析PHP运行情况的工具。
     1431681727.365848      usleep(10000) at [Command line code:1]
     ```
 
+命令行选项
+-----------------------------
+
+* trace     追踪运行的PHP进程(默认) 
+* status    展示PHP进程的运行状态
+* version   版本 
+* -p        指定php进程id('all'追踪所有的进程)
+* -h        帮助
+* -v        同version
+* -f        通过类型(url,function,class)和内容过滤数据
+* -l        限制输出次数
+* --ptrace  在追踪状态的模式下通过ptrace获取数据
+
 
 使用
 ------------------------------
@@ -106,6 +120,34 @@ phptrace是一个低开销的用于跟踪、分析PHP运行情况的工具。
     #1    printf("hello world") at [sample.php:8]
     #2    say("hello world") at [sample.php:3]
     #3    run() at [sample.php:12]
+    ```
+
+* 根据url/类名/函数名过滤
+
+    ```
+    $ ./phptrace -p 3600 -f type=class,content=simple
+    [pid 3600]> simple() called at [/mnt/windows/php-trace/optimize/bench1.php:83]
+    [pid 3600]< simple() = NULL called at [/mnt/windows/php-trace/optimize/bench1.php:83] ~ 0.226s 0.226s
+    [pid 3600]> simplecall() called at [/mnt/windows/php-trace/optimize/bench1.php:85]
+    [pid 3600]< simplecall() = NULL called at [/mnt/windows/php-trace/optimize/bench1.php:85] ~ 0.612s 0.612s
+    [pid 3600]> simpleucall() called at [/mnt/windows/php-trace/optimize/bench1.php:87]
+    [pid 3600]< simpleucall() = NULL called at [/mnt/windows/php-trace/optimize/bench1.php:87] ~ 0.610s 0.610s
+    [pid 3600]> simpleudcall() called at [/mnt/windows/php-trace/optimize/bench1.php:89]
+    [pid 3600]< simpleudcall() = NULL called at [/mnt/windows/php-trace/optimize/bench1.php:89] ~ 0.633s 0.633s
+    ```
+
+* 限制帧/url的输出次数
+
+    ```
+    $ ./phptrace -p 3600 -l 3
+    [pid 3600]> {main}() called at [/mnt/windows/php-trace/optimize/bench1.php:2]
+    [pid 3600]    > function_exists("date_default_timezone_set") called at [/mnt/windows/php-trace/optimize/bench1.php:2]
+    [pid 3600]    < function_exists("date_default_timezone_set") = true called at [/mnt/windows/php-trace/optimize/bench1.php:2] ~ 0.000s 0.000s
+    [pid 3600]    > date_default_timezone_set("UTC") called at [/mnt/windows/php-trace/optimize/bench1.php:3]
+    [pid 3600]    < date_default_timezone_set("UTC") = true called at [/mnt/windows/php-trace/optimize/bench1.php:3] ~ 0.000s 0.000s
+    [pid 3600]    > start_test() called at [/mnt/windows/php-trace/optimize/bench1.php:82]
+    [pid 3600]        > ob_start() called at [/mnt/windows/php-trace/optimize/bench1.php:54]
+    [pid 3600]        < ob_start() = true called at [/mnt/windows/php-trace/optimize/bench1.php:54] ~ 0.000s 0.000s
     ```
 
 

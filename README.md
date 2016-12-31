@@ -17,6 +17,7 @@ environments, especially in production environments.
 Features:
 * low-overhead, when extension loaded and trace is off
 * stable, running on [Qihoo 360](http://www.360safe.com/) and tested on main-stream frameworks
+* trace PHP run-time status, even PHP do not install the extension of phptrace
 
 Download the latest version: https://pecl.php.net/package/trace
 
@@ -71,6 +72,19 @@ Building
     1431681727.365848      usleep(10000) at [Command line code:1]
     ```
 
+Command line options
+-----------------------------
+
+* trace     trace running php process(default)
+* status    display php process status
+* version   show version
+* -p        specify php process id ('all' to trace all processes)
+* -h        show helper
+* -v        same as version
+* -f        filter data by type(url,function,class) and content
+* -l        limit output count
+* --ptrace  in status mode fetch data using ptrace
+
 
 Usage
 ------------------------------
@@ -108,6 +122,34 @@ Usage
     #2    say("hello world") at [sample.php:3]
     #3    run() at [sample.php:12]
     ```
+
+* Filter frame by url/class/function
+
+    ```
+    $ ./phptrace -p 3600 -f type=class,content=simple
+    [pid 3600]> simple() called at [/mnt/windows/php-trace/optimize/bench1.php:83]
+    [pid 3600]< simple() = NULL called at [/mnt/windows/php-trace/optimize/bench1.php:83] ~ 0.226s 0.226s
+    [pid 3600]> simplecall() called at [/mnt/windows/php-trace/optimize/bench1.php:85]
+    [pid 3600]< simplecall() = NULL called at [/mnt/windows/php-trace/optimize/bench1.php:85] ~ 0.612s 0.612s
+    [pid 3600]> simpleucall() called at [/mnt/windows/php-trace/optimize/bench1.php:87]
+    [pid 3600]< simpleucall() = NULL called at [/mnt/windows/php-trace/optimize/bench1.php:87] ~ 0.610s 0.610s
+    [pid 3600]> simpleudcall() called at [/mnt/windows/php-trace/optimize/bench1.php:89]
+    [pid 3600]< simpleudcall() = NULL called at [/mnt/windows/php-trace/optimize/bench1.php:89] ~ 0.633s 0.633s
+    ```
+* Limit frame/url display count
+
+    ```
+    $ ./phptrace -p 3600 -l 3
+    [pid 3600]> {main}() called at [/mnt/windows/php-trace/optimize/bench1.php:2]
+    [pid 3600]    > function_exists("date_default_timezone_set") called at [/mnt/windows/php-trace/optimize/bench1.php:2]
+    [pid 3600]    < function_exists("date_default_timezone_set") = true called at [/mnt/windows/php-trace/optimize/bench1.php:2] ~ 0.000s 0.000s
+    [pid 3600]    > date_default_timezone_set("UTC") called at [/mnt/windows/php-trace/optimize/bench1.php:3]
+    [pid 3600]    < date_default_timezone_set("UTC") = true called at [/mnt/windows/php-trace/optimize/bench1.php:3] ~ 0.000s 0.000s
+    [pid 3600]    > start_test() called at [/mnt/windows/php-trace/optimize/bench1.php:82]
+    [pid 3600]        > ob_start() called at [/mnt/windows/php-trace/optimize/bench1.php:54]
+    [pid 3600]        < ob_start() = true called at [/mnt/windows/php-trace/optimize/bench1.php:54] ~ 0.000s 0.000s
+    ```
+
 
 
 Comparison
