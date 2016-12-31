@@ -29,16 +29,10 @@ http://pear.php.net/dtd/package-2.0.xsd">
     <email>flabbyan@gmail.com</email>
     <active>yes</active>
   </lead>
-  <lead>
-    <name>Bing Bai</name>
-    <user>silkcut</user>
-    <email>silkcutbeta@gmail.com</email>
-    <active>yes</active>
-  </lead>
-  <date>2016-12-30</date>
+  <date>2015-05-21</date>
   <version>
-    <release>1.0.0</release>
-    <api>1.0.0</api>
+    <release>0.3.0</release>
+    <api>0.3.0</api>
   </version>
   <stability>
     <release>stable</release>
@@ -49,37 +43,54 @@ http://pear.php.net/dtd/package-2.0.xsd">
   <notes>
 ### Added
 
-- Add support for Linux environment ptrace
-- Add support for MacOS
-- Add filter by url/class/function name
-- Add limit ouput count
+- Added support for special function calls: `main`, `include`, `require`, `Closure`, `Labmda`, `eval()`
+- Added support for PHP 5.1
+- Keep collecting and sending back trace information after PHP bailout
+- Added duplexing to communication module
+- Compatible with Trait Alias
+- Added checking for ZTS (Thread-safety support) during configuration
 
 ### Changed
 
-- Refactoring extensions and tool-side information interaction
-- Optimize format and color of the output
-- Remove unused messages such as wall_time、memory records
-- Improve display status module
+- Refactor the PHP extension
+- Unified the naming convention of Type, Function, Macro
+- Change License to Apache 2.0
+- Change Extension's name to "trace" (php is redundant for a PHP extension)
+- Improve representation of `zval` and support for Array, Object
+- Improve performance when trace if off
+- Limit the length of print arguments and retvalue
+
+### Fixed
+
+- Fixed handling of large or small double value that needs scientific notation
+- Fixed memory leaks related with SDS
   </notes>
 
   <contents>
     <dir name="/">
+      <file role="doc" name="CHANGES.md"/>
+      <file role="doc" name="CHANGES_ZH.md"/>
+      <file role="doc" name="LICENSE"/>
+      <file role="src" name="Makefile"/>
+      <file role="doc" name="README.md"/>
+      <file role="doc" name="README_ZH.md"/>
+      <dir name="cmdtool">
+        <file role="src" name="Makefile"/>
+        <file role="src" name="log.c"/>
+        <file role="src" name="log.h"/>
+        <file role="src" name="phptrace"/>
+        <file role="src" name="sys_trace.c"/>
+        <file role="src" name="sys_trace.h"/>
+        <file role="src" name="trace.c"/>
+        <file role="src" name="trace.h"/>
+        <file role="src" name="trace_count.c"/>
+        <file role="src" name="trace_count.h"/>
+        <file role="src" name="trace_status.c"/>
+        <file role="src" name="trace_status.h"/>
+        <file role="src" name="trace_util.c"/>
+        <file role="src" name="trace_util.h"/>
+      </dir> <!-- cmdtool -->
       <dir name="common">
-        <file role="src" name="trace_color.h"/>
-        <file role="src" name="trace_comm.c"/>
-        <file role="src" name="trace_comm.h"/>
-        <file role="src" name="trace_ctrl.c"/>
-        <file role="src" name="trace_ctrl.h"/>
-        <file role="src" name="trace_filter.c"/>
-        <file role="src" name="trace_filter.h"/>
-        <file role="src" name="trace_mmap.c"/>
-        <file role="src" name="trace_mmap.h"/>
-        <file role="src" name="trace_time.h"/>
-        <file role="src" name="trace_type.c"/>
-        <file role="src" name="trace_type.h"/>
-        <file role="src" name="trace_version.h"/>
-      </dir> <!-- common -->
-      <dir name="deps">
         <dir name="sds">
           <file role="doc" name="LICENSE"/>
           <file role="src" name="Makefile"/>
@@ -88,8 +99,21 @@ http://pear.php.net/dtd/package-2.0.xsd">
           <file role="src" name="sds.h"/>
           <file role="src" name="testhelp.h"/>
         </dir> <!-- sds -->
-      </dir> <!-- deps -->
+        <file role="src" name="trace_comm.c"/>
+        <file role="src" name="trace_comm.h"/>
+        <file role="src" name="trace_ctrl.c"/>
+        <file role="src" name="trace_ctrl.h"/>
+        <file role="src" name="trace_mmap.c"/>
+        <file role="src" name="trace_mmap.h"/>
+        <file role="src" name="trace_time.h"/>
+        <file role="src" name="trace_type.c"/>
+        <file role="src" name="trace_type.h"/>
+        <file role="src" name="uthash.h"/>
+      </dir> <!-- common -->
       <dir name="extension">
+        <file role="src" name="config.m4"/>
+        <file role="src" name="make_test_on.sh"/>
+        <file role="src" name="php_trace.h"/>
         <dir name="tests">
           <file role="test" name="skipif.inc"/>
           <file role="test" name="trace_001.phpt"/>
@@ -107,31 +131,10 @@ http://pear.php.net/dtd/package-2.0.xsd">
           <file role="test" name="trace_010.phpt"/>
           <file role="test" name="trace_011.phpt"/>
           <file role="test" name="trace_012.phpt"/>
-          <file role="test" name="trace_013.phpt"/>
-          <file role="test" name="trace_014.phpt"/>
-          <file role="test" name="trace_015.phpt"/>
-          <file role="test" name="trace_016.phpt"/>
         </dir> <!-- tests -->
-        <file role="src" name="Makefile.frag"/>
-        <file role="src" name="config.m4"/>
-        <file role="src" name="php_trace.h"/>
         <file role="src" name="trace.c"/>
       </dir> <!-- extension -->
-      <dir name="src">
-        <file role="src" name="cli.c"/>
-        <file role="src" name="cli.h"/>
-        <file role="src" name="ptrace.c"/>
-        <file role="src" name="ptrace.h"/>
-        <file role="src" name="status.c"/>
-        <file role="src" name="status.h"/>
-        <file role="src" name="trace.c"/>
-        <file role="src" name="trace.h"/>
-      </dir> <!-- src -->
-      <file role="doc" name="CHANGES.md"/>
-      <file role="doc" name="CHANGES_ZH.md"/>
-      <file role="doc" name="LICENSE"/>
-      <file role="doc" name="README.md"/>
-      <file role="doc" name="README_ZH.md"/>
+      <file role="src" name="release.sh"/>
     </dir> <!-- / -->
   </contents>
   <dependencies>

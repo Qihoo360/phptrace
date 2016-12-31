@@ -40,41 +40,6 @@
 #define PT_FUNC_REQUIRE         0x12
 #define PT_FUNC_REQUIRE_ONCE    0x13
 
-/* Buffer Pack */
-#define PACK(buf, type, ele) \
-    *(type *) buf = ele; buf += sizeof(type)
-
-#define UNPACK(buf, type, ele) \
-    ele = *(type *) buf; buf += sizeof(type)
-
-#define LEN_STR_EX(s, lenfunc) \
-    (sizeof(uint32_t) + (s == NULL ? 0 : lenfunc(s)))
-#define LEN_STR(s) LEN_STR_EX(s, strlen)
-#define LEN_SDS(s) LEN_STR_EX(s, sdslen)
-
-#define PACK_STR_EX(buf, ele, lenfunc) \
-if (ele == NULL) { \
-    PACK(buf, uint32_t, 0); \
-} else { \
-    PACK(buf, uint32_t, lenfunc(ele)); \
-    memcpy(buf, ele, lenfunc(ele)); \
-    buf += lenfunc(ele); \
-}
-#define PACK_STR(buf, ele) PACK_STR_EX(buf, ele, strlen)
-#define PACK_SDS(buf, ele) PACK_STR_EX(buf, ele, sdslen)
-
-#define UNPACK_STR_EX(buf, ele, dupfunc) \
-UNPACK(buf, uint32_t, len); \
-if (len) { \
-    ele = dupfunc(buf, len); \
-    buf += len; \
-} else { \
-    ele = NULL; \
-}
-#define UNPACK_STR(buf, ele) UNPACK_STR_EX(buf, ele, strndup)
-#define UNPACK_SDS(buf, ele) UNPACK_STR_EX(buf, ele, sdsnewlen)
-
-
 typedef struct {
     uint8_t type;               /* frame type, entry or exit */
     uint8_t functype;           /* function flags of PT_FUNC_xxx */

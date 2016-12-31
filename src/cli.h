@@ -17,18 +17,11 @@
 #ifndef TRACE_CLI_H
 #define TRACE_CLI_H
 
-#define PT_PID_INVALID      -1
-#define PT_PID_ALL          0xF0000001
-#define PT_LIMIT_UNLIMITED  -1
-
-#define PT_DECR_LIMIT(type) ((clictx.limit.type != PT_LIMIT_UNLIMITED) \
-    && (clictx.limit.type--))
-#define PT_STOP_MATCH(type) (clictx.limit.type == 0)
+#define PT_PID_INVALID  -1
+#define PT_PID_ALL      0xF0000001
 
 #include "trace_ctrl.h"
 #include "trace_comm.h"
-#include "trace_filter.h"
-#include "trace_type.h"
 
 /* Context */
 typedef struct {
@@ -43,13 +36,6 @@ typedef struct {
 
     int sfd;                /* cli-tool socket fd */
     char listen_addr[256];  /* listen address */
-
-    pt_filter_t pft;
-
-    struct {
-        int frame;          /* frame limit */
-        int request;        /* request limit */
-    }limit;
 } pt_context_t;
 
 /* make it accessable, global variables declared in cli.c */

@@ -17,7 +17,6 @@ if test "$PHP_TRACE" != "no"; then
     common/trace_ctrl.c \
     common/trace_mmap.c \
     common/trace_type.c \
-    common/trace_filter.c \
     deps/sds/sds.c"
 
   dnl $ext_srcdir available after PHP_NEW_EXTENSION
