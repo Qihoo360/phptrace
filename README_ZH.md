@@ -3,6 +3,8 @@ phptrace
 
 [![Build Status](https://travis-ci.org/Qihoo360/phptrace.svg)](https://travis-ci.org/Qihoo360/phptrace)
 
+我们团队开发了另外一个有意思的项目 [pika](https://github.com/Qihoo360/pika), pika 是一个兼容redis 协议的大容量的存储, 用来解决redis 内存不够的问题, 欢迎大家试试
+
 phptrace是一个低开销的用于跟踪、分析PHP运行情况的工具。
 
 它可以跟踪PHP在运行时的函数调用、请求信息、执行流程，并且提供有过滤器、统计信息
