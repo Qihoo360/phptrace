@@ -169,7 +169,7 @@ zend_module_entry trace_module_entry = {
     PHP_RSHUTDOWN(trace),
     PHP_MINFO(trace),
 #if ZEND_MODULE_API_NO >= 20010901
-    TRACE_EXT_VERSION,
+    PHP_TRACE_VERSION,
 #endif
     STANDARD_MODULE_PROPERTIES
 };

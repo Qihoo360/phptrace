@@ -350,7 +350,7 @@ int main(int argc, char **argv)
     status = 0;
     switch (clictx.command) {
         case CMD_VERSION:
-            printf("php-trace version %s (cli:%s)\n", TRACE_VERSION, TRACE_CLI_VERSION);
+            printf("phptrace %s\n", TRACE_VERSION);
             break;
 
         case CMD_TRACE:

@@ -18,7 +18,5 @@
 #define TRACE_VERSION_H
 
 #define TRACE_VERSION "1.0.0-beta"
-#define TRACE_CLI_VERSION "1.0.0-beta"
-#define TRACE_EXT_VERSION "0.6.0-beta"
 
 #endif

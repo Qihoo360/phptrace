@@ -20,6 +20,8 @@
 extern zend_module_entry trace_module_entry;
 #define phpext_trace_ptr &trace_module_entry
 
+#define PHP_TRACE_VERSION TRACE_VERSION
+
 #ifdef PHP_WIN32
 #   define PHP_TRACE_API __declspec(dllexport)
 #elif defined(__GNUC__) && __GNUC__ >= 4
