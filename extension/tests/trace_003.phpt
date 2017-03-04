@@ -58,7 +58,7 @@ $data = serialize($o);
 $o = unserialize($data);
 
 // toString
-strlen($o);
+strtolower($o);
 
 // get, set, isset, unset
 $o->attr = 'hello';
@@ -112,10 +112,10 @@ clone($o);
     < unserialize("O:9:\"TestClass\":0:{}") = object(TestClass)#1 called at [%s:53] ~ %fs %fs
     > TestClass->__destruct() called at [%s:53]
     < TestClass->__destruct() = NULL called at [%s:53] ~ %fs %fs
-    > strlen(object(TestClass)#1) called at [%s:56]
+    > strtolower(object(TestClass)#1) called at [%s:56]
         > TestClass->__toString() called at [%s:56]
         < TestClass->__toString() = "" called at [%s:56] ~ %fs %fs
-    < strlen(object(TestClass)#1) = 0 called at [%s:56] ~ %fs %fs
+    < strtolower(object(TestClass)#1) = "" called at [%s:56] ~ %fs %fs
     > TestClass->__set("attr", "hello") called at [%s:59]
     < TestClass->__set("attr", "hello") = NULL called at [%s:59] ~ %fs %fs
     > TestClass->__get("attr") called at [%s:60]

@@ -1,2 +1,2 @@
 <?php
-strlen('in '.basename(__FILE__));
+substr('in '.basename(__FILE__), 0, 1);

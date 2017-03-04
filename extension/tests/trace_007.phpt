@@ -14,20 +14,24 @@ if (version_compare(PHP_VERSION, '5.3', '<')) {
 
 function call_normal($arg = null) {}
 
+function call_closure($c) { $c(); }
+
+// Closure as argument
 call_normal(function () {});
 
-call_user_func(function () {
+// Call closure
+call_closure(function () {
     call_normal();
 });
 
 trace_end(); ?>
 --EXPECTF--
-> call_normal(object(Closure)#1) called at [%s:5]
-    < call_normal(object(Closure)#1) = NULL called at [%s:5] ~ %fs %fs
-    > call_user_func(object(Closure)#1) called at [%s:9]
-        > {closure:%s:7-9}() called at [%s:9]
-            > call_normal() called at [%s:8]
-            < call_normal() = NULL called at [%s:8] ~ %fs %fs
-        < {closure:%s:7-9}() = NULL called at [%s:9] ~ %fs %fs
-    < call_user_func(object(Closure)#1) = NULL called at [%s:9] ~ %fs %fs
-    > trace_end() called at [%s:11]
+> call_normal(object(Closure)#1) called at [%s:8]
+    < call_normal(object(Closure)#1) = NULL called at [%s:8] ~ %fs %fs
+    > call_closure(object(Closure)#1) called at [%s:13]
+        > {closure:%s:11-13}() called at [%s:5]
+            > call_normal() called at [%s:12]
+            < call_normal() = NULL called at [%s:12] ~ %fs %fs
+        < {closure:%s:11-13}() = NULL called at [%s:5] ~ %fs %fs
+    < call_closure(object(Closure)#1) = NULL called at [%s:13] ~ %fs %fs
+    > trace_end() called at [%s:15]
