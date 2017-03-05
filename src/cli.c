@@ -181,11 +181,11 @@ void parse_args(int argc, char **argv)
 
     struct option long_opts[] = {
         {"pid",     required_argument,  NULL, 'p'},
-        {"filter",  required_argument,  NULL, 'f'},
-        {"limit",   required_argument,  NULL, 'l'},
         {"help",    no_argument,        NULL, 'h'},
         {"verbose", no_argument,        NULL, 'v'},
         {"ptrace",  no_argument,        NULL, 0},
+        {"filter",  required_argument,  NULL, 'f'},
+        {"limit",   required_argument,  NULL, 'l'},
         {0, 0, 0, 0}
     };
 
