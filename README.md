@@ -1,5 +1,4 @@
-phptrace
-==============================
+# phptrace
 
 > Readme in [Chinese 中文](https://github.com/Qihoo360/phptrace/blob/master/README_ZH.md)
 
@@ -16,68 +15,77 @@ environments, especially in production environments.
 
 Features:
 * low-overhead, when extension loaded and trace is off
-* stable, running on [Qihoo 360](http://www.360safe.com/) and tested on main-stream frameworks
-* trace PHP run-time status, even PHP do not install the extension of phptrace
+* stable, running on [Qihoo 360](http://www.360safe.com/) and tested on mainstream frameworks
+* ease of use, view PHP run-time status without extension installation
 
-Download the latest version: https://pecl.php.net/package/trace
+Misc:
+- [PECL Download](https://pecl.php.net/package/trace)
 
 > News
 > We have build another interesting project [pika](https://github.com/Qihoo360/pika).
-> Pika is a nosql compatible with redis protocol with huge storage space. You can have a try.
+> It's a NoSQL compatible with Redis protocol with huge storage space.
 
 
-Building
-------------------------------
+## Install from source
 
 1. Extracting tarball
     ```
-    tar -zxf phptrace-{version}.tar.gz
-    cd phptrace-{version}
+    tar -xf phptrace-{version}.tar.gz
+    cd phptrace-{version}/extension
     ```
 
-2. PHP extension - Build & Install
+2. Build
+
+    PHP Extension
     ```
-    cd extension
     {php_bin_dir}/phpize
     ./configure --with-php-config={php_bin_dir}/php-config
     make
-    make install
     ```
 
-3. PHP extension - Add extension load directive
+    CLI Binary
+    ```
+    make cli
+    ```
+
+3. Install & Configure
+
+    Install PHP Extension, CLI Binary into PHP path
+    ```
+    make install-all
+    ```
 
     Edit `php.ini`, add the following line. A reload is needed if PHP running
-    by php-fpm.
-
+    on php-fpm mode.
     ```
     extension=trace.so
     ```
 
-4. Command tool - Build & Install
+4. Verify
     ```
-    make cli
-    make install-cli
-    ```
-
-5. Verify
-    ```
-    php -r 'for ($i = 0; $i < 10; $i++) usleep(10000);' &
+    php -r 'for ($i = 0; $i < 20; $i++) usleep(50000);' &
     phptrace -p $!
     ```
 
-    You should see something below if everything fine
-
+    You should see something below if it works fine
     ```
-    1431681727.341829      usleep  =>  NULL   wt: 0.011979 ct: 0.011980
-    1431681727.341847      usleep(10000) at [Command line code:1]
-    1431681727.353831      usleep  =>  NULL   wt: 0.011984 ct: 0.011983
-    1431681727.353849      usleep(10000) at [Command line code:1]
-    1431681727.365829      usleep  =>  NULL   wt: 0.011980 ct: 0.011981
-    1431681727.365848      usleep(10000) at [Command line code:1]
+    process attached
+    [pid 3600]> cli php -
+    [pid 3600]> {main}() called at [Command line code:1]
+    [pid 3600]    > usleep(50000) called at [Command line code:1]
+    [pid 3600]    < usleep(50000) = NULL called at [Command line code:1] ~ 0.051s 0.051s
+    [pid 3600]    > usleep(50000) called at [Command line code:1]
+    [pid 3600]    < usleep(50000) = NULL called at [Command line code:1] ~ 0.051s 0.051s
+    [pid 3600]    > usleep(50000) called at [Command line code:1]
+    [pid 3600]    < usleep(50000) = NULL called at [Command line code:1] ~ 0.051s 0.051s
+    [pid 3600]    > usleep(50000) called at [Command line code:1]
+    ...
     ```
 
-Command line options
------------------------------
+
+## Usage
+
+### Command line options
 
 * trace     trace running php process(default)
 * status    display php process status
@@ -89,106 +97,84 @@ Command line options
 * -l        limit output count
 * --ptrace  in status mode fetch data using ptrace
 
+### Trace executing
 
-Usage
-------------------------------
+```
+$ phptrace -p 3600
 
-* Trace executing
+[pid 3600]    > Me->run() called at [example.php:57]
+[pid 3600]        > Me->say("good night") called at [example.php:33]
+[pid 3600]        < Me->say("good night") = NULL called at [example.php:33] ~ 0.000s 0.000s
+[pid 3600]        > Me->sleep() called at [example.php:34]
+[pid 3600]            > Me->say("sleeping...") called at [example.php:27]
+[pid 3600]            < Me->say("sleeping...") = NULL called at [example.php:27] ~ 0.000s 0.000s
+[pid 3600]            > sleep(2) called at [example.php:28]
+[pid 3600]            < sleep(2) = 0 called at [example.php:28] ~ 2.000s 2.000s
+[pid 3600]        < Me->sleep() = NULL called at [example.php:34] ~ 2.000s 0.000s
+[pid 3600]        > Me->say("wake up") called at [example.php:35]
+[pid 3600]        < Me->say("wake up") = NULL called at [example.php:35] ~ 0.000s 0.000s
+[pid 3600]    < Me->run() = NULL called at [example.php:57] ~ 2.000s 0.000s
+```
 
-    ```
-    $ ./phptrace -p 3600
-    1431682433.534909      run() at [sample.php:15]
-    1431682433.534944        say("hello world") at [sample.php:7]
-    1431682433.534956          sleep(1) at [sample.php:11]
-    1431682434.538847          sleep  =>  0   wt: 1.003891 ct: 0.000000
-    1431682434.538899          printf("hello world") at [sample.php:12]
-    1431682434.538953          printf  =>  11   wt: 0.000054 ct: 0.000000
-    1431682434.538959        say  =>  NULL   wt: 1.004015 ct: 0.000000
-    1431682434.538966      run  =>  NULL   wt: 1.004057 ct: 0.000000
-    ```
+### Print current status
 
-* Print current status
+```
+$ phptrace status -p 3600
 
-    ```
-    $ ./phptrace -s -p 3600
-    Memory
-    usage: 235320
-    peak_usage: 244072
-    real_usage: 262144
-    real_peak_usage: 262144
+------------------------------- Status --------------------------------
+PHP Version:       7.0.16
+SAPI:              cli
+script:            example.php
+elapse:            26.958s
+------------------------------ Arguments ------------------------------
+$0
+------------------------------ Backtrace ------------------------------
+#0  fgets() called at [example.php:53]
+#1  {main}() called at [example.php:53]
+```
 
-    Request
-    request_script: sample.php
-    request_time: 1431682554.245320
+### Tracing with filter of url/class/function
 
-    Stack
-    #1    printf("hello world") at [sample.php:8]
-    #2    say("hello world") at [sample.php:3]
-    #3    run() at [sample.php:12]
-    ```
+```
+$ phptrace -p 3600 -f type=class,content=Me
 
-* Filter frame by url/class/function
+[pid 3600]> Me->run() called at [example.php:57]
+[pid 3600]> Me->say("good night") called at [example.php:33]
+[pid 3600]< Me->say("good night") = NULL called at [example.php:33] ~ 0.000s 0.000s
+[pid 3600]> Me->sleep() called at [example.php:34]
+[pid 3600]> Me->say("sleeping...") called at [example.php:27]
+[pid 3600]< Me->say("sleeping...") = NULL called at [example.php:27] ~ 0.000s 0.000s
+[pid 3600]< Me->sleep() = NULL called at [example.php:34] ~ 2.000s 2.000s
+[pid 3600]> Me->say("wake up") called at [example.php:35]
+[pid 3600]< Me->say("wake up") = NULL called at [example.php:35] ~ 0.000s 0.000s
+[pid 3600]< Me->run() = NULL called at [example.php:57] ~ 2.001s 0.000s
+```
 
-    ```
-    $ ./phptrace -p 3600 -f type=class,content=simple
-    [pid 3600]> simple() called at [/mnt/windows/php-trace/optimize/bench1.php:83]
-    [pid 3600]< simple() = NULL called at [/mnt/windows/php-trace/optimize/bench1.php:83] ~ 0.226s 0.226s
-    [pid 3600]> simplecall() called at [/mnt/windows/php-trace/optimize/bench1.php:85]
-    [pid 3600]< simplecall() = NULL called at [/mnt/windows/php-trace/optimize/bench1.php:85] ~ 0.612s 0.612s
-    [pid 3600]> simpleucall() called at [/mnt/windows/php-trace/optimize/bench1.php:87]
-    [pid 3600]< simpleucall() = NULL called at [/mnt/windows/php-trace/optimize/bench1.php:87] ~ 0.610s 0.610s
-    [pid 3600]> simpleudcall() called at [/mnt/windows/php-trace/optimize/bench1.php:89]
-    [pid 3600]< simpleudcall() = NULL called at [/mnt/windows/php-trace/optimize/bench1.php:89] ~ 0.633s 0.633s
-    ```
-* Limit frame/url display count
+### Limit frame/URL display times
 
-    ```
-    $ ./phptrace -p 3600 -l 3
-    [pid 3600]> {main}() called at [/mnt/windows/php-trace/optimize/bench1.php:2]
-    [pid 3600]    > function_exists("date_default_timezone_set") called at [/mnt/windows/php-trace/optimize/bench1.php:2]
-    [pid 3600]    < function_exists("date_default_timezone_set") = true called at [/mnt/windows/php-trace/optimize/bench1.php:2] ~ 0.000s 0.000s
-    [pid 3600]    > date_default_timezone_set("UTC") called at [/mnt/windows/php-trace/optimize/bench1.php:3]
-    [pid 3600]    < date_default_timezone_set("UTC") = true called at [/mnt/windows/php-trace/optimize/bench1.php:3] ~ 0.000s 0.000s
-    [pid 3600]    > start_test() called at [/mnt/windows/php-trace/optimize/bench1.php:82]
-    [pid 3600]        > ob_start() called at [/mnt/windows/php-trace/optimize/bench1.php:54]
-    [pid 3600]        < ob_start() = true called at [/mnt/windows/php-trace/optimize/bench1.php:54] ~ 0.000s 0.000s
-    ```
+```
+$ phptrace -p 3600 -l 2
 
-
-
-Comparison
-------------------------------
-
-### phptrace
-* It can print call stack of executing php process, which is similar to pstack.
-* It can trace php function calls, which is similar to strace.
-* It cannot get performance summary of php scripts, which will be supported in the future.
-* It can not debug php scripts.
-
-### Phpdbg
-* It is used to debug php program, which is similar to gdb.
-* It cannot print call stack of executing php process.
-* It cannot trace php function calls.
-
-### Xhprof
-* It is used to get performance summary, which is similar to gprof.
-* It cannot print call stack of executing php process.
-* It cannot trace php function calls.
-
-### Xdebug
-* It can print call stack only if some error occurs.
-* It would hook many opcode handlers even you did not set the auto_trace flag in php.ini; it traces all the processes at the same time just without output. This is a big overhea
-d in production envirenment.
-* It can not be enabled to trace without modifying the ini or the php script.
+[pid 3600]    > Me->run() called at [example.php:57]
+[pid 3600]        > Me->say("good night") called at [example.php:33]
+[pid 3600]        < Me->say("good night") = NULL called at [example.php:33] ~ 0.000s 0.000s
+[pid 3600]        > Me->sleep() called at [example.php:34]
+[pid 3600]            > Me->say("sleeping...") called at [example.php:27]
+[pid 3600]            < Me->say("sleeping...") = NULL called at [example.php:27] ~ 0.000s 0.000s
+```
 
 
-Contact
-------------------------------
+## Contributing
 
-* Email: g-infra-webcore@list.qihoo.net
+Welcome developers who willing to make PHP environment better.
+
+If you are interested but have no idea about how to starting, please try these below:
+
+- Use it on your system, [feedback](https://github.com/monque/phptrace/issues) problem, feature request.
+- Here is [roadmap](https://github.com/monque/phptrace/projects), try to develop one.
+- Any other? Contact phobosw@gmail.com.
 
 
-License
-------------------------------
+## License
 
 This project is released under the [Apache 2.0 License](https://raw.githubusercontent.com/Qihoo360/phptrace/master/LICENSE).

@@ -15,10 +15,12 @@ Version 1.0.0-beta (2016-12-26)
 - Remove unused messages such as wall_time、memory records
 - Improve display status module
 
+
 Version 0.5.0-dev (2016-03-17)
 ------------------------------
 
 - Support PHP 7
+
 
 Version 0.4.0-dev (2016-01-20)
 ------------------------------
