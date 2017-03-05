@@ -27,7 +27,7 @@ http://pear.php.net/dtd/package-2.0.xsd">
     <name>Anan Zhao</name>
     <user>flabby</user>
     <email>flabbyan@gmail.com</email>
-    <active>yes</active>
+    <active>no</active>
   </lead>
   <lead>
     <name>Bing Bai</name>
@@ -35,10 +35,10 @@ http://pear.php.net/dtd/package-2.0.xsd">
     <email>silkcutbeta@gmail.com</email>
     <active>yes</active>
   </lead>
-  <date>2016-12-30</date>
+  <date>2017-03-05</date>
   <version>
-    <release>1.0.0</release>
-    <api>1.0.0</api>
+    <release>1.0.1-beta</release>
+    <api>1.0.1-beta</api>
   </version>
   <stability>
     <release>beta</release>
@@ -111,6 +111,8 @@ http://pear.php.net/dtd/package-2.0.xsd">
           <file role="test" name="trace_014.phpt"/>
           <file role="test" name="trace_015.phpt"/>
           <file role="test" name="trace_016.phpt"/>
+          <file role="test" name="trace_017_special_func.phpt"/>
+          <file role="test" name="trace_018_special_func.phpt"/>
         </dir> <!-- tests -->
         <file role="src" name="Makefile.frag"/>
         <file role="src" name="config.m4"/>
@@ -129,6 +131,7 @@ http://pear.php.net/dtd/package-2.0.xsd">
       </dir> <!-- src -->
       <file role="doc" name="CHANGES.md"/>
       <file role="doc" name="CHANGES_ZH.md"/>
+      <file role="php" name="example.php"/>
       <file role="doc" name="LICENSE"/>
       <file role="doc" name="README.md"/>
       <file role="doc" name="README_ZH.md"/>
@@ -137,7 +140,7 @@ http://pear.php.net/dtd/package-2.0.xsd">
   <dependencies>
     <required>
       <php>
-        <min>5.1</min>
+        <min>5.2</min>
       </php>
       <pearinstaller>
         <min>1.4.0</min>

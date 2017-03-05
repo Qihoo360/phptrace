@@ -17,6 +17,6 @@
 #ifndef TRACE_VERSION_H
 #define TRACE_VERSION_H
 
-#define TRACE_VERSION "1.0.0-beta"
+#define TRACE_VERSION "1.0.1-beta"
 
 #endif
