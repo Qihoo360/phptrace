@@ -1,5 +1,5 @@
 --TEST--
-Trace special function >= 7.0.0
+Trace special function >= 7.0
 --INI--
 trace.dotrace=1
 --SKIPIF--

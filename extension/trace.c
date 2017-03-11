@@ -61,7 +61,15 @@
 #define P7_STR(v)       v
 #define P7_STR_LEN(v)   strlen(v)
 #else
+#if PHP_VERSION_ID < 70100
+/* object fetching in PHP 7.0
+ * object = call ? Z_OBJ(call->This) : NULL; */
 #define P7_EX_OBJ(ex)   Z_OBJ(ex->This)
+#else
+/* object fetching in PHP 7.1
+ * object = (call && (Z_TYPE(call->This) == IS_OBJECT)) ? Z_OBJ(call->This) : NULL; */
+#define P7_EX_OBJ(ex)   (Z_TYPE(ex->This) == IS_OBJECT ? Z_OBJ(ex->This) : NULL)
+#endif
 #define P7_EX_OBJCE(ex) Z_OBJCE(ex->This)
 #define P7_EX_OPARR(ex) (&(ex->func->op_array))
 #define P7_STR(v)       ZSTR_VAL(v)
@@ -1269,8 +1277,9 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zva
         }
 #else
         if (!internal && execute_data->return_value == NULL) {
-            ZVAL_UNDEF(&retval);
+#if PHP_VERSION_ID < 70100
             Z_VAR_FLAGS(retval) = 0;
+#endif
             execute_data->return_value = &retval;
         }
 #endif

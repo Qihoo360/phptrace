@@ -1,5 +1,5 @@
 --TEST--
-Trace signal handler
+Trace signal handler >= 7.1
 --SKIPIF--
 <?php
 require 'skipif.inc';
@@ -7,6 +7,10 @@ trace_skipif_no_trace_start();
 
 if (!function_exists('pcntl_signal')) {
     echo "skip this test is for pcntl_signal() only";
+}
+
+if (version_compare(PHP_VERSION, '7.1', '<')) {
+    echo 'skip this test is for version >= 7.1';
 }
 ?>
 --FILE--
@@ -27,6 +31,6 @@ trace_end(); ?>
     < getmypid() = %d called at [%s:5] ~ %fs %fs
     > system("kill -HUP %d") called at [%s:7]
     < system("kill -HUP %d") = "" called at [%s:7] ~ %fs %fs
-    > handler_for_signal(1) called at [%s:7]
-    < handler_for_signal(1) = NULL called at [%s:7] ~ %fs %fs
+    > handler_for_signal(1, array(3)) called at [%s:7]
+    < handler_for_signal(1, array(3)) = NULL called at [%s:7] ~ %fs %fs
     > trace_end() called at [%s:10]
