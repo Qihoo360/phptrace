@@ -1284,6 +1284,7 @@ ZEND_API void pt_execute_core(int internal, zend_execute_data *execute_data, zva
         }
 #else
         if (!internal && execute_data->return_value == NULL) {
+            ZVAL_UNDEF(&retval); /* initialize return value type */
 #if PHP_VERSION_ID < 70100
             Z_VAR_FLAGS(retval) = 0;
 #endif
