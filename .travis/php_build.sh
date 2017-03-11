@@ -6,7 +6,11 @@ function logit() {
 function build_from_tar()
 {
     tar="$2"
-    src=`echo $tar | sed 's/^.*\/\?\(php-[0-9]\+\.[0-9]\+\.[0-9]\+\)\.tar\.bz2$/\1/'`
+    if [ `uname -s` = "Darwin" ]; then
+        src=`echo $tar | sed -E 's/^.*\/?(php-[0-9]+\.[0-9]+\.[0-9]+)\.tar\.bz2$/\1/'`
+    else
+        src=`echo $tar | sed 's/^.*\/\?\(php-[0-9]\+\.[0-9]\+\.[0-9]\+\)\.tar\.bz2$/\1/'`
+    fi
     if [ -z "$src" ]; then
         return 1
     fi
@@ -34,7 +38,11 @@ function build()
     fi
 
     # version related
-    version=`grep ' PHP_VERSION ' $src/main/php_version.h | sed 's/^#define PHP_VERSION "\([0-9a-zA-Z\.]\+\)".*$/\1/'`
+    if [ `uname -s` = "Darwin" ]; then
+        version=`grep ' PHP_VERSION ' $src/main/php_version.h | sed -E 's/^#define PHP_VERSION "([0-9a-zA-Z\.]+)".*$/\1/'`
+    else
+        version=`grep ' PHP_VERSION ' $src/main/php_version.h | sed 's/^#define PHP_VERSION "\([0-9a-zA-Z\.]\+\)".*$/\1/'`
+    fi
     buildname="php-${version}${prefix_debug}"
     logit "[$buildname] build"
 

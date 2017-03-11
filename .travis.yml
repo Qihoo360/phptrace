@@ -1,8 +1,8 @@
 language: c
 
-compiler:
-    - gcc
-    - clang
+os:
+    - linux
+    - osx
 
 env:
     - PT_PHP_VERSION=7.1.2
@@ -12,6 +12,13 @@ env:
     - PT_PHP_VERSION=5.4.37
     - PT_PHP_VERSION=5.3.29
     - PT_PHP_VERSION=5.2.17
+
+matrix:
+    exclude:
+        - os: osx
+          env: PT_PHP_VERSION=5.2.17
+        - os: osx
+          env: PT_PHP_VERSION=5.3.29
 
 cache:
     directories:
@@ -25,8 +32,8 @@ before_install:
 
     # build PHP without ZTS by ourselves...
     - mkdir -p php_source php_build
-    - (cd php_source && sha256sum php-${PT_PHP_VERSION}.tar.bz2 || ../.travis/php_get.sh ${PT_PHP_VERSION})
-    - (cd php_source && sha256sum ${PT_PHP_BIN} || ../.travis/php_build.sh ${TRAVIS_BUILD_DIR}/php_build php-${PT_PHP_VERSION}.tar.bz2)
+    - (cd php_source && ls -l php-${PT_PHP_VERSION}.tar.bz2 || ../.travis/php_get.sh ${PT_PHP_VERSION})
+    - (cd php_source && ls -l ${PT_PHP_BIN} || ../.travis/php_build.sh ${TRAVIS_BUILD_DIR}/php_build php-${PT_PHP_VERSION}.tar.bz2)
 
 before_script:
     - ./.travis/ext_build.sh extension ${PT_PHP_PATH}
