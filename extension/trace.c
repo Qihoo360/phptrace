@@ -1054,6 +1054,7 @@ static sds repr_zval(zval *zv, int limit TSRMLS_DC)
 #endif
 
     /* php_var_export_ex is a good example */
+again:
     switch (Z_TYPE_P(zv)) {
 #if PHP_VERSION_ID < 70000
         case IS_BOOL:
@@ -1110,6 +1111,12 @@ static sds repr_zval(zval *zv, int limit TSRMLS_DC)
             return sdscatprintf(sdsempty(), "resource(%s)#%d", tstr ? tstr : "Unknown", Z_RES_P(zv)->handle);
         case IS_UNDEF:
             return sdsnew("{undef}");
+#endif
+#if PHP_VERSION_ID >= 70000
+		case IS_REFERENCE:
+			zv = Z_REFVAL_P(zv);
+			goto again;
+			break;
 #endif
         default:
             return sdsnew("{unknown}");
