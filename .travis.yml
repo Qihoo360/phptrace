@@ -13,17 +13,25 @@ env:
     - PT_PHP_VERSION=5.3.29
     - PT_PHP_VERSION=5.2.17
 
+cache:
+    directories:
+        - php_source
+        - php_build
+
 before_install:
-    # build PHP without ZTS by ourselves...
-    - ./.travis/php_get.sh ${PT_PHP_VERSION}
-    - ./.travis/php_build.sh `pwd` php-${PT_PHP_VERSION}.tar.bz2
-    - PT_PHP_PATH=`pwd`/php-${PT_PHP_VERSION}
+    - PT_PHP_SRC=${TRAVIS_BUILD_DIR}/php_source/php-${PT_PHP_VERSION}
+    - PT_PHP_PATH=${TRAVIS_BUILD_DIR}/php_build/php-${PT_PHP_VERSION}
     - PT_PHP_BIN=${PT_PHP_PATH}/bin/php
+
+    # build PHP without ZTS by ourselves...
+    - mkdir -p php_source php_build
+    - (cd php_source && sha256sum php-${PT_PHP_VERSION}.tar.bz2 || ../.travis/php_get.sh ${PT_PHP_VERSION})
+    - (cd php_source && sha256sum ${PT_PHP_BIN} || ../.travis/php_build.sh ${TRAVIS_BUILD_DIR}/php_build php-${PT_PHP_VERSION}.tar.bz2)
 
 before_script:
     - ./.travis/ext_build.sh extension ${PT_PHP_PATH}
     - (cd extension && make cli)
 
 script:
-    - (cd ${PT_PHP_PATH} && TEST_PHP_EXECUTABLE=${PT_PHP_BIN} ${PT_PHP_BIN} -n run-tests.php -q -n -d extension=trace.so -g "FAIL" --show-diff --set-timeout 120 tests Zend/tests; true)
+    # - (cd ${PT_PHP_SRC} && TEST_PHP_EXECUTABLE=${PT_PHP_BIN} ${PT_PHP_BIN} -n run-tests.php -q -n -d extension=trace.so -g "FAIL" --show-diff --set-timeout 120 tests Zend/tests; true)
     - (cd extension && REPORT_EXIT_STATUS=1 TEST_PHP_EXECUTABLE=${PT_PHP_BIN} ${PT_PHP_BIN} -n run-tests.php -q -n -d extension=trace.so --show-diff)
