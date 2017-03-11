@@ -3,15 +3,10 @@ Trace signal handler >= 7.1
 --SKIPIF--
 <?php
 require 'skipif.inc';
-trace_skipif_no_trace_start();
+require_debug_mode();
+for_verion_gte('7.1');
 
-if (!function_exists('pcntl_signal')) {
-    echo "skip this test is for pcntl_signal() only";
-}
-
-if (version_compare(PHP_VERSION, '7.1', '<')) {
-    echo 'skip this test is for version >= 7.1';
-}
+require_function('pcntl_signal');
 ?>
 --FILE--
 <?php trace_start();

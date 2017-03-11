@@ -4,9 +4,11 @@ Trace special function  < 7.0 && >= 5.3
 trace.dotrace=1
 --SKIPIF--
 <?php
+require 'skipif.inc';
+
 if (version_compare(PHP_VERSION, '7.0', '>=') ||
         version_compare(PHP_VERSION, '5.3', '<')) {
-    echo 'skip this test is for version < 7.0 && >= 5.3';
+    skip('Required version < 7.0 && >= 5.3');
 }
 ?>
 --FILE--

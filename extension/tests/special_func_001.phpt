@@ -4,9 +4,8 @@ Trace special function >= 7.0
 trace.dotrace=1
 --SKIPIF--
 <?php
-if (version_compare(PHP_VERSION, '7.0', '<')) {
-    echo 'skip this test is for version >= 7.0';
-}
+require 'skipif.inc';
+for_verion_gte('7.0');
 ?>
 --FILE--
 <?php
