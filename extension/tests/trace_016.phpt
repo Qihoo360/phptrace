@@ -2,6 +2,12 @@
 Trace filter class name 
 --INI--
 trace.enable=1
+--SKIPIF--
+<?php
+require 'skipif.inc';
+require_debug_mode();
+require_trace_filter();
+?>
 --FILE--
 <?php
 trace_set_filter(PT_FILTER_CLASS_NAME, 'simple');

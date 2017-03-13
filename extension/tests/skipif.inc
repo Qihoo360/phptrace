@@ -34,3 +34,10 @@ function for_verion_lt($version)
         skip('Required version < '.$version);
     }
 }
+
+function require_trace_filter()
+{
+    if (!function_exists('trace_set_filter')) {
+        skip("skip trace_set_filter() not exists");
+    }
+}
