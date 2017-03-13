@@ -37,8 +37,8 @@ http://pear.php.net/dtd/package-2.0.xsd">
   </lead>
   <date>2017-03-14</date>
   <version>
-    <release>1.0.1-beta</release>
-    <api>1.0.1-beta</api>
+    <release>1.0.1beta</release>
+    <api>1.0.1beta</api>
   </version>
   <stability>
     <release>beta</release>
@@ -81,28 +81,32 @@ http://pear.php.net/dtd/package-2.0.xsd">
       </dir> <!-- deps -->
       <dir name="extension">
         <dir name="tests">
-          <file role="test" name="skipif.inc"/>
-          <file role="test" name="trace_001.phpt"/>
-          <file role="test" name="trace_002.phpt"/>
-          <file role="test" name="trace_002_include.inc"/>
-          <file role="test" name="trace_002_require.inc"/>
-          <file role="test" name="trace_003.phpt"/>
-          <file role="test" name="trace_004.phpt"/>
-          <file role="test" name="trace_005.phpt"/>
-          <file role="test" name="trace_006.phpt"/>
-          <file role="test" name="trace_006_include.inc"/>
-          <file role="test" name="trace_007.phpt"/>
-          <file role="test" name="trace_008.phpt"/>
-          <file role="test" name="trace_009.phpt"/>
-          <file role="test" name="trace_010.phpt"/>
-          <file role="test" name="trace_011.phpt"/>
-          <file role="test" name="trace_012.phpt"/>
-          <file role="test" name="trace_013.phpt"/>
-          <file role="test" name="trace_014.phpt"/>
-          <file role="test" name="trace_015.phpt"/>
-          <file role="test" name="trace_016.phpt"/>
-          <file role="test" name="trace_017_special_func.phpt"/>
-          <file role="test" name="trace_018_special_func.phpt"/>
+            <file role="test" name="pcntl_001.phpt"/>
+            <file role="test" name="pcntl_002.phpt"/>
+            <file role="test" name="refargs.phpt"/>
+            <file role="test" name="skipif.inc"/>
+            <file role="test" name="special_func_001.phpt"/>
+            <file role="test" name="special_func_002.phpt"/>
+            <file role="test" name="trace_001.phpt"/>
+            <file role="test" name="trace_002_include.inc"/>
+            <file role="test" name="trace_002.phpt"/>
+            <file role="test" name="trace_002_require.inc"/>
+            <file role="test" name="trace_003.phpt"/>
+            <file role="test" name="trace_004.phpt"/>
+            <file role="test" name="trace_006_include.inc"/>
+            <file role="test" name="trace_006.phpt"/>
+            <file role="test" name="trace_007.phpt"/>
+            <file role="test" name="trace_008.phpt"/>
+            <file role="test" name="trace_009.phpt"/>
+            <file role="test" name="trace_010.phpt"/>
+            <file role="test" name="trace_011.phpt"/>
+            <file role="test" name="trace_012.phpt"/>
+            <file role="test" name="trace_013.phpt"/>
+            <file role="test" name="trace_014.phpt"/>
+            <file role="test" name="trace_015.phpt"/>
+            <file role="test" name="trace_015.sh"/>
+            <file role="test" name="trace_016.phpt"/>
+            <file role="test" name="trace_016.sh"/>
         </dir> <!-- tests -->
         <file role="src" name="Makefile.frag"/>
         <file role="src" name="config.m4"/>
