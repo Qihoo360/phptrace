@@ -6,7 +6,9 @@ function skip($text)
 
 function require_debug_mode()
 {
-    if (!function_exists('trace_start') || !function_exists('trace_end')) {
+    if (!function_exists('trace_start') ||
+            !function_exists('trace_end') ||
+            !function_exists('trace_set_filter')) {
         skip('Debug mode is required');
     }
 }
@@ -32,12 +34,5 @@ function for_verion_lt($version)
 {
     if (version_compare(PHP_VERSION, $version, '>=')) {
         skip('Required version < '.$version);
-    }
-}
-
-function require_trace_filter()
-{
-    if (!function_exists('trace_set_filter')) {
-        skip("skip trace_set_filter() not exists");
     }
 }

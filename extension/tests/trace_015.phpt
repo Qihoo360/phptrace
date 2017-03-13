@@ -6,7 +6,6 @@ trace.enable=1
 <?php
 require 'skipif.inc';
 require_debug_mode();
-require_trace_filter();
 ?>
 --FILE--
 <?php
