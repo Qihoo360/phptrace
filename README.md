@@ -85,6 +85,8 @@ Misc:
 
 ## Usage
 
+Just try `php example.php`.
+
 ### Command line options
 
 * trace     trace running php process(default)

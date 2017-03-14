@@ -78,6 +78,8 @@ phptrace是一个低开销的用于跟踪、分析PHP运行情况的工具。
 
 ## 使用
 
+试试看`php example.php`
+
 ### 命令行选项
 
 * trace     追踪运行的PHP进程(默认)

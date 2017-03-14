@@ -1,3 +1,10 @@
+Version 1.0.1-beta (2017-03-14)
+------------------------------
+
+- Add support for PHP 7.1
+- Fix problem with arguments passed by-reference #77
+- Fix some unit tests
+
 Version 1.0.0-beta (2016-12-26)
 ------------------------------
 
