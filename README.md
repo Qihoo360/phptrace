@@ -1,5 +1,7 @@
 # phptrace
 
+[![Join the chat at https://gitter.im/Qihoo360/phptrace](https://badges.gitter.im/Qihoo360/phptrace.svg)](https://gitter.im/Qihoo360/phptrace?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 > Readme in [Chinese 中文](https://github.com/Qihoo360/phptrace/blob/master/README_ZH.md)
 
 [![Build Status](https://travis-ci.org/Qihoo360/phptrace.svg)](https://travis-ci.org/Qihoo360/phptrace)
