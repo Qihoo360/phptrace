@@ -2,6 +2,8 @@
 
 > Readme in [Chinese 中文](https://github.com/Qihoo360/phptrace/blob/master/README_ZH.md)
 
+> Another trace tool [Molten](https://github.com/chuan-yun/Molten) base on google dapper, zipkin compatibility.
+
 [![Build Status](https://travis-ci.org/Qihoo360/phptrace.svg)](https://travis-ci.org/Qihoo360/phptrace)
 
 phptrace is a low-overhead tracing tool for PHP.
