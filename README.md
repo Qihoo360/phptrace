@@ -1,10 +1,15 @@
 # phptrace
 
-> Readme in [Chinese 中文](https://github.com/Qihoo360/phptrace/blob/master/README_ZH.md)
+> We have a new trace tool **[Molten](https://github.com/chuan-yun/Molten)**,
+> It's an OpenTracing supported tracer, for Distributed Tracing System.
 
-> Another trace tool [Molten](https://github.com/chuan-yun/Molten) base on google dapper, zipkin compatibility.
+> 我们开发了新的Trace工具 **[Molten](https://github.com/chuan-yun/Molten)**，
+> 它支持OpenTracing，用于分布式追踪系统。
+
 
 [![Build Status](https://travis-ci.org/Qihoo360/phptrace.svg)](https://travis-ci.org/Qihoo360/phptrace)
+
+> Readme in [Chinese 中文](https://github.com/Qihoo360/phptrace/blob/master/README_ZH.md)
 
 phptrace is a low-overhead tracing tool for PHP.
 
