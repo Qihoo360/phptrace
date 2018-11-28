@@ -1,5 +1,7 @@
 --TEST--
 Trace include, require, lambda, eval
+--SKIPIF--
+<?php (PHP_VERSION_ID < 70200) or die("skip PHP <= 7.2 only"); ?>
 --INI--
 trace.dotrace=1
 --FILE--
